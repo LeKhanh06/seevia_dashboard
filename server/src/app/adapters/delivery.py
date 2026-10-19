@@ -12,9 +12,11 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Protocol
 
 import firebase_admin
+import httpx
 from firebase_admin import credentials, messaging
 from firebase_admin.exceptions import FirebaseError
 
@@ -96,13 +98,14 @@ def _get_fcm_app(settings: Settings) -> firebase_admin.App:
         )
 
 
-def _build_message(*, push_token: str, operation: Operation) -> messaging.Message:
-    """Build the data-only FCM message the Android receiver expects.
+def _command_data(operation: Operation) -> dict[str, str]:
+    """Build the data payload the Android receiver expects.
 
-    It never carries credentials: the phone reports with the server URL and
-    token it saved when it registered.
+    FCM và webhook dùng chung hàm này để điện thoại giả lập nhận đúng cái điện
+    thoại thật nhận. Payload không mang credential: điện thoại báo kết quả bằng
+    URL và token đã lưu lúc đăng ký.
     """
-    data = {
+    return {
         "request_id": str(operation.request_id),
         "user_id": operation.user_id,
         "device_id": operation.device_id or "",
@@ -113,8 +116,12 @@ def _build_message(*, push_token: str, operation: Operation) -> messaging.Messag
         "expires_at": operation.expires_at.isoformat(),
         "requested_priority": "high",
     }
+
+
+def _build_message(*, push_token: str, operation: Operation) -> messaging.Message:
+    """Build the data-only FCM message from the shared command payload."""
     return messaging.Message(
-        data=data,
+        data=_command_data(operation),
         token=push_token,
         android=messaging.AndroidConfig(priority="high", ttl=timedelta(seconds=10)),
     )
@@ -167,8 +174,68 @@ class FcmDeliveryAdapter:
         )
 
 
+class WebhookDeliveryAdapter:
+    """POST the FCM data payload to a URL (phone simulator / e2e), not to FCM.
+
+    Chỉ dùng để chạy E2E không cần điện thoại thật. Quy ước kết quả giống FCM:
+    2xx = sent, lỗi mạng/5xx/429 = transient, 4xx khác = permanent.
+    """
+
+    def __init__(
+        self, settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
+        """Initialize with validated settings (DELIVERY_WEBHOOK_URL required)."""
+        if settings.delivery_webhook_url is None:
+            message = "DELIVERY_WEBHOOK_URL is required for the webhook transport"
+            raise ValueError(message)
+        self._url = str(settings.delivery_webhook_url)
+        self._timeout = httpx.Timeout(5.0)
+        self._transport = transport  # chỉ test truyền vào
+
+    async def send_command(
+        self,
+        *,
+        device: Device,
+        push_token: str,
+        operation: Operation,
+    ) -> DeliveryOutcome:
+        """POST the command data with ``X-Push-Token``; map the status to an outcome."""
+        _ = device
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport
+            ) as client:
+                response = await client.post(
+                    self._url,
+                    json=_command_data(operation),
+                    headers={"X-Push-Token": push_token},
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("Webhook send failed for request %s", operation.request_id)
+            return DeliveryOutcome(
+                status=DeliveryOutcomeStatus.TRANSIENT_FAILURE,
+                error_reason=type(exc).__name__,
+            )
+
+        code = response.status_code
+        if response.is_success:
+            return DeliveryOutcome(
+                status=DeliveryOutcomeStatus.SENT,
+                provider_message_id=f"webhook-{operation.request_id}",
+            )
+        status = (
+            DeliveryOutcomeStatus.TRANSIENT_FAILURE
+            if response.is_server_error
+            or code in (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS)
+            else DeliveryOutcomeStatus.PERMANENT_FAILURE
+        )
+        return DeliveryOutcome(status=status, error_reason=f"webhook HTTP {code}")
+
+
 def get_delivery_adapter(settings: Settings) -> DeliveryAdapter:
     """Return the configured delivery transport adapter."""
     if settings.delivery_transport is DeliveryTransport.FCM:
         return FcmDeliveryAdapter(settings)
+    if settings.delivery_transport is DeliveryTransport.WEBHOOK:
+        return WebhookDeliveryAdapter(settings)
     return FakeDeliveryAdapter()

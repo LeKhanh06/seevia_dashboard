@@ -24,6 +24,7 @@ class DeliveryTransport(StrEnum):
 
     FAKE = "fake"
     FCM = "fcm"
+    WEBHOOK = "webhook"
 
 
 class LogLevel(StrEnum):
@@ -105,6 +106,8 @@ class Settings(BaseSettings):
     delivery_transport: DeliveryTransport
 
     fcm_project_id: str | None = None
+    # Voice server v2: transport webhook cho E2E với điện thoại giả lập.
+    delivery_webhook_url: HttpUrl | None = None
     google_application_credentials: Path | None = None
 
     spotify_client_id: str | None = None
@@ -164,6 +167,10 @@ class Settings(BaseSettings):
         """Require complete provider and callback settings when those modes are enabled."""
         if self.delivery_transport is DeliveryTransport.FCM and not self.fcm_project_id:
             message = "FCM_PROJECT_ID is required when DELIVERY_TRANSPORT=fcm"
+            raise ValueError(message)
+
+        if self.delivery_transport is DeliveryTransport.WEBHOOK and not self.delivery_webhook_url:
+            message = "DELIVERY_WEBHOOK_URL is required when DELIVERY_TRANSPORT=webhook"
             raise ValueError(message)
 
         callback_values = (

@@ -1,0 +1,11 @@
+{
+  "request_id": "3f1c9a40-5b7e-4c2d-9a10-000000000009",
+  "user_id": "user-123",
+  "device_id": "glasses-001",
+  "action": "ride_quote",
+  "params_json": "{\"destination\":{\"lat\":10.7721,\"lng\":106.6578,\"address\":\"\\u0110\\u1ea1i h\\u1ecdc B\\u00e1ch Khoa TP.HCM\"},\"current_location\":{\"lat\":10.7769,\"lng\":106.7009}}",
+  "issued_at": "2026-10-19T08:00:00.000000+00:00",
+  "deadline_at": "2026-10-19T08:00:01.000000+00:00",
+  "expires_at": "2026-10-19T08:01:00.000000+00:00",
+  "requested_priority": "high"
+}

@@ -1,0 +1,11 @@
+{
+  "request_id": "3f1c9a40-5b7e-4c2d-9a10-000000000003",
+  "user_id": "user-123",
+  "device_id": "glasses-001",
+  "action": "music_play",
+  "params_json": "{\"song\":\"N\\u01a1i n\\u00e0y c\\u00f3 anh - S\\u01a1n T\\u00f9ng M-TP\",\"volume\":60,\"spotify_uri\":\"spotify:search:N%C6%A1i%20n%C3%A0y%20c%C3%B3%20anh%20-%20S%C6%A1n%20T%C3%B9ng%20M-TP\"}",
+  "issued_at": "2026-10-19T08:00:00.000000+00:00",
+  "deadline_at": "2026-10-19T08:00:01.000000+00:00",
+  "expires_at": "2026-10-19T08:01:00.000000+00:00",
+  "requested_priority": "high"
+}

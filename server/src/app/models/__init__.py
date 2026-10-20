@@ -14,10 +14,13 @@ from app.models.enums import (
     DevicePlatform,
     DeviceStatus,
     GlassesLinkStatus,
+    MessageCallbackState,
+    MessageDirection,
     Operation,
     RequestState,
 )
 from app.models.glasses_device import GlassesDevice
+from app.models.message import Message
 from app.models.operation import Operation as OperationRecord
 from app.models.session import Session
 from app.models.support_ticket import SupportTicket
@@ -39,6 +42,9 @@ __all__ = [
     "DeviceStatus",
     "GlassesDevice",
     "GlassesLinkStatus",
+    "Message",
+    "MessageCallbackState",
+    "MessageDirection",
     "Operation",
     "OperationRecord",
     "RequestState",

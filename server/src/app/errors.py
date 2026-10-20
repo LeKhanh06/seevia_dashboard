@@ -187,6 +187,20 @@ class CallStateConflictError(PublicApiError):
     code = "CALL_STATE_CONFLICT"
 
 
+class MessageNotFoundError(PublicApiError):
+    """Raised when a message is missing or the caller is not its glasses' owner."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "MESSAGE_NOT_FOUND"
+
+
+class MessageNotAllowedError(PublicApiError):
+    """Raised when the caller has no ``active`` care link with the other party."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "MESSAGE_NOT_ALLOWED"
+
+
 class DeviceEventForwardError(PublicApiError):
     """Raised when a spontaneous phone event cannot reach the glasses server."""
 

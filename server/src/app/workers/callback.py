@@ -13,9 +13,12 @@ from typing import TYPE_CHECKING
 
 from app.adapters.callback import CallbackAdapter, CallbackOutcomeStatus, CallEventAdapter
 from app.repositories.call import CallRepository
+from app.repositories.message import MessageRepository
 from app.repositories.operation import OperationRepository
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from app.config import Settings
@@ -37,6 +40,20 @@ _CALL_EVENT_BACKOFF = [
     timedelta(seconds=2),
     timedelta(seconds=5),
     timedelta(seconds=10),
+]
+
+
+# Tin nhắn không sống ngắn như cuộc gọi: kính có thể đang offline, thử lại tới ~25 phút rồi bỏ
+# (kính vẫn lấy được qua GET /messages/unread khi vào phiên).
+_MESSAGE_EVENT_BACKOFF = [
+    timedelta(seconds=1),
+    timedelta(seconds=2),
+    timedelta(seconds=5),
+    timedelta(seconds=10),
+    timedelta(seconds=30),
+    timedelta(seconds=60),
+    timedelta(seconds=300),
+    timedelta(seconds=900),
 ]
 
 
@@ -62,7 +79,7 @@ class CallbackWorker:
 
         Returns the number of claimed operations and call events processed.
         """
-        call_events = await self._run_call_events()
+        call_events = await self._run_call_events() + await self._run_message_events()
         now = datetime.now(UTC)
         lease_duration = timedelta(seconds=self._settings.callback_lease_seconds)
         lease_until = now + lease_duration
@@ -126,6 +143,58 @@ class CallbackWorker:
             except Exception:
                 logger.exception("Unexpected error delivering call event %s", event.id)
         return len(claimed)
+
+    async def _run_message_events(self) -> int:
+        """Deliver due ``message_received`` events (``/internal/messages``); returns attempts."""
+        now = datetime.now(UTC)
+        async with self._session_factory() as session:
+            claimed = await MessageRepository(session).claim_due_callbacks(
+                now=now,
+                lease_until=now + timedelta(seconds=self._settings.callback_lease_seconds),
+                limit=self._settings.worker_batch_size,
+            )
+            # Tách khỏi phiên: payload dựng xong trước khi commit đóng phiên.
+            events: list[tuple[UUID, int, dict[str, object]]] = [
+                (
+                    m.id,
+                    m.callback_attempts,
+                    {
+                        "event": "message_received",
+                        "message_id": str(m.id),
+                        "glasses_device_id": m.glasses_device_id,
+                        "from_display_name": m.peer_display_name,
+                        "text": m.text,
+                    },
+                )
+                for m in claimed
+            ]
+            await session.commit()
+
+        for message_id, attempts, payload in events:
+            try:
+                outcome = await self._call_events.send_message_event(
+                    message_id=message_id, payload=payload
+                )
+                async with self._session_factory() as session:
+                    repo = MessageRepository(session)
+                    done = datetime.now(UTC)
+                    if outcome.status is CallbackOutcomeStatus.DELIVERED:
+                        await repo.record_callback_delivered(message_id, now=done)
+                    elif outcome.status is CallbackOutcomeStatus.RETRY and attempts < len(
+                        _MESSAGE_EVENT_BACKOFF
+                    ):
+                        await repo.record_callback_retry(
+                            message_id, next_attempt_at=done + _MESSAGE_EVENT_BACKOFF[attempts]
+                        )
+                    else:
+                        await repo.record_callback_dead_letter(message_id)
+                        logger.warning(
+                            "Message event %s dead-lettered: %s", message_id, outcome.error_reason
+                        )
+                    await session.commit()
+            except Exception:
+                logger.exception("Unexpected error delivering message event %s", message_id)
+        return len(events)
 
     async def _process_claimed_callback(self, op: Operation) -> None:
         """Send HTTP callback and persist outcome."""

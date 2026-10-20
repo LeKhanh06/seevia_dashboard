@@ -17,6 +17,8 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 import httpx
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from app.config import Settings
     from app.models.operation import Operation
 
@@ -184,7 +186,7 @@ class CallbackAdapter:
 
 
 class CallEventAdapter:
-    """POST call events to ``/internal/calls`` on the callback origin (same token as results)."""
+    """POST glasses-server events (calls, messages) to the callback origin."""
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
         """Bind validated settings and an optional reusable HTTP client."""
@@ -192,14 +194,31 @@ class CallEventAdapter:
         self._client = client
 
     async def send_event(self, *, event_id: int, payload: dict[str, object]) -> CallbackOutcome:
-        """POST one event; ``Idempotency-Key`` is the outbox id so the receiver can dedupe."""
+        """POST one call event; ``Idempotency-Key`` is the outbox id so the receiver can dedupe."""
+        return await self._post(
+            path="/internal/calls", idempotency_key=f"call-event-{event_id}", payload=payload
+        )
+
+    async def send_message_event(
+        self, *, message_id: UUID, payload: dict[str, object]
+    ) -> CallbackOutcome:
+        """POST ``message_received`` to ``/internal/messages`` (dedupe key = the message id)."""
+        return await self._post(
+            path="/internal/messages",
+            idempotency_key=f"message-{message_id}",
+            payload=payload,
+        )
+
+    async def _post(
+        self, *, path: str, idempotency_key: str, payload: dict[str, object]
+    ) -> CallbackOutcome:
         if self._settings.callback_url is None or self._settings.callback_token is None:
             return CallbackOutcome(
                 status=CallbackOutcomeStatus.DEAD_LETTER,
                 error_reason="CALLBACK_URL is not configured",
             )
         parsed = urlsplit(str(self._settings.callback_url))
-        url = urlunsplit((parsed.scheme, parsed.netloc, "/internal/calls", "", ""))
+        url = urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
         try:
             validate_callback_url(url, _allowed_hosts(self._settings))
         except SsfValidationError as exc:
@@ -209,7 +228,7 @@ class CallEventAdapter:
             )
         headers = {
             "Content-Type": "application/json",
-            "Idempotency-Key": f"call-event-{event_id}",
+            "Idempotency-Key": idempotency_key,
             "Authorization": f"Bearer {self._settings.callback_token.get_secret_value()}",
         }
         client = self._client or httpx.AsyncClient(timeout=5.0)

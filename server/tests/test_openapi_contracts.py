@@ -93,6 +93,10 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/calls/{call_id}/answer",
         "/api/v1/calls/{call_id}/reject",
         "/api/v1/calls/{call_id}/hangup",
+        "/api/v1/service/messages/send",
+        "/api/v1/service/messages/unread",
+        "/api/v1/service/messages/{message_id}/read",
+        "/api/v1/messages",
     }
 
 

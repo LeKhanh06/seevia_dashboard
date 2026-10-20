@@ -60,6 +60,21 @@ class CallCallbackState(StrEnum):
     DEAD_LETTER = "dead_letter"
 
 
+class MessageDirection(StrEnum):
+    """Who wrote the message: the glasses' owner (to a relative) or a relative (to the glasses)."""
+
+    TO_RELATIVE = "to_relative"
+    TO_GLASSES = "to_glasses"
+
+
+class MessageCallbackState(StrEnum):
+    """Delivery state of the ``message_received`` event owed to the glasses server."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    DEAD_LETTER = "dead_letter"
+
+
 class RequestState(StrEnum):
     """Public operation states persisted in PostgreSQL."""
 
@@ -113,6 +128,8 @@ __all__ = [
     "DevicePlatform",
     "DeviceStatus",
     "GlassesLinkStatus",
+    "MessageCallbackState",
+    "MessageDirection",
     "Operation",
     "RequestState",
 ]

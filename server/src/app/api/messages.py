@@ -74,6 +74,7 @@ async def send_message(
 ) -> OkResponse[MessageSendData]:
     """Text the relative named ``contact_alias`` (409/404 when ambiguous or unknown)."""
     message = await service.send_from_glasses(
+        glasses_device_id=body.glasses_device_id,
         user_id=body.user_id,
         contact_alias=body.contact_alias,
         text=body.text,
@@ -90,10 +91,12 @@ async def send_message(
 
 @service_router.get("/unread", response_model=OkResponse[UnreadMessagesData])
 async def list_unread(
-    user_id: Annotated[TrimmedNonEmptyStr, Query()], service: Messages
+    glasses_device_id: Annotated[TrimmedNonEmptyStr, Query()],
+    service: Messages,
+    user_id: Annotated[TrimmedNonEmptyStr | None, Query()] = None,
 ) -> OkResponse[UnreadMessagesData]:
     """Messages from relatives the glasses have not read out yet (oldest first)."""
-    rows = await service.list_unread_for_glasses(user_id)
+    rows = await service.list_unread_for_glasses(glasses_device_id, user_id)
     return OkResponse(
         data=UnreadMessagesData(
             messages=[
@@ -115,10 +118,12 @@ async def mark_message_read(
     service: Messages,
     session: Session,
     wake: Wake,
-    body: MessageReadRequest | None = None,
+    body: MessageReadRequest,
 ) -> OkResponse[MessageReadData]:
     """Record that the glasses read the message out (idempotent)."""
-    message = await service.mark_read(message_id, user_id=body.user_id if body else None)
+    message = await service.mark_read(
+        message_id, glasses_device_id=body.glasses_device_id, user_id=body.user_id
+    )
     data = MessageReadData(message_id=message.id, read_at=message.read_at)
     await _commit_and_notify(session, service, wake)
     return OkResponse(data=data)

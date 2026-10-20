@@ -349,13 +349,21 @@ thoại chỉ trả lời khi được hỏi.
 ## 7. Gọi điện / nhắn tin với kính
 
 Người khiếm thị nói và nghe **ngay trên kính**; người thân dùng chính app này. Cuộc gọi và tin nhắn đi **qua internet
-giống Messenger**: gọi thoại bằng WebSocket `WS /v2/call` (PCM16) và báo cuộc gọi/tin bằng FCM. **Không dùng SIM, không gọi
-số điện thoại, không SMS, không có video call.** Vì vậy app người thân:
+giống Messenger**: gọi thoại bằng WebSocket `WS /v2/call` (PCM16) và báo cuộc gọi/tin bằng FCM. **Gọi/nhắn thường không dùng SIM,
+không gọi số điện thoại, không SMS, không có video call.** Vì vậy tính năng gọi/nhắn qua mạng của app người thân:
 
 - **Chỉ cần quyền micro (`RECORD_AUDIO`) và quyền thông báo (`POST_NOTIFICATIONS`, kèm thông báo toàn màn hình/`USE_FULL_SCREEN_INTENT`
   để màn hình cuộc gọi hiện khi khoá máy).** Trên iOS: micro + thông báo (+ CallKit/PushKit nếu muốn đổ chuông như cuộc gọi thường, tuỳ app).
 - **KHÔNG cần quyền camera, KHÔNG cần quyền gọi điện thoại (`CALL_PHONE`)**, không cần danh bạ/SMS cho tính năng này.
 - Server **không có** trường hay endpoint video nào; đừng thêm.
+- Riêng **app của chủ kính** vẫn cần `SEND_SMS`/`CALL_PHONE` (+ liên hệ khẩn cấp trong Safety) cho **đường dự phòng khẩn cấp qua SIM**
+  (mục 7.5): chỉ dùng khi đường internet không dùng được (kính chưa có token riêng/phiên, hoặc AB/VH không tới được). Đây là lưới an toàn có
+  chủ ý của riêng khẩn cấp, không phải đường gọi/nhắn thường.
+- Server kính (VH) gọi AB bằng Public API `/api/v1/service/{call/start,emergency/start,messages/send,messages/unread,messages/{id}/read}`
+  và **luôn gửi `glasses_device_id`**; AB suy chủ kính từ kính đã ghép. `user_id` chỉ là trường đối chiếu tuỳ chọn: có gửi mà khác chủ thật
+  thì `404 GLASSES_DEVICE_NOT_LINKED`. Nhờ đó kính của chủ B không đọc/nhắn/gọi được dưới tên chủ A. Tin chưa đọc và `read` cũng kiểm đúng chủ
+  của kính (`unread?glasses_device_id=…`, body `read` bắt buộc `glasses_device_id`). `emergency/{id}/stop` trả thêm `call_id` khi
+  `state:"answered"` (người thân vừa nghe máy đúng lúc bấm dừng): server kính phải `call/{call_id}/hangup` để không để cuộc `active` mồ côi.
 
 Hai server (như mục đầu tài liệu): mọi URL dưới đây là **app server** (AB). Âm thanh KHÔNG đi qua AB mà qua server kính (VH) theo `media_url`.
 Xác thực: `Authorization: Bearer <access_token>` của phiên người dùng (mục 2.1, đăng nhập bằng số điện thoại), **không** phải Device API token.
@@ -442,7 +450,7 @@ server cúp (`media_timeout`). Token sai/đã dùng/hết hạn: server `accept`
 | app → server | text | `{"t":"hangup"}` cúp; `{"t":"mute","on":true}` báo app tắt mic (chỉ thông tin; đơn giản nhất là ngừng gửi khung) |
 | server → app | text | `{"t":"state","state":"ringing"\|"active"\|"ended","reason"?:str}`; sau `ended` server đóng socket (1000) |
 
-- Server đệm chống giật 60 ms mỗi hướng, bỏ khung trễ quá 200 ms; app KHÔNG cần tự đệm phía gửi, phía nhận nên có đệm nhỏ (~60 ms) và phát đều.
+- Chiều app→kính: server đệm chống giật 60 ms, bỏ khung trễ quá 200 ms. Chiều kính→app: server **không đệm**, chuyển khung đi ngay; app PHẢI tự đệm phía nhận (~60 ms) và phát đều. Phía gửi không cần đệm.
 - Kính có thể không khử vọng tốt: app nên bật tiêu chuẩn `VOICE_COMMUNICATION` (AEC/NS của hệ điều hành) khi thu mic.
 - Cúp từ app: gửi `{"t":"hangup"}` rồi `POST /calls/{id}/hangup` (idempotent, an toàn gọi cả hai). Mất mạng/đóng socket ≈ cúp (`peer_disconnect`).
 - Độ trễ một chiều đo local (không gồm mạng): kính→app ≈ 40–60 ms, app→kính ≈ 80 ms (xem `visioncare-host-demo/docs/E2E_FULL_FLOW.md`); mục tiêu qua Cloudflare ≤ 400 ms.
@@ -465,6 +473,9 @@ server cúp (`media_timeout`). Token sai/đã dùng/hết hạn: server `accept`
 Người dùng nói "cấp cứu / gọi người thân giúp tôi" → server nhắn **mọi** người thân `emergency:true` một tin `KHẨN CẤP: <tên chủ kính> cần giúp. Vị trí: <link bản đồ>`
 (không kèm vị trí nếu điện thoại chủ kính không trả lời trong 5 s) và gọi lần lượt theo `priority`, mỗi người đổ chuông tới hết chuông, hết danh sách thì
 lặp lại, **tối đa 3 vòng**. Người đầu tiên nghe máy thì nối âm thanh như cuộc gọi thường; chủ kính bấm nút khi đang chuông thì dừng cả chuỗi.
+Chuỗi **không dừng** khi kính rớt phiên/nối lại (người dùng có thể vẫn cần giúp); chỉ dừng khi chủ kính bấm nút, hết vòng, hoặc có người nghe máy.
+**Đường dự phòng SIM (có chủ ý):** khi kính không đi được đường internet ở trên, server kính gửi lệnh `emergency_call` (mục 4:
+SMS `[SOS]` + gọi qua điện thoại chủ kính) làm lưới an toàn riêng cho khẩn cấp. Không dùng cho gọi/nhắn thường.
 Với app: **không có endpoint riêng**, chỉ khác ở dữ liệu FCM: `call_incoming.emergency == "true"` và tin `message_in` có `text` bắt đầu bằng `KHẨN CẤP`.
 App nên dùng kênh thông báo ưu tiên cao, đổ chuông to, hiện toàn màn hình, cho nghe/từ chối như cuộc gọi thường (cùng API mục 7.2).
 
@@ -515,9 +526,10 @@ Toàn bộ là **data message** (không có khối `notification`), `android.pri
 | Thông báo (`POST_NOTIFICATIONS`), thông báo toàn màn hình | nhận FCM, hiện cuộc gọi đến khi khoá máy | có |
 | Bỏ tối ưu pin / chạy nền | FCM priority cao tới ngay | nên có |
 | Camera | — | **không cần** |
-| `CALL_PHONE` / `READ_PHONE_STATE` / SMS | — (không gọi qua mạng di động) | **không cần** cho tính năng này |
+| `CALL_PHONE` / `READ_PHONE_STATE` / SMS | — (không gọi qua mạng di động) | **không cần** cho gọi/nhắn qua mạng (app người thân). App chủ kính cần cho đường dự phòng khẩn cấp (mục 7.5) |
 
-Các action cũ của mục 4 (`contact_call`, `emergency_call`, `call_answer`...) là đường gọi điện bằng SIM của Android; tính năng ở mục 7 độc lập với chúng.
+Các action cũ của mục 4 (`contact_call`, `call_answer`...) là đường gọi điện bằng SIM của Android; tính năng ở mục 7 độc lập với chúng. Riêng
+`emergency_call` được GIỮ làm đường dự phòng khẩn cấp (SMS `[SOS]` + gọi qua SIM) khi đường internet không dùng được.
 
 ### 7.9. Thử không cần app thật
 

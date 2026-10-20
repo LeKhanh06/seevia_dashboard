@@ -90,19 +90,23 @@ class CallService:
     async def start_from_glasses(  # noqa: PLR0913
         self,
         *,
-        user_id: str,
         glasses_device_id: str,
         contact_alias: str,
         media_token: str,
         request_id: UUID,
+        user_id: str | None = None,
         emergency: bool = False,
     ) -> Call:
-        """Resolve ``contact_alias`` to one active relative and start ringing them."""
+        """Resolve ``contact_alias`` to one active relative and start ringing them.
+
+        The owner is derived from the authenticated glasses; ``user_id`` (if sent) must match.
+        """
         paired = await self._glasses.get_active_user_id(glasses_device_id)
-        if paired != user_id:
+        if paired is None or (user_id is not None and paired != user_id):
             raise GlassesDeviceNotLinkedError(
                 _NOT_LINKED_MSG, details={"device_id": glasses_device_id}
             )
+        user_id = paired
         existing = await self._calls.get_by_request_id(request_id)
         if existing is not None:
             if existing.glasses_device_id != glasses_device_id:

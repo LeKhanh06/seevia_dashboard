@@ -89,17 +89,21 @@ class EmergencyService:
     async def start(
         self,
         *,
-        user_id: str,
         glasses_device_id: str,
         request_id: UUID,
         media_tokens: list[str],
+        user_id: str | None = None,
     ) -> EmergencyStart:
-        """Start a chain (idempotent per ``request_id``) and ring the first relative."""
+        """Start a chain (idempotent per ``request_id``) and ring the first relative.
+
+        The owner is derived from the authenticated glasses; ``user_id`` (if sent) must match.
+        """
         paired = await self._glasses.get_active_user_id(glasses_device_id)
-        if paired != user_id:
+        if paired is None or (user_id is not None and paired != user_id):
             raise GlassesDeviceNotLinkedError(
                 _NOT_LINKED_MSG, details={"device_id": glasses_device_id}
             )
+        user_id = paired
         existing = await self._emergencies.get_by_request_id(request_id)
         if existing is not None:
             if existing.glasses_device_id != glasses_device_id:

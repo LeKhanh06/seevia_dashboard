@@ -15,8 +15,9 @@ class EmergencyStartRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_id: TrimmedNonEmptyStr
     glasses_device_id: TrimmedNonEmptyStr
+    # Tuỳ chọn: chủ kính do AB suy từ glasses_device_id; có gửi mà khác chủ thật thì từ chối.
+    user_id: TrimmedNonEmptyStr | None = None
     request_id: UUID
     # Token media một lần cho từng lượt gọi (3 vòng x số người), VH sinh sẵn để AB không gọi ngược.
     # Hết token trước khi hết vòng thì chuỗi kết thúc sớm bằng emergency_exhausted.
@@ -44,3 +45,6 @@ class EmergencyStateData(BaseModel):
 
     emergency_id: UUID
     state: EmergencyState
+    # Chỉ có khi `state == "answered"` (người thân vừa nghe máy đúng lúc VH bấm dừng): cuộc gọi đó vẫn `active`,
+    # VH phải gửi `call/{call_id}/hangup` nếu đã đóng đầu kính. Các trạng thái khác: null.
+    call_id: UUID | None = None

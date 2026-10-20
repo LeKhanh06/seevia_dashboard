@@ -66,12 +66,29 @@ class MessageService:
 
     # ------------------------------------------------------------------ glasses server
 
-    async def send_from_glasses(
-        self, *, user_id: str, contact_alias: str, text: str, request_id: UUID
+    async def _owner_of_glasses(self, glasses_device_id: str, user_id: str | None) -> str:
+        """Owner of the authenticated glasses; ``user_id`` (if sent) must be that owner."""
+        owner = await self._glasses.get_active_user_id(glasses_device_id)
+        if owner is None or (user_id is not None and owner != user_id):
+            raise GlassesDeviceNotLinkedError(
+                _NOT_LINKED_MSG, details={"device_id": glasses_device_id}
+            )
+        return owner
+
+    async def send_from_glasses(  # noqa: PLR0913
+        self,
+        *,
+        glasses_device_id: str,
+        contact_alias: str,
+        text: str,
+        request_id: UUID,
+        user_id: str | None = None,
     ) -> Message:
-        """Resolve ``contact_alias`` to one active relative and send them ``text``."""
-        if await self._glasses.get_active_device_id(user_id) is None:
-            raise GlassesDeviceNotLinkedError(_NOT_LINKED_MSG)
+        """Resolve ``contact_alias`` to one active relative and send them ``text``.
+
+        The sender is the owner of ``glasses_device_id``, never a caller-supplied user.
+        """
+        user_id = await self._owner_of_glasses(glasses_device_id, user_id)
         existing = await self._messages.get_by_request_id(request_id)
         if existing is not None:
             return self._same_sender(existing, MessageDirection.TO_RELATIVE, user_id)
@@ -105,17 +122,23 @@ class MessageService:
             await self._push_to_relative(message)
         return message
 
-    async def list_unread_for_glasses(self, user_id: str) -> list[Message]:
-        """Unread messages for the owner's glasses (only relatives with an ``active`` link)."""
+    async def list_unread_for_glasses(
+        self, glasses_device_id: str, user_id: str | None = None
+    ) -> list[Message]:
+        """Unread messages for the owner of ``glasses_device_id`` (``active`` links only)."""
+        user_id = await self._owner_of_glasses(glasses_device_id, user_id)
         return await self._messages.list_unread_for_glasses(user_id, limit=UNREAD_LIMIT)
 
-    async def mark_read(self, message_id: UUID, *, user_id: str | None) -> Message:
-        """Mark a relative->glasses message read (idempotent); ``user_id`` must be its owner."""
+    async def mark_read(
+        self, message_id: UUID, *, glasses_device_id: str, user_id: str | None = None
+    ) -> Message:
+        """Mark a relative->glasses message read (idempotent); the glasses must be its owner's."""
+        owner = await self._owner_of_glasses(glasses_device_id, user_id)
         message = await self._messages.get_locked(message_id)
         if (
             message is None
             or message.direction is not MessageDirection.TO_GLASSES
-            or (user_id is not None and message.owner_user_id != user_id)
+            or message.owner_user_id != owner
         ):
             raise MessageNotFoundError(_NOT_FOUND_MSG)
         self._messages.stamp_read(message)

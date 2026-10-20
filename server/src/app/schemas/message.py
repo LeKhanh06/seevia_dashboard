@@ -16,7 +16,9 @@ class MessageSendRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_id: TrimmedNonEmptyStr
+    # Chủ kính do AB suy từ kính đã xác thực (glasses_device_id); user_id chỉ để đối chiếu.
+    glasses_device_id: TrimmedNonEmptyStr
+    user_id: TrimmedNonEmptyStr | None = None
     contact_alias: TrimmedNonEmptyStr
     text: TrimmedNonEmptyStr = Field(max_length=MESSAGE_MAX_CHARS)
     request_id: UUID
@@ -60,10 +62,11 @@ class UnreadMessagesData(BaseModel):
 
 
 class MessageReadRequest(BaseModel):
-    """Optional body of ``messages/{id}/read``: ``user_id`` pins the owner (404 otherwise)."""
+    """Body of ``messages/{id}/read``: the glasses that read it out must belong to its owner."""
 
     model_config = ConfigDict(extra="forbid")
 
+    glasses_device_id: TrimmedNonEmptyStr
     user_id: TrimmedNonEmptyStr | None = None
 
 

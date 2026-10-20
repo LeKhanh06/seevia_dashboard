@@ -13,6 +13,7 @@ from app.api.calls import get_call_push_adapter
 from app.auth import require_public_scope
 from app.config import PublicApiScope, Settings, get_app_settings
 from app.database import get_db_session
+from app.models.enums import EmergencyState
 from app.schemas.call import CallRelativeData
 from app.schemas.common import OkResponse
 from app.schemas.emergency import EmergencyStartData, EmergencyStartRequest, EmergencyStateData
@@ -74,7 +75,12 @@ async def stop_emergency(
 ) -> OkResponse[EmergencyStateData]:
     """Stop the chain now and cancel the call still ringing (idempotent)."""
     emergency = await service.stop(emergency_id)
-    data = EmergencyStateData(emergency_id=emergency.id, state=emergency.state)
+    answered = emergency.state is EmergencyState.ANSWERED
+    data = EmergencyStateData(
+        emergency_id=emergency.id,
+        state=emergency.state,
+        call_id=emergency.current_call_id if answered else None,
+    )
     await session.commit()
     wake.callback.set()
     await service.dispatch_pushes()

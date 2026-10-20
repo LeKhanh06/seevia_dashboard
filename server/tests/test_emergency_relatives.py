@@ -66,12 +66,18 @@ class World:
         """Session factory on the test database."""
         return build_session_factory(self.engine)
 
-    async def start(self, n_tokens: int = 6, request_id: uuid.UUID | None = None):  # noqa: ANN201
+    async def start(  # noqa: ANN201
+        self,
+        n_tokens: int = 6,
+        request_id: uuid.UUID | None = None,
+        *,
+        send_user_id: bool = True,
+    ):
         """Glasses server starts an emergency with ``n_tokens`` media tokens."""
         return await self.client.post(
             "/api/v1/service/emergency/start",
             json={
-                "user_id": self.owner_id,
+                **({"user_id": self.owner_id} if send_user_id else {}),
                 "glasses_device_id": self.glasses_id,
                 "request_id": str(request_id or uuid.uuid4()),
                 "media_tokens": [f"media-token-{i:04d}" for i in range(n_tokens)],
@@ -381,7 +387,7 @@ async def test_emergency_stop(world: World) -> None:
     for _ in range(2):
         res = await world.client.post(f"/api/v1/service/emergency/{emergency_id}/stop", headers=SVC)
         assert res.status_code == 200, res.text
-        assert res.json()["data"] == {"emergency_id": emergency_id, "state": "stopped"}
+        assert res.json()["data"] == {"emergency_id": emergency_id, "state": "stopped", "call_id": None}
     (ended,) = world.pushes_to("Bố", "call_ended")
     assert ended["reason"] == "cancelled"
 
@@ -412,3 +418,24 @@ async def test_start_without_emergency_contact(world_no_contact: World) -> None:
     assert (res.status_code, res.json()["error"]["code"]) == (404, "EMERGENCY_CONTACT_NOT_FOUND")
     assert await world_no_contact.rows(Emergency) == []
     assert await world_no_contact.calls() == []
+
+
+async def test_start_without_user_id_derives_owner(world: World) -> None:
+    """Không gửi user_id: AB suy chủ từ kính đã xác thực và vẫn chạy chuỗi bình thường."""
+    started = await world.start(send_user_id=False)
+    assert started.status_code == 200, started.text
+    assert (await world.emergency()).owner_user_id == world.owner_id
+
+
+async def test_stop_after_answer_returns_active_call_id(world: World) -> None:
+    """Minor 7: người thân vừa nghe máy rồi VH mới bấm dừng -> state `answered` + call_id để VH cúp cuộc vẫn active."""
+    started = await world.start()
+    emergency_id = started.json()["data"]["emergency_id"]
+    call = (await world.calls())[-1]
+    peer = call.peer_display_name
+    answered = await world.client.post(f"/api/v1/calls/{call.id}/answer", headers=world.sessions[peer])
+    assert answered.status_code == 200, answered.text
+    res = await world.client.post(f"/api/v1/service/emergency/{emergency_id}/stop", headers=SVC)
+    assert res.status_code == 200, res.text
+    assert res.json()["data"] == {"emergency_id": emergency_id, "state": "answered", "call_id": str(call.id)}
+    assert (await world.calls())[-1].state.value == "active"  # AB không tự cúp người đã nghe máy

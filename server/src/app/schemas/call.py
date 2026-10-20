@@ -14,8 +14,9 @@ class CallStartRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_id: TrimmedNonEmptyStr
     glasses_device_id: TrimmedNonEmptyStr
+    # Tuỳ chọn: chủ kính do AB suy từ glasses_device_id; có gửi mà khác chủ thật thì từ chối.
+    user_id: TrimmedNonEmptyStr | None = None
     contact_alias: TrimmedNonEmptyStr
     # Token media một lần do VH sinh; AB chỉ lưu hash và chuyển cho người thân khi nghe máy.
     media_token: str = Field(min_length=8, max_length=256)

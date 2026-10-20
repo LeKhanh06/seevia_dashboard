@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 def _send_body(world: World, text: str = "Con đang đi chợ", alias: str = "má") -> dict:
     return {
-        "user_id": world.owner_id,
+        "glasses_device_id": world.glasses_id,
         "contact_alias": alias,
         "text": text,
         "request_id": str(uuid.uuid4()),
@@ -143,7 +143,9 @@ async def test_revoked_link_message_not_delivered(world: World) -> None:
     (row,) = await world.rows(Message)
     assert row.callback_state.value == "dead_letter"
     unread = await world.client.get(
-        "/api/v1/service/messages/unread", params={"user_id": world.owner_id}, headers=SVC
+        "/api/v1/service/messages/unread",
+        params={"glasses_device_id": world.glasses_id},
+        headers=SVC,
     )
     assert unread.json()["data"]["messages"] == []
 
@@ -179,20 +181,22 @@ async def test_unread_and_mark_read(world: World) -> None:
             "/api/v1/messages", json=_app_body(world, text), headers=world.relative
         )
         assert resp.status_code == 200
-    params = {"user_id": world.owner_id}
+    params = {"glasses_device_id": world.glasses_id}
     unread = await world.client.get("/api/v1/service/messages/unread", params=params, headers=SVC)
     rows = unread.json()["data"]["messages"]
     assert [(m["from_display_name"], m["text"]) for m in rows] == [("Mẹ", "một"), ("Mẹ", "hai")]
 
     first_id = rows[0]["message_id"]
     wrong = await world.client.post(
-        f"/api/v1/service/messages/{first_id}/read", json={"user_id": "someone-else"}, headers=SVC
+        f"/api/v1/service/messages/{first_id}/read",
+        json={"glasses_device_id": world.glasses_id, "user_id": "someone-else"},
+        headers=SVC,
     )
     assert wrong.status_code == 404
     for _ in range(2):  # lặp lại vẫn 200
         read = await world.client.post(
             f"/api/v1/service/messages/{first_id}/read",
-            json={"user_id": world.owner_id},
+            json={"glasses_device_id": world.glasses_id},
             headers=SVC,
         )
         assert read.status_code == 200

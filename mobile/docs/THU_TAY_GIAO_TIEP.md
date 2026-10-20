@@ -78,6 +78,10 @@ Mỗi ca ghi **hãng / model / phiên bản Android**, trạng thái pin và m�
 | 15 | Bật TalkBack; lần lượt khám phá các nút trên màn cuộc gọi, **Người thân**, **Hội thoại**. | TalkBack đọc đúng tên/hành động; nút cuộc gọi đủ lớn để chạm và không nhầm **Nghe** với **Từ chối**. | ☐ |
 | 16 | Đang phát nhạc, gửi lệnh `emergency_call` đồng thời để một lệnh chậm như `music_play` đang chờ. | Lệnh khẩn cấp được xử lý ở làn FAST, không phải chờ lệnh SLOW. | ☐ |
 | 17 | Tắt mạng ngay sau khi điện thoại nhận lệnh để report gửi thất bại; bật mạng lại. | Lệnh không chạy lần hai; report được thử lại trước lệnh kế tiếp hoặc bởi WorkManager khi có mạng. | ☐ |
+| 18 | Bấm Gọi kính rồi bấm Huỷ ngay lập tức (và thử khi tắt mạng). | App không crash; màn hình về trạng thái kết thúc. | ☐ |
+| 19 | Gọi kính nhưng kính không bắt máy, không có thông báo kết thúc tới. | Sau tối đa 45 s app tự kết thúc với "Không ai nghe máy"; không còn thông báo "đang gọi" trên thanh trạng thái. | ☐ |
+| 20 | Kính gọi tới, không ai bấm gì, và tắt mạng điện thoại trong lúc đổ chuông. | Chuông và thông báo cuộc gọi đến tự tắt sau khoảng 45 s. | ☐ |
+| 21 | Máy Android 8 trở xuống: kính gọi tới. | Chuông lặp lại tới khi nghe/từ chối, không chỉ kêu một lần. | ☐ |
 
 ## 5. Khi lỗi thì gửi gì
 

@@ -97,6 +97,8 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/service/messages/unread",
         "/api/v1/service/messages/{message_id}/read",
         "/api/v1/messages",
+        "/api/v1/service/emergency/start",
+        "/api/v1/service/emergency/{emergency_id}/stop",
     }
 
 

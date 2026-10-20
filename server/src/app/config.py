@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     call_media_url: str | None = None
     # Cuộc gọi `active` quá lâu (VH sập, mất hangup) bị đóng để không mồ côi vô hạn.
     call_max_active_s: float = Field(default=7200.0, gt=0)
+    # Khẩn cấp: trần chờ vị trí từ điện thoại người khiếm thị (quá hạn thì nhắn không kèm vị trí)
+    # và số vòng gọi tối đa qua danh sách người thân khẩn cấp.
+    emergency_location_timeout_s: float = Field(default=5.0, gt=0)
+    emergency_max_rounds: int = Field(default=3, ge=1)
 
     demo_time_scale: float = Field(default=1.0, gt=0)
     log_level: LogLevel = LogLevel.INFO

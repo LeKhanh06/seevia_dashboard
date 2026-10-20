@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
     from app.adapters.delivery import DeliveryAdapter
     from app.config import Settings
+    from app.models.care_link import CareLink
     from app.models.message import Message
 
 logger = logging.getLogger("app.services.message")
@@ -82,7 +83,14 @@ class MessageService:
             raise MultipleContactsFoundError(
                 _MANY_CONTACTS_MSG, details={"candidates": [m.display_name for m in matches]}
             )
-        link = matches[0]
+        message = await self.send_to_link(matches[0], text, request_id=request_id)
+        return self._same_sender(message, MessageDirection.TO_RELATIVE, user_id)
+
+    async def send_to_link(self, link: CareLink, text: str, *, request_id: UUID) -> Message:
+        """Text the relative of a resolved ``active`` link (also used by the emergency chain).
+
+        Idempotent per ``request_id``: a replay returns the stored message without pushing again.
+        """
         message, created = await self._messages.create(
             owner_user_id=link.owner_user_id,
             relative_user_id=link.relative_user_id,
@@ -93,9 +101,8 @@ class MessageService:
             request_id=request_id,
             needs_callback=False,
         )
-        if not created:
-            return self._same_sender(message, MessageDirection.TO_RELATIVE, user_id)
-        await self._push_to_relative(message)
+        if created:
+            await self._push_to_relative(message)
         return message
 
     async def list_unread_for_glasses(self, user_id: str) -> list[Message]:

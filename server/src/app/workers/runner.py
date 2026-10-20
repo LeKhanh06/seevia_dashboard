@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from app.workers.callback import CallbackWorker
 from app.workers.delivery import DeliveryWorker
+from app.workers.emergency import EmergencyWorker
 from app.workers.timeout import TimeoutWorker
 from app.workers.wake import WorkerWakeSignals
 
@@ -42,7 +43,7 @@ class WorkerRunner:
         return self._started and any(not t.done() for t in self._tasks)
 
     def start(self) -> None:
-        """Spawn background tasks for delivery, timeout, and callback workers."""
+        """Spawn background tasks for delivery, timeout, callback, and emergency workers."""
         if self._started:
             return
 
@@ -50,9 +51,14 @@ class WorkerRunner:
         delivery_worker = DeliveryWorker(
             self._session_factory, self._settings, self._wake_signals.delivery
         )
-        timeout_worker = TimeoutWorker(self._session_factory, self._settings)
+        timeout_worker = TimeoutWorker(
+            self._session_factory, self._settings, self._wake_signals.emergency_chain
+        )
         callback_worker = CallbackWorker(
             self._session_factory, self._settings, self._wake_signals.callback
+        )
+        emergency_worker = EmergencyWorker(
+            self._session_factory, self._settings, self._wake_signals
         )
 
         self._tasks = [
@@ -65,9 +71,12 @@ class WorkerRunner:
             asyncio.create_task(
                 callback_worker.run_loop(self._shutdown_event), name="callback-worker"
             ),
+            asyncio.create_task(
+                emergency_worker.run_loop(self._shutdown_event), name="emergency-worker"
+            ),
         ]
         self._started = True
-        logger.info("Started background worker runner with 3 worker loops")
+        logger.info("Started background worker runner with 4 worker loops")
 
     async def stop(self) -> None:
         """Signal shutdown event and wait gracefully for worker tasks to finish."""

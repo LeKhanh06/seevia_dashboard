@@ -60,6 +60,15 @@ class CallCallbackState(StrEnum):
     DEAD_LETTER = "dead_letter"
 
 
+class EmergencyState(StrEnum):
+    """Emergency chain: ``running`` -> ``answered`` | ``exhausted`` | ``stopped``."""
+
+    RUNNING = "running"
+    ANSWERED = "answered"
+    EXHAUSTED = "exhausted"
+    STOPPED = "stopped"
+
+
 class MessageDirection(StrEnum):
     """Who wrote the message: the glasses' owner (to a relative) or a relative (to the glasses)."""
 

@@ -166,6 +166,20 @@ class MultipleContactsFoundError(PublicApiError):
     code = "MULTIPLE_CONTACTS_FOUND"
 
 
+class EmergencyNotFoundError(PublicApiError):
+    """Raised when an emergency chain does not exist."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "EMERGENCY_NOT_FOUND"
+
+
+class NoEmergencyContactError(PublicApiError):
+    """Raised when the owner has no ``active`` relative flagged for emergencies."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "EMERGENCY_CONTACT_NOT_FOUND"
+
+
 class CallNotFoundError(PublicApiError):
     """Raised when a call is missing or the caller is not a party to it."""
 

@@ -61,6 +61,7 @@ async def _commit_and_notify(
     """Commit, then wake the callback worker and send the queued pushes."""
     await session.commit()
     wake.callback.set()
+    wake.emergency_chain.set()  # cuộc gọi vừa đổi trạng thái: chuỗi khẩn cấp (nếu có) đi tiếp
     await service.dispatch_pushes()
 
 

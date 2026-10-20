@@ -3,6 +3,7 @@
 from app.models.call import Call, CallCallback
 from app.models.care_link import CareLink
 from app.models.device import Device
+from app.models.emergency import Emergency
 from app.models.enums import (
     Action,
     CallbackState,
@@ -13,6 +14,7 @@ from app.models.enums import (
     DeliveryState,
     DevicePlatform,
     DeviceStatus,
+    EmergencyState,
     GlassesLinkStatus,
     MessageCallbackState,
     MessageDirection,
@@ -40,6 +42,8 @@ __all__ = [
     "Device",
     "DevicePlatform",
     "DeviceStatus",
+    "Emergency",
+    "EmergencyState",
     "GlassesDevice",
     "GlassesLinkStatus",
     "Message",

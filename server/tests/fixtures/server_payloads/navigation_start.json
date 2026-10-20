@@ -7,5 +7,6 @@
   "issued_at": "2026-10-19T08:00:00.000000+00:00",
   "deadline_at": "2026-10-19T08:00:01.000000+00:00",
   "expires_at": "2026-10-19T08:01:00.000000+00:00",
-  "requested_priority": "high"
+  "requested_priority": "high",
+  "maps_url": "https://www.google.com/maps/dir/?api=1&destination=B%C6%B0u%20%C4%91i%E1%BB%87n%20Th%C3%A0nh%20ph%E1%BB%91%20H%E1%BB%93%20Ch%C3%AD%20Minh&travelmode=walking"
 }

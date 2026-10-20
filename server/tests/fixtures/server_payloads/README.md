@@ -19,6 +19,7 @@ Mọi giá trị đều là chuỗi (ràng buộc của FCM data).
 | `deadline_at` | hạn server dự định chờ kết quả (lưu ý: hiện server đặt = `issued_at` + 1 s) |
 | `expires_at` | lúc lệnh hết hạn; sau đó server không còn chờ report |
 | `requested_priority` | luôn `high` |
+| `maps_url` | chỉ có ở `navigation_start`: URL Google Maps chỉ đường đi bộ tới `destination` (địa chỉ, hoặc `lat,lng`); thêm vào, không đổi `params_json` |
 
 `params_json` theo action: `contact_call {name}`, `ride_quote {current_location, destination}`,
 `ride_confirm {quote_id, confirm}`, `music_play {song, volume?}`, `music_stop {}`,

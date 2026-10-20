@@ -348,7 +348,182 @@ thoại chỉ trả lời khi được hỏi.
 
 ## 7. Gọi điện / nhắn tin với kính
 
-(bổ sung khi plan 2026-10-19-glasses-calls-messages xong)
+Người khiếm thị nói và nghe **ngay trên kính**; người thân dùng chính app này. Cuộc gọi và tin nhắn đi **qua internet
+giống Messenger**: gọi thoại bằng WebSocket `WS /v2/call` (PCM16) và báo cuộc gọi/tin bằng FCM. **Không dùng SIM, không gọi
+số điện thoại, không SMS, không có video call.** Vì vậy app người thân:
+
+- **Chỉ cần quyền micro (`RECORD_AUDIO`) và quyền thông báo (`POST_NOTIFICATIONS`, kèm thông báo toàn màn hình/`USE_FULL_SCREEN_INTENT`
+  để màn hình cuộc gọi hiện khi khoá máy).** Trên iOS: micro + thông báo (+ CallKit/PushKit nếu muốn đổ chuông như cuộc gọi thường, tuỳ app).
+- **KHÔNG cần quyền camera, KHÔNG cần quyền gọi điện thoại (`CALL_PHONE`)**, không cần danh bạ/SMS cho tính năng này.
+- Server **không có** trường hay endpoint video nào; đừng thêm.
+
+Hai server (như mục đầu tài liệu): mọi URL dưới đây là **app server** (AB). Âm thanh KHÔNG đi qua AB mà qua server kính (VH) theo `media_url`.
+Xác thực: `Authorization: Bearer <access_token>` của phiên người dùng (mục 2.1, đăng nhập bằng số điện thoại), **không** phải Device API token.
+Điện thoại vẫn phải `POST /api/v1/device/register` (mục 2.2) với `user_id` = `public_user_id` của tài khoản để nhận FCM; server đẩy tới
+điện thoại đăng ký gần nhất của user. Mọi phản hồi thành công: `{"status":"ok","data":{...}}`; lỗi theo envelope ở mục 2.
+
+```text
+        đổ chuông / tin (FCM data)                       âm thanh (WS /v2/call, PCM16)
+ kính ─► VH ─► AB ───────────────► app người thân          kính ◄─► VH ◄──────► app người thân
+        ▲        ◄─ REST /api/v1/care|calls|messages ──
+```
+
+### 7.1. Quan hệ người thân (`care_links`)
+
+Chủ kính mời người thân bằng số điện thoại; người thân phải đã có tài khoản và **chấp nhận** thì mới gọi/nhắn được.
+
+| Việc | Endpoint (Bearer app session) | Body | `data` |
+|---|---|---|---|
+| Mời (chủ kính) | `POST /api/v1/care/invite` | `{phone_number, display_name, aliases:[str] (≤10), emergency:bool, priority:int 0-100}` | `CareLink` (bên dưới), `status:"pending"` |
+| Chấp nhận (người thân) | `POST /api/v1/care/{link_id}/accept` | không | `CareLink`, `status:"active"` |
+| Danh sách (cả hai vai) | `GET /api/v1/care/links` | | `{links:[CareLink]}` (ẩn link đã thu hồi) |
+| Sửa (chủ kính) | `PATCH /api/v1/care/{link_id}` | `{aliases?, emergency?, priority?}` | `CareLink` |
+| Thu hồi (cả hai bên) | `DELETE /api/v1/care/{link_id}` | | `CareLink`, `status:"revoked"` |
+
+```json
+{ "status": "ok", "data": { "id": "9c1f0d0e-6c43-4b8e-9f41-0d5b6a3f2a11", "role": "owner", "status": "active",
+  "display_name": "Mẹ", "aliases": ["mẹ", "má"], "emergency": true, "priority": 0,
+  "owner_user_id": "user-A1B2C3", "relative_user_id": "user-D4E5F6",
+  "peer_display_name": "Mẹ Hoa", "peer_phone_number": "0911000001", "created_at": "2026-10-20T07:10:00Z" } }
+```
+
+- `role` là vai của NGƯỜI GỌI API trong link (`owner` = chủ kính, `relative` = người thân). `owner_user_id`/`relative_user_id` là `public_user_id`.
+- `display_name` + `aliases` là tên chủ kính dùng để gọi ("gọi cho mẹ"). Khớp không phân biệt hoa/thường, bỏ dấu câu; ưu tiên khớp đúng dấu rồi mới khớp
+  không dấu. Hai người cùng tên gọi → kính hỏi lại "Bạn muốn gọi ai: A hay B?".
+- `emergency:true` + `priority` (nhỏ gọi trước): danh sách khẩn cấp (mục 7.5).
+- Lỗi: `404 USER_NOT_FOUND` (số chưa đăng ký), `404 CARE_LINK_NOT_FOUND` (không phải bên liên quan, cũng dùng khi không có quyền để không lộ id),
+  `409 CARE_LINK_CONFLICT` (đã mời/đang active, tự mời mình).
+- Thu hồi link: mọi cuộc gọi đang chuông/đang nói của cặp đó bị kết thúc (`reason:"revoked"`), tin chưa giao bị huỷ.
+
+**Màn hình app:** (1) danh sách người thân + lời mời đang chờ (nút Chấp nhận); (2) chủ kính: form mời (số điện thoại, tên hiển thị, tên gọi/alias, bật khẩn cấp, thứ tự ưu tiên).
+
+### 7.2. Cuộc gọi
+
+Trạng thái cuộc gọi trên AB: `ringing → active → ended`, hoặc `missed` (hết chuông, mặc định 30 s), `rejected`, `failed`. Hai chiều:
+`to_relative` (kính gọi người thân) và `to_glasses` (người thân gọi kính).
+
+| Việc | Endpoint | Body | `data` |
+|---|---|---|---|
+| Gọi tới kính | `POST /api/v1/calls` | `{owner_user_id}` (cần link `active`) | `{call_id}` |
+| Nghe máy | `POST /api/v1/calls/{call_id}/answer` | không | `{call_id, media_url, media_token\|null}` |
+| Từ chối (khi đang chuông) | `POST /api/v1/calls/{call_id}/reject` | không | `CallData` |
+| Cúp / huỷ | `POST /api/v1/calls/{call_id}/hangup` | không | `CallData` |
+| Xem / đồng bộ | `GET /api/v1/calls/{call_id}` | | `CallData` |
+
+```json
+{ "status": "ok", "data": { "call_id": "1886c84f-9436-4edd-a417-24cc1aa66c3c", "media_url": "wss://api.visioncare-host.uk/v2/call",
+  "media_token": "s3cr3t-one-time-token" } }
+```
+
+```json
+{ "status": "ok", "data": { "call_id": "1886c84f-9436-4edd-a417-24cc1aa66c3c", "direction": "to_relative", "state": "active",
+  "end_reason": null, "emergency": false, "peer_display_name": "Cô Sáu", "media_url": "wss://api.visioncare-host.uk/v2/call",
+  "media_token": null, "created_at": "2026-10-20T07:10:01Z", "answered_at": "2026-10-20T07:10:03Z", "ended_at": null } }
+```
+
+- `media_token` chỉ giao **MỘT lần** (lần nghe đầu tiên; gọi `answer` lặp lại trả `null`), dùng một lần ở `WS /v2/call`, hết hạn sau khi hết chuông.
+  Cuộc gọi `to_glasses`: token tới qua FCM `call_answered` (hoặc `GET` trong vòng 60 s sau khi kính nghe). Đừng ghi token ra log.
+- `peer_display_name`: với người thân là tên chủ kính (tên tài khoản của họ); `end_reason` ví dụ `cancelled|rejected|hangup|missed|timeout|revoked|max_duration|glasses_offline|busy|app_hangup|glasses_hangup`.
+- Gọi lặp khi cuộc `ringing` tới kính còn hiệu lực trả lại cùng `call_id` (không đổ chuông thêm).
+- Lỗi: `404 CALL_NOT_FOUND` (không phải bên liên quan), `403 CALL_NOT_ALLOWED` (không còn link `active`), `409 CALL_STATE_CONFLICT`
+  (nghe/cúp cuộc đã kết thúc hoặc quá hạn chuông).
+- Người thân không có điện thoại đã đăng ký: cuộc gọi vào thẳng `missed` trong ~1 s.
+- Mọi cuộc gọi `active` quá 2 giờ bị server đóng (`max_duration`).
+
+### 7.3. Âm thanh: `WS /v2/call?token=<media_token>`
+
+App nối vào `media_url` + `?token=<media_token>` **ngay sau khi nghe** (`answer` / FCM `call_answered`). Quá 15 s sau khi cuộc gọi `active` mà chưa nối thì
+server cúp (`media_timeout`). Token sai/đã dùng/hết hạn: server `accept` rồi đóng mã **4401**.
+
+| Hướng | Khung | Nội dung |
+|---|---|---|
+| app → server | binary | PCM16 little-endian, **16 kHz, mono, khung 20 ms = 640 byte**, gửi đều đặn theo thời gian thực (không gộp, không bỏ). Khung dài hơn 16 KB bị bỏ. |
+| server → app | binary | cùng định dạng (tiếng người trên kính), 640 byte/khung |
+| app → server | text | `{"t":"hangup"}` cúp; `{"t":"mute","on":true}` báo app tắt mic (chỉ thông tin; đơn giản nhất là ngừng gửi khung) |
+| server → app | text | `{"t":"state","state":"ringing"\|"active"\|"ended","reason"?:str}`; sau `ended` server đóng socket (1000) |
+
+- Server đệm chống giật 60 ms mỗi hướng, bỏ khung trễ quá 200 ms; app KHÔNG cần tự đệm phía gửi, phía nhận nên có đệm nhỏ (~60 ms) và phát đều.
+- Kính có thể không khử vọng tốt: app nên bật tiêu chuẩn `VOICE_COMMUNICATION` (AEC/NS của hệ điều hành) khi thu mic.
+- Cúp từ app: gửi `{"t":"hangup"}` rồi `POST /calls/{id}/hangup` (idempotent, an toàn gọi cả hai). Mất mạng/đóng socket ≈ cúp (`peer_disconnect`).
+- Độ trễ một chiều đo local (không gồm mạng): kính→app ≈ 40–60 ms, app→kính ≈ 80 ms (xem `visioncare-host-demo/docs/E2E_FULL_FLOW.md`); mục tiêu qua Cloudflare ≤ 400 ms.
+
+### 7.4. Nhắn tin
+
+| Việc | Endpoint | Body | `data` |
+|---|---|---|---|
+| Gửi tới kính | `POST /api/v1/messages` | `{owner_user_id, text (1-1000), request_id (UUID)}` | `{message_id, created_at}` |
+| Lịch sử | `GET /api/v1/messages?with=<user_id>&before=<ISO>&limit=50` | | `{messages:[{id, direction, from_me, text, created_at, read_at}]}` mới → cũ |
+
+- `request_id` do app sinh cho mỗi tin; gửi lại cùng `request_id` + cùng người gửi là idempotent (không nhắn đôi); cùng id khác người gửi: `409 REQUEST_ID_CONFLICT`.
+- `read_at` (tin gửi tới kính): lúc kính ĐỌC cho người dùng nghe; app hiện "đã nghe". Kính đang bận (trong lượt/cuộc gọi) sẽ xếp hàng rồi đọc, không mất.
+- Tin từ kính tới người thân đến bằng FCM `message_in` (bên dưới); lịch sử có cả hai chiều (`direction`: `to_glasses|to_relative`, `from_me` theo người gọi API).
+- Lỗi: `403 MESSAGE_NOT_ALLOWED` (không có link `active`), `400 INVALID_REQUEST` (rỗng/toàn khoảng trắng/>1000 ký tự).
+- Không có SMS: tin chỉ hiện trong app.
+
+### 7.5. Khẩn cấp
+
+Người dùng nói "cấp cứu / gọi người thân giúp tôi" → server nhắn **mọi** người thân `emergency:true` một tin `KHẨN CẤP: <tên chủ kính> cần giúp. Vị trí: <link bản đồ>`
+(không kèm vị trí nếu điện thoại chủ kính không trả lời trong 5 s) và gọi lần lượt theo `priority`, mỗi người đổ chuông tới hết chuông, hết danh sách thì
+lặp lại, **tối đa 3 vòng**. Người đầu tiên nghe máy thì nối âm thanh như cuộc gọi thường; chủ kính bấm nút khi đang chuông thì dừng cả chuỗi.
+Với app: **không có endpoint riêng**, chỉ khác ở dữ liệu FCM: `call_incoming.emergency == "true"` và tin `message_in` có `text` bắt đầu bằng `KHẨN CẤP`.
+App nên dùng kênh thông báo ưu tiên cao, đổ chuông to, hiện toàn màn hình, cho nghe/từ chối như cuộc gọi thường (cùng API mục 7.2).
+
+### 7.6. FCM
+
+Toàn bộ là **data message** (không có khối `notification`), `android.priority=high`, `ttl=30s`, mọi giá trị là **chuỗi**; trường `type` quyết định loại.
+Điện thoại offline quá TTL thì mất thông điệp: khi mở app/đổ chuông trễ hãy `GET /api/v1/calls/{call_id}` để đồng bộ trạng thái.
+
+```json
+{ "type": "call_incoming", "call_id": "1886c84f-9436-4edd-a417-24cc1aa66c3c", "from_display_name": "Cô Sáu", "emergency": "false" }
+```
+```json
+{ "type": "call_answered", "call_id": "3ec6b46b-8e02-4e49-bc45-8236c6176f76", "media_url": "wss://api.visioncare-host.uk/v2/call", "media_token": "s3cr3t-one-time-token" }
+```
+```json
+{ "type": "call_ended", "call_id": "1886c84f-9436-4edd-a417-24cc1aa66c3c", "reason": "glasses_hangup" }
+```
+```json
+{ "type": "message_in", "message_id": "7edb532f-d951-4fb2-abd1-b22b869aeaf9", "from_display_name": "Cô Sáu", "text": "Con sẽ về muộn" }
+```
+
+| `type` | Khi nào | Việc app làm |
+|---|---|---|
+| `call_incoming` | kính gọi người thân (kể cả khẩn cấp, `emergency:"true"`) | hiện màn hình cuộc gọi đến (chuông, Nghe/Từ chối) |
+| `call_answered` | người thân gọi kính và **kính đã bấm nghe** | nối `WS /v2/call` bằng `media_url`+`media_token` |
+| `call_ended` | cuộc gọi kết thúc ở phía kính/server/hết chuông (`reason`) | tắt chuông / đóng màn hình / đóng media WS |
+| `message_in` | kính nhắn người thân, hoặc tin KHẨN CẤP | thông báo + thêm vào hội thoại |
+
+### 7.7. Máy trạng thái màn hình cuộc gọi
+
+```text
+              FCM call_incoming                  bấm Nghe: POST /answer → mở WS
+  (rảnh) ───────────────────► ĐỔ CHUÔNG ─────────────────────────────► ĐANG NÓI ──► (rảnh)
+                                │  Từ chối: POST /reject / hết giờ / FCM call_ended │  Cúp: WS {"t":"hangup"} + POST /hangup
+                                └────────────────────────────────────────────────►──┘  hoặc server {"t":"state","state":"ended"}
+  (rảnh) ── bấm Gọi kính: POST /calls ─► ĐANG GỌI ── FCM call_answered → mở WS ─► ĐANG NÓI
+                                         │  Huỷ: POST /hangup · FCM call_ended (missed/rejected/...)
+```
+
+- Đang nói: đồng hồ, nút tắt mic (ngừng gửi khung / `{"t":"mute"}`), nút loa ngoài, nút cúp. Khi nhận `state:"ended"` hoặc socket đóng: dừng thu/phát, hiện lý do (`reason`).
+- Bấm Gọi kính khi kính đang bận hoặc offline: cuộc gọi kết thúc nhanh qua FCM `call_ended` (`busy`/`glasses_offline`), hiển thị "Kính đang bận / không kết nối".
+
+### 7.8. Quyền và cấu hình app
+
+| Quyền | Để làm gì | Bắt buộc |
+|---|---|---|
+| Micro (`RECORD_AUDIO`) | thu giọng khi nói chuyện | có |
+| Thông báo (`POST_NOTIFICATIONS`), thông báo toàn màn hình | nhận FCM, hiện cuộc gọi đến khi khoá máy | có |
+| Bỏ tối ưu pin / chạy nền | FCM priority cao tới ngay | nên có |
+| Camera | — | **không cần** |
+| `CALL_PHONE` / `READ_PHONE_STATE` / SMS | — (không gọi qua mạng di động) | **không cần** cho tính năng này |
+
+Các action cũ của mục 4 (`contact_call`, `emergency_call`, `call_answer`...) là đường gọi điện bằng SIM của Android; tính năng ở mục 7 độc lập với chúng.
+
+### 7.9. Thử không cần app thật
+
+`server/scripts/relative_sim.py` đóng vai người thân (đăng ký + OTP + chấp nhận lời mời, nhận FCM qua `DELIVERY_TRANSPORT=webhook`, nghe/từ chối/bỏ qua theo
+kịch bản, mở `WS /v2/call`, phát PCM16 và ghi tiếng nhận ra `rx_*.wav`). Chạy cùng kính giả lập bằng `visioncare-host-demo/tools/e2e_calls.py`
+(xem mục 8 và `docs/E2E_FULL_FLOW.md` ở repo server kính).
 
 ## 8. Kiểm thử không cần kính
 

@@ -31,6 +31,8 @@ private class FakeLog : CommandLog {
 
     override fun unsentReports(): List<PendingReportRecord> =
         reports.values.filter { it.status == ReportStatus.PENDING || it.status == ReportStatus.FAILED }
+
+    override fun reportStatus(requestId: String): String? = reports[requestId]?.status
 }
 
 private class FakeSender(var outcome: ReportOutcome = ReportOutcome.SENT) : ReportSender {
@@ -248,5 +250,86 @@ class CommandPipelineTest {
 
         assertTrue(sender.sent.isEmpty())
         assertEquals(ReportStatus.ABANDONED, log.reports.getValue("req-bad").status)
+    }
+
+    @Test
+    fun `two flushes at the same time send a pending report only once`() {
+        log.savePendingReport(PendingReportRecord("req-slow", "user-1", "phone-1", "contact_call", executionState = "succeeded"))
+        val inside = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val blocking = object : ReportSender {
+            val sent = java.util.concurrent.atomic.AtomicInteger()
+            override fun send(credentials: DeviceCredentials, payload: DeviceReportPayload): ReportOutcome {
+                sent.incrementAndGet()
+                inside.countDown()
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                return ReportOutcome.SENT
+            }
+        }
+        var firstResult = -1
+        val first = Thread { firstResult = ReportFlusher(log, blocking).flush(credentials) }
+        first.start()
+        assertTrue(inside.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+        val second = ReportFlusher(log, blocking).flush(credentials) // a flush is running: skipped
+        release.countDown()
+        first.join(5_000)
+
+        assertEquals(0, second)
+        assertEquals(1, firstResult)
+        assertEquals(1, blocking.sent.get())
+        assertEquals(ReportStatus.SENT, log.reports.getValue("req-slow").status)
+    }
+
+    @Test
+    fun `a report that is already sent is not sent again by a later flush or dispatch path`() {
+        dispatcher.dispatch(command(), credentials)
+        assertEquals(ReportStatus.SENT, log.reports.getValue("req-1").status)
+
+        // Another path still holds the stale PENDING copy it read earlier.
+        val stale = log.reports.getValue("req-1").copy(status = ReportStatus.PENDING)
+        val outcome = sendOnce(log, sender, credentials, stale)
+
+        assertEquals(ReportOutcome.SENT, outcome)
+        assertEquals(1, sender.sent.size)
+    }
+
+    @Test
+    fun `a late 409 never turns a delivered report into abandoned`() {
+        log.savePendingReport(PendingReportRecord("req-409", "user-1", "phone-1", "contact_call", executionState = "succeeded"))
+        val racing = object : ReportSender {
+            override fun send(credentials: DeviceCredentials, payload: DeviceReportPayload): ReportOutcome {
+                // Meanwhile the other path delivered it; this duplicate gets refused.
+                log.updateReportStatus("req-409", ReportStatus.SENT, 1)
+                return ReportOutcome.REJECTED
+            }
+        }
+
+        sendOnce(log, racing, credentials, log.reports.getValue("req-409"))
+
+        assertEquals(ReportStatus.SENT, log.reports.getValue("req-409").status)
+    }
+
+    @Test
+    fun `a report being sent right now is left to the sender in progress`() {
+        log.savePendingReport(PendingReportRecord("req-busy", "user-1", "phone-1", "contact_call", executionState = "succeeded"))
+        val inside = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val slow = ReportSender { _, _ ->
+            inside.countDown()
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            ReportOutcome.SENT
+        }
+        val record = log.reports.getValue("req-busy")
+        val thread = Thread { sendOnce(log, slow, credentials, record) }
+        thread.start()
+        assertTrue(inside.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+        val outcome = sendOnce(log, sender, credentials, record)
+        release.countDown()
+        thread.join(5_000)
+
+        assertEquals(ReportOutcome.RETRY, outcome)
+        assertTrue(sender.sent.isEmpty())
     }
 }

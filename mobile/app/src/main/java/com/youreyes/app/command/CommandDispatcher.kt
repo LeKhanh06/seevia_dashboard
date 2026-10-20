@@ -79,6 +79,9 @@ interface CommandLog {
     fun savePendingReport(record: PendingReportRecord)
     fun updateReportStatus(requestId: String, status: String, attempts: Int)
     fun unsentReports(): List<PendingReportRecord>
+
+    /** Current status of one stored report ([ReportStatus]), or null if there is none. */
+    fun reportStatus(requestId: String): String?
 }
 
 enum class ReportOutcome { SENT, RETRY, REJECTED }
@@ -200,27 +203,44 @@ fun PendingReportRecord.toPayload(): DeviceReportPayload? {
     )
 }
 
-/** Sends one stored report and records the attempt; true when the server accepted it. */
+/** Reports being sent right now by this process, so one report never goes out twice at once. */
+private val reportsInFlight: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+/**
+ * Sends one stored report and records the attempt.
+ *
+ * Safe to call from several threads for the same report: only one sends, the others get
+ * [ReportOutcome.RETRY] without touching the row. A report already SENT is never sent again and
+ * is never downgraded afterwards (a late 409 for a report another thread delivered is not a failure).
+ */
 internal fun sendOnce(
     store: CommandLog,
     sender: ReportSender,
     credentials: DeviceCredentials,
     record: PendingReportRecord,
 ): ReportOutcome {
-    val payload = record.toPayload() ?: run {
-        store.updateReportStatus(record.requestId, ReportStatus.ABANDONED, record.attempts)
-        return ReportOutcome.REJECTED
-    }
-    val attempts = record.attempts + 1
-    val outcome = runCatching { sender.send(credentials, payload) }.getOrDefault(ReportOutcome.RETRY)
-    store.updateReportStatus(
-        record.requestId,
-        when (outcome) {
+    if (!reportsInFlight.add(record.requestId)) return ReportOutcome.RETRY
+    try {
+        when (store.reportStatus(record.requestId)) {
+            ReportStatus.SENT -> return ReportOutcome.SENT
+            ReportStatus.ABANDONED -> return ReportOutcome.REJECTED
+        }
+        val payload = record.toPayload() ?: run {
+            store.updateReportStatus(record.requestId, ReportStatus.ABANDONED, record.attempts)
+            return ReportOutcome.REJECTED
+        }
+        val attempts = record.attempts + 1
+        val outcome = runCatching { sender.send(credentials, payload) }.getOrDefault(ReportOutcome.RETRY)
+        val status = when (outcome) {
             ReportOutcome.SENT -> ReportStatus.SENT
             ReportOutcome.RETRY -> ReportStatus.FAILED
             ReportOutcome.REJECTED -> ReportStatus.ABANDONED
-        },
-        attempts,
-    )
-    return outcome
+        }
+        if (status == ReportStatus.SENT || store.reportStatus(record.requestId) != ReportStatus.SENT) {
+            store.updateReportStatus(record.requestId, status, attempts)
+        }
+        return outcome
+    } finally {
+        reportsInFlight.remove(record.requestId)
+    }
 }

@@ -61,6 +61,13 @@ sealed interface CallEvent {
 
     /** The call screen closed after showing [CallState.Ended]. */
     data object Dismiss : CallEvent
+
+    /**
+     * Time passed (the controller sends one about every second while calling or connecting). The
+     * machine reads its own clock: it times out calling (45 s) and connecting (15 s) and asks
+     * the server how a calling call is doing every 5 s.
+     */
+    data object Tick : CallEvent
 }
 
 sealed interface CallEffect {
@@ -92,12 +99,23 @@ class CallStateMachine(
     private val endedIds = LinkedHashSet<String>()
     private var mediaOpenedFor: String? = null
 
+    /** When the current calling / connecting phase began, and when the server was last asked. */
+    private var phaseStartedAt = 0L
+    private var lastPollAt = 0L
+
     internal fun endedIdCount(): Int = endedIds.size
 
     @Synchronized
     fun handle(event: CallEvent): List<CallEffect> {
-        val (next, effects) = reduce(state, event)
+        val previous = state
+        val (next, effects) = reduce(previous, event)
         state = next
+        val enteredCalling = next is CallState.Outgoing && previous !is CallState.Outgoing
+        val enteredConnecting = next is CallState.Connecting && previous !is CallState.Connecting
+        if (enteredCalling || enteredConnecting || effects.any { it is CallEffect.OpenMedia }) {
+            phaseStartedAt = clock()
+            lastPollAt = phaseStartedAt
+        }
         return effects
     }
 
@@ -113,6 +131,7 @@ class CallStateMachine(
         is CallEvent.AnswerReply -> onAnswerReply(state, event.callId, event.result)
         is CallEvent.SyncResult -> onSync(state, event.callId, event.result)
         is CallEvent.SocketState -> onSocket(state, event)
+        CallEvent.Tick -> onTick(state)
         CallEvent.Dismiss -> if (state is CallState.Ended) CallState.Idle to NONE else state to NONE
     }
 
@@ -222,7 +241,10 @@ class CallStateMachine(
                 result.data.mediaToken
                     ?.let { openMedia(callId, result.data.mediaUrl, it) }
                     ?: (s to listOf(CallEffect.CallApi(CallOp.GET, callId))) // token already handed out: ask again
-            else -> finish(s, callId, failureVi(result, ENDED_GENERIC))
+            else -> finish(s, callId, failureVi(result, ENDED_GENERIC)).let { (ended, effects) ->
+                // The request may have reached the server although the reply never came back.
+                if (result is ApiResult.Network) ended to (effects + CallEffect.CallApi(CallOp.HANGUP, callId)) else ended to effects
+            }
         }
     }
 
@@ -257,6 +279,38 @@ class CallStateMachine(
                 s to NONE
             }
         else -> s to NONE
+    }
+
+    // ---- time ----
+
+    private fun onTick(s: CallState): Step {
+        val now = clock()
+        return when (s) {
+            is CallState.Outgoing -> when {
+                now - phaseStartedAt >= OUTGOING_TIMEOUT_MS -> {
+                    val reason = endReasonVi("timeout")
+                    remember(s.callId)
+                    val hangup = if (s.callId == CallState.PENDING_ID) NONE else listOf(CallEffect.CallApi(CallOp.HANGUP, s.callId))
+                    CallState.Ended(s.callId, reason) to (hangup + CallEffect.ShowEnded(reason))
+                }
+                s.callId != CallState.PENDING_ID && now - lastPollAt >= POLL_MS -> {
+                    lastPollAt = now
+                    s to listOf(CallEffect.CallApi(CallOp.GET, s.callId))
+                }
+                else -> s to NONE
+            }
+            is CallState.Connecting ->
+                if (now - phaseStartedAt >= CONNECTING_TIMEOUT_MS) {
+                    val reason = endReasonVi("media_timeout")
+                    remember(s.callId)
+                    val close = if (mediaOpenedFor == s.callId) listOf(CallEffect.CloseMedia) else NONE
+                    CallState.Ended(s.callId, reason) to
+                        (close + CallEffect.CallApi(CallOp.HANGUP, s.callId) + CallEffect.ShowEnded(reason))
+                } else {
+                    s to NONE
+                }
+            else -> s to NONE
+        }
     }
 
     // ---- helpers ----
@@ -303,6 +357,9 @@ class CallStateMachine(
 
     private companion object {
         const val MAX_ENDED_IDS = 50
+        const val OUTGOING_TIMEOUT_MS = 45_000L
+        const val CONNECTING_TIMEOUT_MS = 15_000L
+        const val POLL_MS = 5_000L
         const val ENDED_GENERIC = "Cuộc gọi đã kết thúc"
         const val SESSION_EXPIRED = "Phiên đăng nhập hết hạn"
         const val START_FAILED = "Không gọi được người này"

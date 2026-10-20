@@ -78,7 +78,7 @@ object TelecomBridge {
 
     /** The user answered somewhere other than Telecom's own UI (our screen / notification). */
     fun markActive() {
-        current?.markActive()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) current?.markActive()
     }
 
     /** The call is over; [cause] is a [DisconnectCause] code. */

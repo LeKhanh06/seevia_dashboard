@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.youreyes.app.MainActivity
+import com.youreyes.app.calls.CallNotifications
 import com.youreyes.app.calls.CallPush
 
 /** Notifications for messages from the glasses. Content is shown to the user, never logged. */
@@ -59,7 +60,14 @@ object MessageNotifications {
             .setAutoCancel(true)
             .setContentIntent(tap)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(push.messageId.hashCode(), notification) }
-            .onFailure { Log.w(TAG, "Message notification not shown: ${it.javaClass.simpleName}") }
+        if (!CallNotifications.canNotify(context)) {
+            Log.w(TAG, "Message notification not shown: notifications are off")
+            return
+        }
+        try {
+            NotificationManagerCompat.from(context).notify(push.messageId.hashCode(), notification)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Message notification not shown: ${e.javaClass.simpleName}")
+        }
     }
 }

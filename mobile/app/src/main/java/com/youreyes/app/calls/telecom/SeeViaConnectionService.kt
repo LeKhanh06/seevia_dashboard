@@ -4,10 +4,11 @@ import android.os.Build
 import android.telecom.Connection
 import android.telecom.ConnectionRequest
 import android.telecom.ConnectionService
+import android.telecom.DisconnectCause
 import android.telecom.PhoneAccountHandle
 import androidx.annotation.RequiresApi
-import com.youreyes.app.calls.ActiveVoipCall
 import com.youreyes.app.calls.CallController
+import com.youreyes.app.calls.CallState
 
 /** Telecom entry point; the app only ever creates incoming connections here (outgoing calls bypass Telecom). */
 @RequiresApi(Build.VERSION_CODES.O)
@@ -19,6 +20,11 @@ class SeeViaConnectionService : ConnectionService() {
     ): Connection {
         val extras = request?.extras?.getBundle(android.telecom.TelecomManager.EXTRA_INCOMING_CALL_EXTRAS)
         val callId = extras?.getString(TelecomBridge.EXTRA_CALL_ID).orEmpty()
+        // Telecom is asynchronous: by now the call may be over or replaced. Refuse instead of
+        // handing back a connection that would ring for nothing.
+        if (!isRingingFor(callId)) {
+            return Connection.createFailedConnection(DisconnectCause(DisconnectCause.CANCELED))
+        }
         val connection = SeeViaConnection(
             context = applicationContext,
             callId = callId,
@@ -26,8 +32,6 @@ class SeeViaConnectionService : ConnectionService() {
             emergency = extras?.getBoolean(TelecomBridge.EXTRA_EMERGENCY) == true,
         )
         TelecomBridge.connectionCreated(connection)
-        // The call may have ended while Telecom was creating the connection; don't leave it ringing.
-        if (!ActiveVoipCall.isActive) connection.end(android.telecom.DisconnectCause.CANCELED)
         return connection
     }
 
@@ -36,13 +40,20 @@ class SeeViaConnectionService : ConnectionService() {
         request: ConnectionRequest?,
     ) {
         // Telecom refused (another self-managed call, or the account is off): ring with a plain
-        // full-screen notification instead.
+        // full-screen notification instead, but only for the call that is still ringing.
         val extras = request?.extras?.getBundle(android.telecom.TelecomManager.EXTRA_INCOMING_CALL_EXTRAS)
+        if (!isRingingFor(extras?.getString(TelecomBridge.EXTRA_CALL_ID).orEmpty())) return
         CallController.showRingingUi(
             applicationContext,
             extras?.getString(TelecomBridge.EXTRA_NAME).orEmpty(),
             extras?.getBoolean(TelecomBridge.EXTRA_EMERGENCY) == true,
         )
+    }
+
+    private fun isRingingFor(callId: String): Boolean {
+        CallController.init(applicationContext)
+        val state = CallController.state.value
+        return callId.isNotEmpty() && state is CallState.Ringing && state.callId == callId
     }
 
     override fun onCreateOutgoingConnectionFailed(

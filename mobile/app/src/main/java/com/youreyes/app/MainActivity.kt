@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.youreyes.app.ui.devmode.DeveloperMode
 import com.youreyes.app.ui.navigation.AppRoot
+import com.youreyes.app.ui.navigation.RouteFilter
 import com.youreyes.app.ui.navigation.Routes
 import com.youreyes.app.ui.theme.AppDemoTheme
 import com.youreyes.app.ui.theme.DisplaySettings
@@ -90,7 +91,7 @@ class MainActivity : ComponentActivity() {
         // Spotify remembers the grant, so this costs one tap, once.
         com.youreyes.app.media.SpotifyAppRemoteManager.ensureAuthorized(this)
 
-        requestedRoute = intent?.getStringExtra(EXTRA_ROUTE)
+        requestedRoute = RouteFilter.accept(intent?.getStringExtra(EXTRA_ROUTE))
 
         setContent {
             AppDemoTheme {
@@ -102,7 +103,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(EXTRA_ROUTE)?.let { requestedRoute = it }
+        RouteFilter.accept(intent.getStringExtra(EXTRA_ROUTE))?.let { requestedRoute = it }
     }
 
     /**

@@ -120,8 +120,18 @@ class CommandStore(context: Context) :
                 put("attempts", attempts)
                 put("last_attempt_at", System.currentTimeMillis())
             }
-            writableDatabase.update(PENDING_REPORTS, values, "request_id = ?", arrayOf(requestId))
+            // A delivered report stays delivered, whatever a late duplicate attempt was told.
+            writableDatabase.update(
+                PENDING_REPORTS, values,
+                "request_id = ? AND (status != ? OR ? = ?)",
+                arrayOf(requestId, ReportStatus.SENT, status, ReportStatus.SENT),
+            )
         }
+    }
+
+    override fun reportStatus(requestId: String): String? = synchronized(DB_LOCK) {
+        readableDatabase.query(PENDING_REPORTS, arrayOf("status"), "request_id = ?", arrayOf(requestId), null, null, null)
+            .use { if (it.moveToFirst()) it.getString(0) else null }
     }
 
     /** Reports not yet accepted by the server, oldest first. */

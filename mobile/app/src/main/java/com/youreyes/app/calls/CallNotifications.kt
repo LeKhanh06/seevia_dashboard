@@ -1,21 +1,26 @@
 package com.youreyes.app.calls
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
+import androidx.core.content.ContextCompat
 import com.youreyes.app.MainActivity
 import com.youreyes.app.calls.ui.CallActivity
 
@@ -36,6 +41,8 @@ object CallNotifications {
     const val ID_ONGOING = 7002
     const val ID_SESSION = 7003
     const val ID_LOGIN_NEEDED = 7004
+
+    private const val INCOMING_TIMEOUT_MS = 45_000L
 
     const val ACTION_REJECT = "com.youreyes.app.calls.REJECT"
     const val ACTION_HANGUP = "com.youreyes.app.calls.HANGUP"
@@ -106,6 +113,8 @@ object CallNotifications {
             .setOngoing(true)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
+            // A call nobody answered must not stay on the lock screen if every FCM cleanup is lost.
+            .setTimeoutAfter(INCOMING_TIMEOUT_MS)
             .setContentIntent(open)
             .setFullScreenIntent(open, true)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person(title), decline, answer))
@@ -163,8 +172,25 @@ object CallNotifications {
 
     private fun post(context: Context, id: Int, notification: Notification) {
         // POST_NOTIFICATIONS may be denied; a refused notification must not crash a push handler.
-        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
-            .onFailure { Log.w(TAG, "Notification $id not shown: ${it.javaClass.simpleName}") }
+        if (!canNotify(context)) {
+            Log.w(TAG, "Notification $id not shown: notifications are off")
+            return
+        }
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Notification $id not shown: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /** True when Android would show our notifications (permission granted on API 33+, and not switched off). */
+    fun canNotify(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
     fun displayName(name: String): String = name.ifBlank { "Người thân" }
@@ -173,6 +199,12 @@ object CallNotifications {
 /** Handles the Từ chối / Cúp buttons of call notifications. */
 class CallActionReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // The process may have been restarted since the notification was posted.
+        CallController.init(context)
+        if (CallController.state.value == CallState.Idle) {
+            CallNotifications.cancelIncoming(context)
+            return
+        }
         when (intent.action) {
             CallNotifications.ACTION_REJECT -> CallController.reject()
             CallNotifications.ACTION_HANGUP -> CallController.hangup()
@@ -184,6 +216,16 @@ class CallActionReceiver : android.content.BroadcastReceiver() {
 class CallRinger(private val context: Context) {
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Ringtone.isLooping exists from Android 9; older versions replay it while it still rings.
+    private val replay = object : Runnable {
+        override fun run() {
+            val current = synchronized(this@CallRinger) { ringtone } ?: return
+            if (!current.isPlaying) runCatching { current.play() }
+            handler.postDelayed(this, REPLAY_CHECK_MS)
+        }
+    }
 
     @Synchronized
     fun start(emergency: Boolean) {
@@ -202,6 +244,7 @@ class CallRinger(private val context: Context) {
                 play()
             }
         }.getOrNull()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) handler.postDelayed(replay, REPLAY_CHECK_MS)
         val vib = context.getSystemService(Vibrator::class.java)
         vibrator = vib
         runCatching {
@@ -217,9 +260,14 @@ class CallRinger(private val context: Context) {
 
     @Synchronized
     fun stop() {
+        handler.removeCallbacks(replay)
         runCatching { ringtone?.stop() }
         runCatching { vibrator?.cancel() }
         ringtone = null
         vibrator = null
+    }
+
+    private companion object {
+        const val REPLAY_CHECK_MS = 1_000L
     }
 }

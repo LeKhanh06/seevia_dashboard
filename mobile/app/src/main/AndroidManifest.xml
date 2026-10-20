@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <!-- Speak to the glasses wearer. The only runtime permission the call itself needs -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Vibrate while an incoming call rings (normal permission) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- CallForegroundService (phoneCall + microphone) keeps the call alive in the background -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -160,6 +162,7 @@
         <service
             android:name=".calls.telecom.SeeViaConnectionService"
             android:exported="true"
+            tools:targetApi="26"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
             <intent-filter>
                 <action android:name="android.telecom.ConnectionService" />

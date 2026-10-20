@@ -37,6 +37,7 @@ object CallController {
     private const val TAG = "CallController"
     private const val RING_TIMEOUT_MS = 45_000L
     private const val ENDED_HOLD_MS = 3_000L
+    private const val TICK_MS = 1_000L
 
     private val machine = CallStateMachine()
     private val lock = Any()
@@ -59,6 +60,24 @@ object CallController {
     @Volatile private var ringShownFor: String? = null
     @Volatile private var incomingId: String? = null
     private var foregroundRunning = false
+
+    /** One tick a second while calling or connecting: the machine decides about timeouts and polling. */
+    private val ticking = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val ticker = object : Runnable {
+        override fun run() {
+            val s = state.value
+            if (s is CallState.Outgoing || s is CallState.Connecting) {
+                dispatch(CallEvent.Tick)
+                main.postDelayed(this, TICK_MS)
+            } else {
+                ticking.set(false)
+                val again = state.value
+                if ((again is CallState.Outgoing || again is CallState.Connecting) && ticking.compareAndSet(false, true)) {
+                    main.postDelayed(this, TICK_MS)
+                }
+            }
+        }
+    }
     private var ringer: CallRinger? = null
 
     private val effects = Executors.newSingleThreadExecutor { Thread(it, "call-effects").apply { isDaemon = true } }
@@ -133,7 +152,8 @@ object CallController {
 
     // ---- core ----
 
-    private fun init(context: Context) {
+    /** Safe to call any number of times; entry points that may run in a fresh process call it first. */
+    fun init(context: Context) {
         if (appContext != null) return
         synchronized(lock) {
             if (appContext == null) {
@@ -155,9 +175,24 @@ object CallController {
             val next = machine.state
             publish(prev, next)
             effects.execute {
-                transition(ctx, prev, next)
-                list.forEach { runEffect(ctx, it) }
+                guarded("transition", mediaRelated = false) { transition(ctx, prev, next) }
+                list.forEach { effect ->
+                    guarded(effect.javaClass.simpleName, mediaRelated = effect is CallEffect.OpenMedia) { runEffect(ctx, effect) }
+                }
             }
+        }
+    }
+
+    /**
+     * One failing effect must not stop the rest of the list (a crash while opening audio would
+     * leave the call "connecting" forever). Logs the type only: never tokens, URLs or numbers.
+     */
+    private fun guarded(what: String, mediaRelated: Boolean, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.w(TAG, "Effect $what failed: ${e.javaClass.simpleName}")
+            if (mediaRelated) dispatch(CallEvent.SocketState("ended", "mic_unavailable"))
         }
     }
 
@@ -173,6 +208,8 @@ object CallController {
 
     /** Side effects that follow the state itself rather than one machine effect. */
     private fun transition(ctx: Context, prev: CallState, next: CallState) {
+        val timed = next is CallState.Outgoing || next is CallState.Connecting
+        if (timed && ticking.compareAndSet(false, true)) main.postDelayed(ticker, TICK_MS)
         val wantForeground = next is CallState.Outgoing || next is CallState.Connecting || next is CallState.Active
         if (wantForeground && !foregroundRunning) {
             foregroundRunning = true
@@ -268,8 +305,13 @@ object CallController {
             }
 
             override fun onClosed(code: Int) {
+                if (media !== session) return
+                // Token refused (4401): the server never knew we joined; end the call there too.
+                if (code == CallMediaSocket.CLOSE_TOKEN_REJECTED) {
+                    network.execute { SessionApi.run(ctx) { it.hangup(callId) } }
+                }
                 // A close without an `ended` frame is a dropped call.
-                if (media === session) dispatch(CallEvent.SocketState("ended", "peer_disconnect"))
+                dispatch(CallEvent.SocketState("ended", "peer_disconnect"))
             }
         }
         val socket = CallMediaSocket(SessionApi.media, effect.url, effect.token, listener)

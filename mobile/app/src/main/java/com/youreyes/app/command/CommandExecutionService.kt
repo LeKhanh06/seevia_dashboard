@@ -41,18 +41,22 @@ class CommandExecutionService : Service() {
         running.incrementAndGet()
         latestStartId = startId
         val context = applicationContext
-        lanes.getValue(CommandLanes.laneFor(command.action)).execute {
+        val lane = CommandLanes.laneFor(command.action)
+        lanes.getValue(lane).execute {
             try {
                 val store = CommandStore(context)
                 val sender = DeviceApiClient().asReportSender()
                 val credentials = AppConfig.deviceCredentials(context)
-                if (credentials != null) ReportFlusher(store, sender).flush(credentials)
                 val result = CommandDispatcher(store, ActionRegistry(), sender, context)
                     .dispatch(command, credentials)
                 Log.i(TAG, "${command.action} ${command.requestId}: $result")
                 if (credentials != null && result is DispatchResult.Executed && !result.reportSent) {
                     ReportRetryWorker.enqueue(context)
                 }
+                // Old reports are retried after the slow lane's own command, never before it, and
+                // never on the fast lane (an emergency must not wait for a stuck network call);
+                // WorkManager covers the rest.
+                if (credentials != null && lane == Lane.SLOW) ReportFlusher(store, sender).flush(credentials)
             } catch (exc: Exception) {
                 Log.e(TAG, "Command ${command.action} ${command.requestId} failed", exc)
             } finally {

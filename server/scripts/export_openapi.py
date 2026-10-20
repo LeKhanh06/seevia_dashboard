@@ -58,7 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stderr.write("usage: export_openapi.py [--check]\n")
         return 2
 
-    output_directory = Path(__file__).resolve().parents[3] / "contracts"
+    output_directory = Path(__file__).resolve().parents[2] / "contracts"
     if arguments == ["--check"]:
         stale_paths = find_stale_contracts(output_directory)
         if stale_paths:

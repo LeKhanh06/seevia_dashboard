@@ -167,6 +167,6 @@ async def test_public_contract_app_returns_400_for_invalid_request() -> None:
 
 def test_committed_openapi_artifacts_are_up_to_date() -> None:
     """Fail when generated Public or Device YAML differs from the repository."""
-    contracts_directory = Path(__file__).resolve().parents[3] / "contracts"
+    contracts_directory = Path(__file__).resolve().parents[2] / "contracts"
 
     assert find_stale_contracts(contracts_directory) == ()

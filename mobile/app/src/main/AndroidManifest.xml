@@ -15,6 +15,16 @@
     <!-- CALL_PHONE/SEND_SMS otherwise imply required telephony hardware (blocks ChromeOS/tablet installs) -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- ── Internet calls with the glasses (protocol section 7) ───────── -->
+    <!-- Self-managed Telecom calls: the app draws its own call UI and rings itself -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!-- Speak to the glasses wearer. The only runtime permission the call itself needs -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- CallForegroundService (phoneCall + microphone) keeps the call alive in the background -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Internet calls are not telephony: no camera, no CALL_PHONE needed for them -->
+
     <!-- ── Audio ────────────────────────────────────────────────────── -->
     <!-- music_volume: adjust media stream volume -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -108,7 +118,8 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -127,6 +138,39 @@
             android:noHistory="true"
             android:launchMode="singleInstance"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!--
+            Incoming / outgoing call screen. Shown over the lock screen by the call
+            notification's full-screen intent; see calls/ui/CallActivity.kt.
+        -->
+        <activity
+            android:name=".calls.ui.CallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <!-- Notification buttons: Từ chối / Cúp máy -->
+        <receiver
+            android:name=".calls.CallActionReceiver"
+            android:exported="false" />
+
+        <!-- Telecom self-managed ConnectionService: lock-screen priority and Bluetooth answer for calls -->
+        <service
+            android:name=".calls.telecom.SeeViaConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Keeps the process and microphone alive for the whole call -->
+        <service
+            android:name=".calls.CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone" />
 
         <!--
             FCM Receiver — receives push commands from backend via Firebase.

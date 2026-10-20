@@ -14,6 +14,7 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.youreyes.app.calls.ActiveVoipCall
 import com.youreyes.app.core.AppConfig
 import com.youreyes.app.network.DeviceEventPayload
 import com.youreyes.app.network.IncomingCallerPayload
@@ -135,6 +136,11 @@ object IncomingCallMonitor {
     }
 
     private fun sendEvent(type: String, caller: IncomingCallerPayload?) {
+        // The app's own internet call is not a SIM call; never tell the glasses it is.
+        if (!shouldReportSimCall(ActiveVoipCall.isActive)) {
+            Log.i(TAG, "Skip $type: an internet call is active")
+            return
+        }
         val context = appContext ?: return
         val prefs = context.getSharedPreferences(AppConfig.PREFS_NAME, Context.MODE_PRIVATE)
         val deviceId = prefs.getString(AppConfig.KEY_DEVICE_ID, null)
@@ -206,6 +212,13 @@ object IncomingCallMonitor {
         }
     }
 }
+
+/**
+ * Whether a handset call-state change may be reported to the glasses as a SIM call. False while
+ * the app's own VoIP call is live (self-managed Telecom calls normally leave TelephonyManager
+ * alone, but some devices still flip it; the app must not announce its own call to itself).
+ */
+fun shouldReportSimCall(voipActive: Boolean): Boolean = !voipActive
 
 /** Starts the process for protected PHONE_STATE broadcasts and supplies the number half. */
 class PhoneStateBroadcastReceiver : BroadcastReceiver() {

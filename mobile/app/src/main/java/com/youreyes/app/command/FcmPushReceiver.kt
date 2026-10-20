@@ -3,6 +3,8 @@ package com.youreyes.app.command
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.youreyes.app.calls.CallController
+import com.youreyes.app.calls.FcmCallRouter
 import com.youreyes.app.core.AppConfig
 import com.youreyes.app.network.DeviceApiClient
 import com.youreyes.app.network.DeviceRegisterPayload
@@ -11,8 +13,8 @@ import java.util.concurrent.Executors
 /**
  * Entry point for server commands (FCM data messages).
  *
- * It only parses the command and hands it to [CommandExecutionService]; it never
- * runs a handler itself, because handlers outlive the receiver's short window.
+ * Call/message pushes (`type`) go to [CallController]; commands (`request_id`) are parsed and
+ * handed to [CommandExecutionService]. It never runs a handler itself, because handlers outlive the receiver's short window.
  * Commands never carry credentials: reports use what was saved at registration.
  */
 class FcmPushReceiver : FirebaseMessagingService() {
@@ -35,6 +37,17 @@ class FcmPushReceiver : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // Calls and messages (protocol 7.6) carry `type`; commands carry `request_id`.
+        if (message.data["type"] != null) {
+            val push = FcmCallRouter.parse(message.data)
+            if (push == null) {
+                Log.w(TAG, "Ignoring call/message push, keys=${message.data.keys}")
+            } else {
+                // Returns at once: the controller moves network and audio work to its own threads.
+                CallController.onPush(applicationContext, push)
+            }
+            return
+        }
         val command = PushCommand.fromData(message.data)
         if (command == null) {
             Log.w(TAG, "Ignoring FCM message without a complete command, keys=${message.data.keys}")

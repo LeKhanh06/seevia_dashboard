@@ -3,6 +3,7 @@ package com.youreyes.app
 import android.Manifest
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -16,13 +17,20 @@ import com.youreyes.app.telephony.IncomingCallMonitor
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.youreyes.app.ui.devmode.DeveloperMode
 import com.youreyes.app.ui.navigation.AppRoot
+import com.youreyes.app.ui.navigation.Routes
 import com.youreyes.app.ui.theme.AppDemoTheme
 import com.youreyes.app.ui.theme.DisplaySettings
 
 class MainActivity : ComponentActivity() {
+
+    /** Screen a notification asked for (login after a 401, a chat); consumed once by [AppRoot]. */
+    private var requestedRoute by mutableStateOf<String?>(null)
 
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -82,11 +90,19 @@ class MainActivity : ComponentActivity() {
         // Spotify remembers the grant, so this costs one tap, once.
         com.youreyes.app.media.SpotifyAppRemoteManager.ensureAuthorized(this)
 
+        requestedRoute = intent?.getStringExtra(EXTRA_ROUTE)
+
         setContent {
             AppDemoTheme {
-                AppRoot()
+                AppRoot(requestedRoute = requestedRoute, onRouteHandled = { requestedRoute = null })
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_ROUTE)?.let { requestedRoute = it }
     }
 
     /**
@@ -135,6 +151,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
+            // Speaking in an internet call with the glasses wearer
+            Manifest.permission.RECORD_AUDIO,
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -251,5 +269,13 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val EXTRA_ROUTE = "seevia_route"
+        const val ROUTE_AUTH = Routes.AUTH
+
+        /** Opens (or brings forward) the app on [route], e.g. [ROUTE_AUTH] or `chat/<userId>`. */
+        fun routeIntent(context: Context, route: String): Intent =
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(EXTRA_ROUTE, route)
     }
 }

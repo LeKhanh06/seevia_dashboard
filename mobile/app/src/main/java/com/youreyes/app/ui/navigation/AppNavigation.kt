@@ -106,8 +106,16 @@ private val bottomDestinations = listOf(
 )
 
 @Composable
-fun AppRoot() {
+fun AppRoot(requestedRoute: String? = null, onRouteHandled: () -> Unit = {}) {
     val navController = rememberNavController()
+    // A notification (login needed, new message) can ask for a screen; the nav graph may not be
+    // ready on the very first frame, so wait for it.
+    androidx.compose.runtime.LaunchedEffect(requestedRoute) {
+        if (requestedRoute != null) {
+            runCatching { navController.navigate(requestedRoute) }
+            onRouteHandled()
+        }
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 

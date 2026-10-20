@@ -10,6 +10,7 @@ fun endReasonVi(reason: String?): String = when (reason) {
     "rejected" -> "Cuộc gọi bị từ chối"
     "revoked" -> "Đã huỷ liên kết người thân"
     "media_timeout", "peer_disconnect" -> "Mất kết nối âm thanh"
+    "mic_unavailable" -> "Không mở được micro — hãy cho SeeVia dùng micro trong Cài đặt"
     "max_duration" -> "Cuộc gọi quá 2 giờ"
     else -> "Cuộc gọi đã kết thúc"
 }

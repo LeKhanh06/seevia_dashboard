@@ -81,6 +81,10 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/auth/logout",
         "/api/v1/preferences",
         "/api/v1/support/tickets",
+        "/api/v1/care/invite",
+        "/api/v1/care/links",
+        "/api/v1/care/{link_id}/accept",
+        "/api/v1/care/{link_id}",
     }
 
 

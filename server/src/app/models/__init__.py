@@ -1,9 +1,11 @@
 """SQLAlchemy persistence models and logical database enums."""
 
+from app.models.care_link import CareLink
 from app.models.device import Device
 from app.models.enums import (
     Action,
     CallbackState,
+    CareLinkStatus,
     DeliveryState,
     DevicePlatform,
     DeviceStatus,
@@ -20,6 +22,8 @@ from app.models.user import User
 __all__ = [
     "Action",
     "CallbackState",
+    "CareLink",
+    "CareLinkStatus",
     "DeliveryState",
     "Device",
     "DevicePlatform",

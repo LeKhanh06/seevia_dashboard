@@ -131,6 +131,27 @@ class GlassesDeviceNotLinkedError(PublicApiError):
     code = "GLASSES_DEVICE_NOT_LINKED"
 
 
+class UserNotFoundError(PublicApiError):
+    """Raised when an invited relative's phone number has no registered account."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "USER_NOT_FOUND"
+
+
+class CareLinkNotFoundError(PublicApiError):
+    """Raised when a care link is missing or the caller is not a party to it."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CARE_LINK_NOT_FOUND"
+
+
+class CareLinkConflictError(PublicApiError):
+    """Raised when a care link already exists for the pair or is in the wrong state."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "CARE_LINK_CONFLICT"
+
+
 class DeviceEventForwardError(PublicApiError):
     """Raised when a spontaneous phone event cannot reach the glasses server."""
 

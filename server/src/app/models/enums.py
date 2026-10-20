@@ -26,6 +26,14 @@ class GlassesLinkStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class CareLinkStatus(StrEnum):
+    """Owner-to-relative care link states."""
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
 class RequestState(StrEnum):
     """Public operation states persisted in PostgreSQL."""
 
@@ -71,6 +79,7 @@ def enum_check_values[EnumT: StrEnum](enum_type: type[EnumT]) -> str:
 __all__ = [
     "Action",
     "CallbackState",
+    "CareLinkStatus",
     "DeliveryState",
     "DevicePlatform",
     "DeviceStatus",

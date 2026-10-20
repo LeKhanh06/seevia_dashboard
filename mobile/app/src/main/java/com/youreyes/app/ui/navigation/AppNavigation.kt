@@ -37,6 +37,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.youreyes.app.care.CareRoute
+import com.youreyes.app.messages.ChatRoute
 import com.youreyes.app.ui.activitylog.ActivityLogRoute
 import com.youreyes.app.ui.album.AlbumRoute
 import com.youreyes.app.ui.auth.AuthRoute
@@ -89,6 +93,12 @@ object Routes {
     const val MEETING = "meeting"
     const val DISPLAY = "display"
     const val DEV_TEST = "dev-test"
+    const val CARE = "care"
+    const val CHAT = "chat/{peerUserId}?name={name}"
+
+    /** Conversation with the glasses owner [peerUserId]; [name] only titles the screen. */
+    fun chatRoute(peerUserId: String, name: String): String =
+        "chat/${android.net.Uri.encode(peerUserId)}?name=${android.net.Uri.encode(name)}"
 }
 
 private data class BottomDestination(
@@ -155,6 +165,7 @@ private fun NavGraphBuilder.appDestinations(
             onNavigateToGuide = { navController.navigate(Routes.GUIDE) },
             onNavigateToTranslation = { navController.navigate(Routes.TRANSLATION) },
             onNavigateToMeeting = { navController.navigate(Routes.MEETING) },
+            onNavigateToCare = { navController.navigate(Routes.CARE) },
         )
     }
     composable(Routes.FEATURES) { FeaturesScreen(modifier = modifier) }
@@ -191,6 +202,28 @@ private fun NavGraphBuilder.appDestinations(
     composable(Routes.MEETING) { MeetingRoute(modifier = modifier, onBack = back) }
     composable(Routes.DISPLAY) { DisplayRoute(modifier = modifier, onBack = back) }
     composable(Routes.DEV_TEST) { FunctionTestRoute(modifier = modifier, onBack = back) }
+    composable(Routes.CARE) {
+        CareRoute(
+            modifier = modifier,
+            onBack = back,
+            onNavigateToAuth = { navController.navigate(Routes.AUTH) },
+            onOpenChat = { peerUserId, name -> navController.navigate(Routes.chatRoute(peerUserId, name)) },
+        )
+    }
+    composable(
+        route = Routes.CHAT,
+        arguments = listOf(
+            navArgument("peerUserId") { type = NavType.StringType },
+            navArgument("name") { type = NavType.StringType; defaultValue = "" },
+        ),
+    ) { entry ->
+        ChatRoute(
+            peerUserId = entry.arguments?.getString("peerUserId").orEmpty(),
+            peerName = entry.arguments?.getString("name").orEmpty(),
+            modifier = modifier,
+            onBack = back,
+        )
+    }
 }
 
 /**

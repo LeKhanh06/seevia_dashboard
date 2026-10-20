@@ -6,6 +6,7 @@ import android.telecom.ConnectionRequest
 import android.telecom.ConnectionService
 import android.telecom.PhoneAccountHandle
 import androidx.annotation.RequiresApi
+import com.youreyes.app.calls.ActiveVoipCall
 import com.youreyes.app.calls.CallController
 
 /** Telecom entry point; the app only ever creates incoming connections here (outgoing calls bypass Telecom). */
@@ -25,6 +26,8 @@ class SeeViaConnectionService : ConnectionService() {
             emergency = extras?.getBoolean(TelecomBridge.EXTRA_EMERGENCY) == true,
         )
         TelecomBridge.connectionCreated(connection)
+        // The call may have ended while Telecom was creating the connection; don't leave it ringing.
+        if (!ActiveVoipCall.isActive) connection.end(android.telecom.DisconnectCause.CANCELED)
         return connection
     }
 

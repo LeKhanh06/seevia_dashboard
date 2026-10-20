@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
@@ -75,6 +76,7 @@ fun OverviewRoute(
     onNavigateToGuide: () -> Unit = {},
     onNavigateToTranslation: () -> Unit = {},
     onNavigateToMeeting: () -> Unit = {},
+    onNavigateToCare: () -> Unit = {},
 ) {
     val viewModel: OverviewViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
@@ -91,6 +93,7 @@ fun OverviewRoute(
         onNavigateToGuide = onNavigateToGuide,
         onNavigateToTranslation = onNavigateToTranslation,
         onNavigateToMeeting = onNavigateToMeeting,
+        onNavigateToCare = onNavigateToCare,
         modifier = modifier,
     )
 }
@@ -105,6 +108,7 @@ fun OverviewScreen(
     onNavigateToGuide: () -> Unit = {},
     onNavigateToTranslation: () -> Unit = {},
     onNavigateToMeeting: () -> Unit = {},
+    onNavigateToCare: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     ScreenShell(modifier = modifier) {
@@ -153,6 +157,14 @@ fun OverviewScreen(
             icon = Icons.Default.Favorite,
             iconTone = accentTextColor,
             onClick = onNavigateToProfile,
+        )
+
+        RowCard(
+            title = "Người Thân & Cuộc Gọi",
+            subtitle = "Mời người thân, gọi và nhắn tin với người đeo kính qua internet",
+            icon = Icons.Default.Call,
+            iconTone = successColor,
+            onClick = onNavigateToCare,
         )
 
         RowCard(

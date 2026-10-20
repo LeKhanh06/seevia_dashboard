@@ -10,6 +10,7 @@ import com.youreyes.app.calls.audio.CallAudioEngine
 import com.youreyes.app.calls.audio.CallMediaSocket
 import com.youreyes.app.calls.telecom.TelecomBridge
 import com.youreyes.app.calls.ui.CallActivity
+import com.youreyes.app.messages.MessageEvents
 import com.youreyes.app.network.ApiResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,7 +80,10 @@ object CallController {
             CallNotifications.showLoginNeeded(context.applicationContext)
             return
         }
-        if (push is CallPush.MessageIn) return // chat notifications: Task 7
+        if (push is CallPush.MessageIn) {
+            MessageEvents.onMessageIn(context.applicationContext, push)
+            return
+        }
         dispatch(CallEvent.Push(push))
     }
 

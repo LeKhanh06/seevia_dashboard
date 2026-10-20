@@ -29,17 +29,22 @@ _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
 _SPACES = re.compile(r"\s+")
 
 
-def normalize_name(text: str) -> str:
-    """Chuẩn hoá tên gọi để so khớp: lower, bỏ dấu (đ->d), bỏ dấu câu, gộp khoảng trắng.
+def normalize_exact(text: str) -> str:
+    """Chuẩn hoá giữ dấu tiếng Việt: lower (NFC), bỏ dấu câu, gộp khoảng trắng."""
+    lowered = unicodedata.normalize("NFC", text).lower()
+    return _SPACES.sub(" ", _PUNCT.sub(" ", lowered)).strip()
 
-    Bỏ dấu cả hai phía nên "me" khớp "mẹ", và "mẹ" khớp "Mẹ."; STT tiếng Việt
-    hay trả về không dấu hoặc sai dấu nên khớp lỏng ở đây là chủ ý.
+
+def normalize_name(text: str) -> str:
+    """Chuẩn hoá bỏ dấu (đ->d) để so khớp lỏng: "me" khớp "mẹ".
+
+    STT tiếng Việt hay trả về không dấu hoặc sai dấu nên khớp lỏng là chủ ý;
+    nhưng chỉ dùng khi không có khớp giữ dấu (xem ``resolve_alias``).
     """
-    lowered = unicodedata.normalize("NFC", text).lower().replace("đ", "d")
-    stripped = "".join(
+    lowered = normalize_exact(text).replace("đ", "d")
+    return "".join(
         ch for ch in unicodedata.normalize("NFD", lowered) if unicodedata.category(ch) != "Mn"
     )
-    return _SPACES.sub(" ", _PUNCT.sub(" ", stripped)).strip()
 
 
 async def invite(  # noqa: PLR0913
@@ -135,14 +140,20 @@ async def resolve_alias(
 ) -> list[CareLink]:
     """Return the owner's ``active`` links whose alias or display_name equals ``alias``.
 
-    Chỉ link ``active`` (pending/revoked không bao giờ được gọi). Nhiều kết quả =
-    trùng tên, phía gọi phải hỏi lại thay vì chọn bừa.
+    Chỉ link ``active`` (pending/revoked không bao giờ được gọi). Ưu tiên khớp giữ
+    dấu: "Lân" chỉ ra link "Lân", không kéo theo "Lan". Chỉ khi không có khớp giữ dấu
+    mới hạ xuống khớp bỏ dấu. Nhiều kết quả = trùng tên, phía gọi phải hỏi lại.
     """
-    wanted = normalize_name(alias)
-    if not wanted:
+    if not normalize_exact(alias):
         return []
-    return [
-        link
-        for link in await links.list_active_for_owner(owner_user_id)
-        if wanted in {normalize_name(n) for n in (link.display_name, *link.aliases)}
-    ]
+    active = await links.list_active_for_owner(owner_user_id)
+    for normalize in (normalize_exact, normalize_name):
+        wanted = normalize(alias)
+        found = [
+            link
+            for link in active
+            if wanted in {normalize(n) for n in (link.display_name, *link.aliases)}
+        ]
+        if found:
+            return found
+    return []

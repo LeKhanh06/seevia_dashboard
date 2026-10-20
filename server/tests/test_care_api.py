@@ -155,3 +155,27 @@ async def test_alias_match_multiple(
 
     found = await resolve_alias(CareLinkRepository(db_session), owner_id, "nam")
     assert sorted(x.display_name for x in found) == ["Anh Nam", "Chú Nam"]
+
+
+async def test_alias_exact_accent_preferred(
+    db_client: AsyncClient, db_session: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Khớp giữ dấu thắng khớp bỏ dấu; chỉ hạ xuống bỏ dấu khi không có khớp giữ dấu."""
+    owner = await _session(db_client, caplog, "0944000001")
+    rel_a = await _session(db_client, caplog, "0944000002")
+    rel_b = await _session(db_client, caplog, "0944000003")
+    rel_c = await _session(db_client, caplog, "0944000004")
+    owner_id = (await UserRepository(db_session).get_by_phone("0944000001")).public_user_id  # type: ignore[union-attr]
+    links = CareLinkRepository(db_session)
+
+    lan_id = await _link(db_client, owner, rel_a, ("0944000002", "Lan", []))
+    await _link(db_client, owner, rel_b, ("0944000003", "Lân", []))
+    for spoken, expected in (("Lân", "Lân"), ("lan", "Lan"), ("lân", "Lân")):
+        found = await resolve_alias(links, owner_id, spoken)
+        assert [x.display_name for x in found] == [expected], spoken
+
+    # Thu hồi "Lan", thêm "Mẹ": "lan" không dấu hạ xuống khớp lỏng -> "Lân".
+    await db_client.delete(f"/api/v1/care/{lan_id}", headers=owner)
+    await _link(db_client, owner, rel_c, ("0944000004", "Mẹ", []))
+    found = await resolve_alias(links, owner_id, "lan")
+    assert [x.display_name for x in found] == ["Lân"]

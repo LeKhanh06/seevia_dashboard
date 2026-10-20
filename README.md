@@ -20,6 +20,7 @@ Tài liệu:
 - [`docs/project-context.md`](docs/project-context.md) — hợp đồng nghiệp vụ (nguồn chuẩn).
 - [`docs/architecture.md`](docs/architecture.md) — module, luồng request, trạng thái.
 - [`docs/external-client-api.md`](docs/external-client-api.md) — hướng dẫn tích hợp cho server kính.
+- [`docs/MOBILE_APP_PROTOCOL.md`](docs/MOBILE_APP_PROTOCOL.md) — giao thức app điện thoại ↔ server: build, đăng ký, nhận lệnh, báo kết quả.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — xử lý sự cố.
 - [`claude.md`](claude.md) — quy tắc phát triển và cổng chất lượng bắt buộc.
 

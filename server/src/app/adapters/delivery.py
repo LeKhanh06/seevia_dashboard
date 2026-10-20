@@ -64,6 +64,12 @@ class DeliveryAdapter(Protocol):
         """Deliver a command message to a device."""
         ...
 
+    async def send_data(
+        self, *, push_token: str, data: dict[str, str], label: str
+    ) -> DeliveryOutcome:
+        """Deliver a plain data message (call events); ``label`` is the log correlation id."""
+        ...
+
 
 class FakeDeliveryAdapter:
     """Deterministic fake delivery transport for local development and testing."""
@@ -81,6 +87,15 @@ class FakeDeliveryAdapter:
         return DeliveryOutcome(
             status=DeliveryOutcomeStatus.SENT,
             provider_message_id=provider_message_id,
+        )
+
+    async def send_data(
+        self, *, push_token: str, data: dict[str, str], label: str
+    ) -> DeliveryOutcome:
+        """Simulate immediate successful delivery of a data message."""
+        _ = (push_token, data)
+        return DeliveryOutcome(
+            status=DeliveryOutcomeStatus.SENT, provider_message_id=f"fake-data-{label}"
         )
 
 
@@ -154,6 +169,10 @@ def _build_message(*, push_token: str, operation: Operation) -> messaging.Messag
     )
 
 
+# Cuộc gọi đổ chuông tối đa CALL_RING_TIMEOUT_S (30 s): tin quá hạn thì vô nghĩa, để FCM bỏ.
+_CALL_PUSH_TTL = timedelta(seconds=30)
+
+
 class FcmDeliveryAdapter:
     """FCM delivery transport using Firebase Admin SDK."""
 
@@ -170,26 +189,40 @@ class FcmDeliveryAdapter:
     ) -> DeliveryOutcome:
         """Deliver a data message to Android device via FCM."""
         _ = device
-        app = _get_fcm_app(self._settings)
         message = _build_message(push_token=push_token, operation=operation)
+        return await self._send(message, f"request {operation.request_id}")
 
+    async def send_data(
+        self, *, push_token: str, data: dict[str, str], label: str
+    ) -> DeliveryOutcome:
+        """Deliver a data-only message (call events) with the short call TTL."""
+        message = messaging.Message(
+            data=data,
+            token=push_token,
+            android=messaging.AndroidConfig(priority="high", ttl=_CALL_PUSH_TTL),
+        )
+        return await self._send(message, label)
+
+    async def _send(self, message: messaging.Message, label: str) -> DeliveryOutcome:
+        """Send via the Admin SDK and map the exception to an outcome."""
+        app = _get_fcm_app(self._settings)
         try:
             message_id = await asyncio.to_thread(messaging.send, message, app=app)
         except messaging.UnregisteredError as exc:
-            logger.info("FCM token unregistered for request %s", operation.request_id)
+            logger.info("FCM token unregistered for %s", label)
             return DeliveryOutcome(
                 status=DeliveryOutcomeStatus.PERMANENT_FAILURE,
                 error_reason=str(exc),
                 invalid_token=True,
             )
         except (messaging.SenderIdMismatchError, messaging.ThirdPartyAuthError) as exc:
-            logger.warning("FCM permanent send failure for request %s", operation.request_id)
+            logger.warning("FCM permanent send failure for %s", label)
             return DeliveryOutcome(
                 status=DeliveryOutcomeStatus.PERMANENT_FAILURE,
                 error_reason=str(exc),
             )
         except (messaging.QuotaExceededError, FirebaseError) as exc:
-            logger.warning("FCM transient send failure for request %s", operation.request_id)
+            logger.warning("FCM transient send failure for %s", label)
             return DeliveryOutcome(
                 status=DeliveryOutcomeStatus.TRANSIENT_FAILURE,
                 error_reason=str(exc),
@@ -228,17 +261,27 @@ class WebhookDeliveryAdapter:
     ) -> DeliveryOutcome:
         """POST the command data with ``X-Push-Token``; map the status to an outcome."""
         _ = device
+        return await self._post(_command_data(operation), push_token, str(operation.request_id))
+
+    async def send_data(
+        self, *, push_token: str, data: dict[str, str], label: str
+    ) -> DeliveryOutcome:
+        """POST a data message (call events) exactly as FCM would carry it."""
+        return await self._post(data, push_token, label)
+
+    async def _post(self, data: dict[str, str], push_token: str, label: str) -> DeliveryOutcome:
+        """POST ``data`` with ``X-Push-Token``; map the status to an outcome."""
         try:
             async with httpx.AsyncClient(
                 timeout=self._timeout, transport=self._transport
             ) as client:
                 response = await client.post(
                     self._url,
-                    json=_command_data(operation),
+                    json=data,
                     headers={"X-Push-Token": push_token},
                 )
         except httpx.HTTPError as exc:
-            logger.warning("Webhook send failed for request %s", operation.request_id)
+            logger.warning("Webhook send failed for %s", label)
             return DeliveryOutcome(
                 status=DeliveryOutcomeStatus.TRANSIENT_FAILURE,
                 error_reason=type(exc).__name__,
@@ -248,7 +291,7 @@ class WebhookDeliveryAdapter:
         if response.is_success:
             return DeliveryOutcome(
                 status=DeliveryOutcomeStatus.SENT,
-                provider_message_id=f"webhook-{operation.request_id}",
+                provider_message_id=f"webhook-{label}",
             )
         status = (
             DeliveryOutcomeStatus.TRANSIENT_FAILURE

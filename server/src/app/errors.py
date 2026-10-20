@@ -131,6 +131,90 @@ class GlassesDeviceNotLinkedError(PublicApiError):
     code = "GLASSES_DEVICE_NOT_LINKED"
 
 
+class UserNotFoundError(PublicApiError):
+    """Raised when an invited relative's phone number has no registered account."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "USER_NOT_FOUND"
+
+
+class CareLinkNotFoundError(PublicApiError):
+    """Raised when a care link is missing or the caller is not a party to it."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CARE_LINK_NOT_FOUND"
+
+
+class CareLinkConflictError(PublicApiError):
+    """Raised when a care link already exists for the pair or is in the wrong state."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "CARE_LINK_CONFLICT"
+
+
+class ContactNotFoundError(PublicApiError):
+    """Raised when no active care link matches the spoken contact name."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CONTACT_NOT_FOUND"
+
+
+class MultipleContactsFoundError(PublicApiError):
+    """Raised when several active care links match; ``details.candidates`` lists their names."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "MULTIPLE_CONTACTS_FOUND"
+
+
+class EmergencyNotFoundError(PublicApiError):
+    """Raised when an emergency chain does not exist."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "EMERGENCY_NOT_FOUND"
+
+
+class NoEmergencyContactError(PublicApiError):
+    """Raised when the owner has no ``active`` relative flagged for emergencies."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "EMERGENCY_CONTACT_NOT_FOUND"
+
+
+class CallNotFoundError(PublicApiError):
+    """Raised when a call is missing or the caller is not a party to it."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CALL_NOT_FOUND"
+
+
+class CallNotAllowedError(PublicApiError):
+    """Raised when the caller has no ``active`` care link for the call."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "CALL_NOT_ALLOWED"
+
+
+class CallStateConflictError(PublicApiError):
+    """Raised when the requested transition is impossible from the call's current state."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "CALL_STATE_CONFLICT"
+
+
+class MessageNotFoundError(PublicApiError):
+    """Raised when a message is missing or the caller is not its glasses' owner."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "MESSAGE_NOT_FOUND"
+
+
+class MessageNotAllowedError(PublicApiError):
+    """Raised when the caller has no ``active`` care link with the other party."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "MESSAGE_NOT_ALLOWED"
+
+
 class DeviceEventForwardError(PublicApiError):
     """Raised when a spontaneous phone event cannot reach the glasses server."""
 

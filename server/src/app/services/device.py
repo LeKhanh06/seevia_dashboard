@@ -23,6 +23,7 @@ from app.repositories.operation import (
     ReportExecutionState,
     ReportOutcomeStatus,
 )
+from app.services.operation import wants_callback
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,7 +101,7 @@ class DeviceService:
             message = "Operation identity or action mismatch"
             raise RequestNotFoundError(message)
 
-        callback_enabled = self._settings.callback_url is not None
+        callback_enabled = wants_callback(self._settings, operation.client_id)
         outcome = await OperationRepository(self._session).record_device_report(
             DeviceReport(
                 request_id=body.request_id,

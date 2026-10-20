@@ -18,6 +18,9 @@ class WorkerWakeSignals:
 
     delivery: asyncio.Event = field(default_factory=asyncio.Event)
     callback: asyncio.Event = field(default_factory=asyncio.Event)
+    # Khẩn cấp: chuỗi gọi cần đi tiếp (cuộc gọi vừa kết thúc) / tin khẩn cấp cần gửi.
+    emergency_chain: asyncio.Event = field(default_factory=asyncio.Event)
+    emergency_messages: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 def get_worker_wake_signals(request: Request) -> WorkerWakeSignals:

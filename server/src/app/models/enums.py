@@ -26,6 +26,64 @@ class GlassesLinkStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class CareLinkStatus(StrEnum):
+    """Owner-to-relative care link states."""
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
+class CallDirection(StrEnum):
+    """Who rings whom: the glasses' owner calls a relative, or the reverse."""
+
+    TO_RELATIVE = "to_relative"
+    TO_GLASSES = "to_glasses"
+
+
+class CallState(StrEnum):
+    """Call lifecycle: ``ringing`` -> ``active``/``rejected``/``missed``/``ended``."""
+
+    RINGING = "ringing"
+    ACTIVE = "active"
+    ENDED = "ended"
+    MISSED = "missed"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class CallCallbackState(StrEnum):
+    """Delivery state of one call event queued for the glasses server."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    DEAD_LETTER = "dead_letter"
+
+
+class EmergencyState(StrEnum):
+    """Emergency chain: ``running`` -> ``answered`` | ``exhausted`` | ``stopped``."""
+
+    RUNNING = "running"
+    ANSWERED = "answered"
+    EXHAUSTED = "exhausted"
+    STOPPED = "stopped"
+
+
+class MessageDirection(StrEnum):
+    """Who wrote the message: the glasses' owner (to a relative) or a relative (to the glasses)."""
+
+    TO_RELATIVE = "to_relative"
+    TO_GLASSES = "to_glasses"
+
+
+class MessageCallbackState(StrEnum):
+    """Delivery state of the ``message_received`` event owed to the glasses server."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    DEAD_LETTER = "dead_letter"
+
+
 class RequestState(StrEnum):
     """Public operation states persisted in PostgreSQL."""
 
@@ -70,11 +128,17 @@ def enum_check_values[EnumT: StrEnum](enum_type: type[EnumT]) -> str:
 
 __all__ = [
     "Action",
+    "CallCallbackState",
+    "CallDirection",
+    "CallState",
     "CallbackState",
+    "CareLinkStatus",
     "DeliveryState",
     "DevicePlatform",
     "DeviceStatus",
     "GlassesLinkStatus",
+    "MessageCallbackState",
+    "MessageDirection",
     "Operation",
     "RequestState",
 ]

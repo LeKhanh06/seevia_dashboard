@@ -44,6 +44,15 @@ class MusicCatalog(Protocol):
         ...
 
 
+# Thao tác do chính AB tạo (ví dụ lấy vị trí cho chuỗi khẩn cấp): không có bên nào chờ callback.
+INTERNAL_CLIENT_ID = "internal:emergency"
+
+
+def wants_callback(settings: Settings, client_id: str) -> bool:
+    """Whether a terminal result of ``client_id``'s operation must be POSTed to ``CALLBACK_URL``."""
+    return settings.callback_url is not None and client_id != INTERNAL_CLIENT_ID
+
+
 def compute_request_fingerprint(
     *, client_id: str, route: ActionRoute, request: ServiceRequest
 ) -> str:
@@ -164,9 +173,9 @@ class OperationService:
                 client_id=client_id, route=route, request=request
             ),
             callback_state=(
-                CallbackState.NOT_REQUIRED
-                if self._settings.callback_url is None
-                else CallbackState.PENDING
+                CallbackState.PENDING
+                if wants_callback(self._settings, client_id)
+                else CallbackState.NOT_REQUIRED
             ),
             expires_at=datetime.now(UTC) + timedelta(seconds=route.timeout_seconds),
         )

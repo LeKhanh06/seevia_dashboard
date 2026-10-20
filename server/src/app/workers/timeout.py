@@ -11,7 +11,10 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.adapters.delivery import get_delivery_adapter
 from app.repositories.operation import OperationRepository
+from app.services.call import CallService
+from app.services.operation import wants_callback
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -31,15 +34,25 @@ class TimeoutWorker:
     """Worker polling and transitioning expired processing operations."""
 
     def __init__(
-        self, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        settings: Settings,
+        chain_wake: asyncio.Event | None = None,
     ) -> None:
-        """Initialize TimeoutWorker with session factory and configuration."""
+        """Initialize TimeoutWorker with session factory and configuration.
+
+        ``chain_wake`` đánh thức chuỗi khẩn cấp ngay khi một cuộc gọi hết giờ chuông.
+        """
         self._session_factory = session_factory
         self._settings = settings
+        self._chain_wake = chain_wake
 
-    async def run_once(self) -> int:
-        """Time out one batch of expired operations; return how many changed."""
-        now = datetime.now(UTC)
+    async def run_once(self, now: datetime | None = None) -> int:
+        """Time out one batch of expired operations and unanswered calls; return how many changed.
+
+        ``now`` chỉ để test đặt đồng hồ; mặc định là giờ thật.
+        """
+        now = now or datetime.now(UTC)
         async with self._session_factory() as session:
             repo = OperationRepository(session)
             expired = await repo.list_expired(now=now, limit=self._settings.worker_batch_size)
@@ -49,13 +62,28 @@ class TimeoutWorker:
                     request_id=operation.request_id,
                     now=now,
                     error=_TIMEOUT_ERROR_PAYLOAD,
-                    schedule_callback=self._settings.callback_url is not None,
+                    schedule_callback=wants_callback(self._settings, operation.client_id),
                 ):
                     count += 1
             await session.commit()
 
         if count:
             logger.info("Transitioned %d expired operation(s) to timed_out", count)
+        return count + await self._expire_calls(now)
+
+    async def _expire_calls(self, now: datetime) -> int:
+        """Mark unanswered calls ``missed``; close ``active`` calls past the max duration."""
+        async with self._session_factory() as session:
+            service = CallService(session, self._settings, get_delivery_adapter(self._settings))
+            limit = self._settings.worker_batch_size
+            count = await service.expire_ringing(now=now, limit=limit)
+            count += await service.sweep_active(now=now, limit=limit)
+            await session.commit()
+        await service.dispatch_pushes()
+        if count:
+            logger.info("Closed %d stale call(s) (missed or over max duration)", count)
+            if self._chain_wake is not None:
+                self._chain_wake.set()
         return count
 
     async def run_loop(self, shutdown_event: asyncio.Event) -> None:

@@ -38,10 +38,15 @@ class LogLevel(StrEnum):
 
 
 class PublicApiScope(StrEnum):
-    """Public API bearer scopes: ``service:execute`` for POSTs, ``requests:read`` for status."""
+    """Public API bearer scopes.
+
+    ``service:execute`` for POSTs, ``requests:read`` for status, ``calls:manage`` for the
+    glasses server's call endpoints (``/api/v1/service/call/{start,{id}/hangup,{id}/answer}``).
+    """
 
     SERVICE_EXECUTE = "service:execute"
     REQUESTS_READ = "requests:read"
+    CALLS_MANAGE = "calls:manage"
 
 
 # Hex encoding of a 32-byte HMAC-SHA256 digest (see app/auth.py).
@@ -121,6 +126,11 @@ class Settings(BaseSettings):
     callback_url: HttpUrl | None = None
     callback_token: SecretStr | None = None
     callback_allowed_hosts: str | None = None
+
+    # Gọi điện qua kính: chuông tối đa bao lâu, và URL WS cầu âm thanh của VH (`WS /v2/call`)
+    # app nhận cùng media_token khi nghe máy.
+    call_ring_timeout_s: float = Field(default=30.0, gt=0)
+    call_media_url: str | None = None
 
     demo_time_scale: float = Field(default=1.0, gt=0)
     log_level: LogLevel = LogLevel.INFO

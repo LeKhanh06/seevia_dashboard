@@ -11,7 +11,9 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.adapters.delivery import get_delivery_adapter
 from app.repositories.operation import OperationRepository
+from app.services.call import CallService
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -37,9 +39,12 @@ class TimeoutWorker:
         self._session_factory = session_factory
         self._settings = settings
 
-    async def run_once(self) -> int:
-        """Time out one batch of expired operations; return how many changed."""
-        now = datetime.now(UTC)
+    async def run_once(self, now: datetime | None = None) -> int:
+        """Time out one batch of expired operations and unanswered calls; return how many changed.
+
+        ``now`` chỉ để test đặt đồng hồ; mặc định là giờ thật.
+        """
+        now = now or datetime.now(UTC)
         async with self._session_factory() as session:
             repo = OperationRepository(session)
             expired = await repo.list_expired(now=now, limit=self._settings.worker_batch_size)
@@ -56,6 +61,17 @@ class TimeoutWorker:
 
         if count:
             logger.info("Transitioned %d expired operation(s) to timed_out", count)
+        return count + await self._expire_calls(now)
+
+    async def _expire_calls(self, now: datetime) -> int:
+        """Mark calls still ringing after ``CALL_RING_TIMEOUT_S`` as ``missed``."""
+        async with self._session_factory() as session:
+            service = CallService(session, self._settings, get_delivery_adapter(self._settings))
+            count = await service.expire_ringing(now=now, limit=self._settings.worker_batch_size)
+            await session.commit()
+        await service.dispatch_pushes()
+        if count:
+            logger.info("Marked %d unanswered call(s) as missed", count)
         return count
 
     async def run_loop(self, shutdown_event: asyncio.Event) -> None:

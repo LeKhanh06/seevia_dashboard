@@ -11,7 +11,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from app.adapters.callback import CallbackAdapter, CallbackOutcomeStatus
+from app.adapters.callback import CallbackAdapter, CallbackOutcomeStatus, CallEventAdapter
+from app.repositories.call import CallRepository
 from app.repositories.operation import OperationRepository
 
 if TYPE_CHECKING:
@@ -30,6 +31,15 @@ _CALLBACK_BACKOFF = [
 ]
 
 
+# Sự kiện cuộc gọi sống ngắn (chuông 30 s): thử lại dồn dập rồi bỏ, không treo hàng giờ.
+_CALL_EVENT_BACKOFF = [
+    timedelta(seconds=1),
+    timedelta(seconds=2),
+    timedelta(seconds=5),
+    timedelta(seconds=10),
+]
+
+
 class CallbackWorker:
     """Worker polling and sending webhook callbacks for terminal operations."""
 
@@ -38,18 +48,21 @@ class CallbackWorker:
         session_factory: async_sessionmaker[AsyncSession],
         settings: Settings,
         wake_event: asyncio.Event | None = None,
+        call_events: CallEventAdapter | None = None,
     ) -> None:
         """Initialize CallbackWorker with session factory and configuration."""
         self._session_factory = session_factory
         self._settings = settings
         self._adapter = CallbackAdapter(settings)
+        self._call_events = call_events or CallEventAdapter(settings)
         self._wake_event = wake_event or asyncio.Event()
 
     async def run_once(self) -> int:
         """Execute one polling batch of callback claims and HTTP notifications.
 
-        Returns the number of claimed operations processed.
+        Returns the number of claimed operations and call events processed.
         """
+        call_events = await self._run_call_events()
         now = datetime.now(UTC)
         lease_duration = timedelta(seconds=self._settings.callback_lease_seconds)
         lease_until = now + lease_duration
@@ -63,7 +76,7 @@ class CallbackWorker:
             await session.commit()
 
         if not claimed:
-            return 0
+            return call_events
 
         for op in claimed:
             try:
@@ -74,6 +87,44 @@ class CallbackWorker:
                     op.request_id,
                 )
 
+        return len(claimed) + call_events
+
+    async def _run_call_events(self) -> int:
+        """Deliver due call events (``/internal/calls``); returns how many were attempted."""
+        now = datetime.now(UTC)
+        async with self._session_factory() as session:
+            repo = CallRepository(session)
+            claimed = await repo.claim_due_callbacks(
+                now=now,
+                lease_until=now + timedelta(seconds=self._settings.callback_lease_seconds),
+                limit=self._settings.worker_batch_size,
+            )
+            await session.commit()
+
+        for event in claimed:
+            try:
+                outcome = await self._call_events.send_event(
+                    event_id=event.id, payload=event.payload
+                )
+                async with self._session_factory() as session:
+                    repo = CallRepository(session)
+                    done = datetime.now(UTC)
+                    if outcome.status is CallbackOutcomeStatus.DELIVERED:
+                        await repo.record_callback_delivered(event.id, now=done)
+                    elif outcome.status is CallbackOutcomeStatus.RETRY and event.attempts < len(
+                        _CALL_EVENT_BACKOFF
+                    ):
+                        await repo.record_callback_retry(
+                            event.id, next_attempt_at=done + _CALL_EVENT_BACKOFF[event.attempts]
+                        )
+                    else:
+                        await repo.record_callback_dead_letter(event.id)
+                        logger.warning(
+                            "Call event %s dead-lettered: %s", event.id, outcome.error_reason
+                        )
+                    await session.commit()
+            except Exception:
+                logger.exception("Unexpected error delivering call event %s", event.id)
         return len(claimed)
 
     async def _process_claimed_callback(self, op: Operation) -> None:

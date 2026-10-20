@@ -12,7 +12,7 @@ import ipaddress
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import httpx
 
@@ -71,6 +71,28 @@ def validate_callback_url(url: str, allowed_hosts: list[str]) -> None:
             raise SsfValidationError(msg)
     except ValueError:
         pass
+
+
+def _allowed_hosts(settings: Settings) -> list[str]:
+    """Parse ``CALLBACK_ALLOWED_HOSTS`` into a host list (empty when unset)."""
+    return [h.strip() for h in (settings.callback_allowed_hosts or "").split(",") if h.strip()]
+
+
+def _classify(status_code: int) -> CallbackOutcome:
+    """Map an HTTP status to the callback outcome (2xx delivered, 408/429/5xx retry, else dead)."""
+    if _HTTP_OK_MIN <= status_code < _HTTP_OK_MAX:
+        return CallbackOutcome(status=CallbackOutcomeStatus.DELIVERED, http_status_code=status_code)
+    if status_code in {408, 429} or status_code >= _HTTP_SERVER_ERROR_MIN:
+        return CallbackOutcome(
+            status=CallbackOutcomeStatus.RETRY,
+            http_status_code=status_code,
+            error_reason=f"HTTP {status_code}",
+        )
+    return CallbackOutcome(
+        status=CallbackOutcomeStatus.DEAD_LETTER,
+        http_status_code=status_code,
+        error_reason=f"HTTP {status_code} permanent error",
+    )
 
 
 class CallbackAdapter:
@@ -159,3 +181,45 @@ class CallbackAdapter:
         finally:
             if close_client:
                 await client.aclose()
+
+
+class CallEventAdapter:
+    """POST call events to ``/internal/calls`` on the callback origin (same token as results)."""
+
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
+        """Bind validated settings and an optional reusable HTTP client."""
+        self._settings = settings
+        self._client = client
+
+    async def send_event(self, *, event_id: int, payload: dict[str, object]) -> CallbackOutcome:
+        """POST one event; ``Idempotency-Key`` is the outbox id so the receiver can dedupe."""
+        if self._settings.callback_url is None or self._settings.callback_token is None:
+            return CallbackOutcome(
+                status=CallbackOutcomeStatus.DEAD_LETTER,
+                error_reason="CALLBACK_URL is not configured",
+            )
+        parsed = urlsplit(str(self._settings.callback_url))
+        url = urlunsplit((parsed.scheme, parsed.netloc, "/internal/calls", "", ""))
+        try:
+            validate_callback_url(url, _allowed_hosts(self._settings))
+        except SsfValidationError as exc:
+            return CallbackOutcome(
+                status=CallbackOutcomeStatus.DEAD_LETTER,
+                error_reason=f"SSRF validation failed: {exc}",
+            )
+        headers = {
+            "Content-Type": "application/json",
+            "Idempotency-Key": f"call-event-{event_id}",
+            "Authorization": f"Bearer {self._settings.callback_token.get_secret_value()}",
+        }
+        client = self._client or httpx.AsyncClient(timeout=5.0)
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+        except (OSError, httpx.HTTPError) as exc:
+            return CallbackOutcome(
+                status=CallbackOutcomeStatus.RETRY, error_reason=f"Network error: {exc}"
+            )
+        finally:
+            if self._client is None:
+                await client.aclose()
+        return _classify(response.status_code)

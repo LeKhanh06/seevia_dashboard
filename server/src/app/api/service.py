@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from app.actions import Action
 from app.adapters.music_catalog import SpotifyCatalog
+from app.api.calls import service_router as call_service_router
 from app.auth import ClientPrincipal, require_public_scope
 from app.config import PublicApiScope, Settings, get_app_settings
 from app.database import get_db_session
@@ -33,6 +34,8 @@ from app.services.operation import OperationService
 from app.workers.wake import WorkerWakeSignals, get_worker_wake_signals
 
 router = APIRouter(prefix="/api/v1/service", tags=["service"])
+# Gọi điện của kính (scope calls:manage): start / {id}/hangup / {id}/answer, trả đồng bộ 200.
+router.include_router(call_service_router)
 
 
 def get_operation_service(

@@ -122,7 +122,7 @@ components:
       - call_answer
       - call_reject
       title: Action
-      description: Internal handler actions corresponding one-to-one with operations.
+      description: Phone handler names, one per operation.
     DeviceEventData:
       properties:
         device_id:

@@ -1022,7 +1022,7 @@ components:
       - call_answer
       - call_reject
       title: Operation
-      description: Operations exposed in Public API responses.
+      description: Operation names exposed in Public API responses.
     PriceEstimate:
       properties:
         currency:

@@ -95,3 +95,14 @@ class CareLinkRepository:
             .order_by(CareLink.priority, CareLink.created_at)
         )
         return list(result.scalars())
+
+    async def get_active_pair(self, owner_user_id: str, relative_user_id: str) -> CareLink | None:
+        """Return the ``active`` link of the (owner, relative) pair, or ``None``."""
+        result = await self._session.execute(
+            select(CareLink).where(
+                CareLink.owner_user_id == owner_user_id,
+                CareLink.relative_user_id == relative_user_id,
+                CareLink.status == CareLinkStatus.ACTIVE,
+            )
+        )
+        return result.scalar_one_or_none()

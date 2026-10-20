@@ -152,6 +152,41 @@ class CareLinkConflictError(PublicApiError):
     code = "CARE_LINK_CONFLICT"
 
 
+class ContactNotFoundError(PublicApiError):
+    """Raised when no active care link matches the spoken contact name."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CONTACT_NOT_FOUND"
+
+
+class MultipleContactsFoundError(PublicApiError):
+    """Raised when several active care links match; ``details.candidates`` lists their names."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "MULTIPLE_CONTACTS_FOUND"
+
+
+class CallNotFoundError(PublicApiError):
+    """Raised when a call is missing or the caller is not a party to it."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    code = "CALL_NOT_FOUND"
+
+
+class CallNotAllowedError(PublicApiError):
+    """Raised when the caller has no ``active`` care link for the call."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "CALL_NOT_ALLOWED"
+
+
+class CallStateConflictError(PublicApiError):
+    """Raised when the requested transition is impossible from the call's current state."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "CALL_STATE_CONFLICT"
+
+
 class DeviceEventForwardError(PublicApiError):
     """Raised when a spontaneous phone event cannot reach the glasses server."""
 

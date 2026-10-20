@@ -34,6 +34,32 @@ class CareLinkStatus(StrEnum):
     REVOKED = "revoked"
 
 
+class CallDirection(StrEnum):
+    """Who rings whom: the glasses' owner calls a relative, or the reverse."""
+
+    TO_RELATIVE = "to_relative"
+    TO_GLASSES = "to_glasses"
+
+
+class CallState(StrEnum):
+    """Call lifecycle: ``ringing`` -> ``active``/``rejected``/``missed``/``ended``."""
+
+    RINGING = "ringing"
+    ACTIVE = "active"
+    ENDED = "ended"
+    MISSED = "missed"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class CallCallbackState(StrEnum):
+    """Delivery state of one call event queued for the glasses server."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    DEAD_LETTER = "dead_letter"
+
+
 class RequestState(StrEnum):
     """Public operation states persisted in PostgreSQL."""
 
@@ -78,6 +104,9 @@ def enum_check_values[EnumT: StrEnum](enum_type: type[EnumT]) -> str:
 
 __all__ = [
     "Action",
+    "CallCallbackState",
+    "CallDirection",
+    "CallState",
     "CallbackState",
     "CareLinkStatus",
     "DeliveryState",

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.api.auth import router as auth_router
+from app.api.calls import router as calls_router
 from app.api.care import router as care_router
 from app.api.device import router as device_router
 from app.api.glasses import router as glasses_router
@@ -48,5 +49,6 @@ def create_app(settings: Settings) -> FastAPI:
     application.include_router(preferences_router)
     application.include_router(support_router)
     application.include_router(care_router)
+    application.include_router(calls_router)
 
     return application

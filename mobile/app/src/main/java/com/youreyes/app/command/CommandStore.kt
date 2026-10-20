@@ -65,69 +65,79 @@ class CommandStore(context: Context) :
      * already received, so the caller must not execute it again.
      */
     override fun insertCommandIfNew(record: CommandRecord): Boolean {
-        val values = ContentValues().apply {
-            put("request_id", record.requestId)
-            put("user_id", record.userId)
-            put("device_id", record.deviceId)
-            put("action", record.action)
-            put("params_json", record.paramsJson)
-            put("received_at", record.receivedAt)
-            put("status", record.status)
+        synchronized(DB_LOCK) {
+            val values = ContentValues().apply {
+                put("request_id", record.requestId)
+                put("user_id", record.userId)
+                put("device_id", record.deviceId)
+                put("action", record.action)
+                put("params_json", record.paramsJson)
+                put("received_at", record.receivedAt)
+                put("status", record.status)
+            }
+            return writableDatabase.insertWithOnConflict(
+                COMMANDS, null, values, SQLiteDatabase.CONFLICT_IGNORE
+            ) != -1L
         }
-        return writableDatabase.insertWithOnConflict(
-            COMMANDS, null, values, SQLiteDatabase.CONFLICT_IGNORE
-        ) != -1L
     }
 
     override fun finishCommand(requestId: String, status: String, resultJson: String?, errorJson: String?) {
-        val values = ContentValues().apply {
-            put("status", status)
-            put("result_json", resultJson)
-            put("error_json", errorJson)
+        synchronized(DB_LOCK) {
+            val values = ContentValues().apply {
+                put("status", status)
+                put("result_json", resultJson)
+                put("error_json", errorJson)
+            }
+            writableDatabase.update(COMMANDS, values, "request_id = ?", arrayOf(requestId))
         }
-        writableDatabase.update(COMMANDS, values, "request_id = ?", arrayOf(requestId))
     }
 
     override fun savePendingReport(record: PendingReportRecord) {
-        val values = ContentValues().apply {
-            put("request_id", record.requestId)
-            put("user_id", record.userId)
-            put("device_id", record.deviceId)
-            put("action", record.action)
-            put("execution_state", record.executionState)
-            put("result_json", record.resultJson)
-            put("error_json", record.errorJson)
-            put("status", record.status)
-            put("attempts", record.attempts)
-            put("last_attempt_at", record.executedAt)
-            put("executed_at", record.executedAt)
+        synchronized(DB_LOCK) {
+            val values = ContentValues().apply {
+                put("request_id", record.requestId)
+                put("user_id", record.userId)
+                put("device_id", record.deviceId)
+                put("action", record.action)
+                put("execution_state", record.executionState)
+                put("result_json", record.resultJson)
+                put("error_json", record.errorJson)
+                put("status", record.status)
+                put("attempts", record.attempts)
+                put("last_attempt_at", record.executedAt)
+                put("executed_at", record.executedAt)
+            }
+            writableDatabase.insertWithOnConflict(
+                PENDING_REPORTS, null, values, SQLiteDatabase.CONFLICT_REPLACE
+            )
         }
-        writableDatabase.insertWithOnConflict(
-            PENDING_REPORTS, null, values, SQLiteDatabase.CONFLICT_REPLACE
-        )
     }
 
     override fun updateReportStatus(requestId: String, status: String, attempts: Int) {
-        val values = ContentValues().apply {
-            put("status", status)
-            put("attempts", attempts)
-            put("last_attempt_at", System.currentTimeMillis())
+        synchronized(DB_LOCK) {
+            val values = ContentValues().apply {
+                put("status", status)
+                put("attempts", attempts)
+                put("last_attempt_at", System.currentTimeMillis())
+            }
+            writableDatabase.update(PENDING_REPORTS, values, "request_id = ?", arrayOf(requestId))
         }
-        writableDatabase.update(PENDING_REPORTS, values, "request_id = ?", arrayOf(requestId))
     }
 
     /** Reports not yet accepted by the server, oldest first. */
-    override fun unsentReports(): List<PendingReportRecord> =
+    override fun unsentReports(): List<PendingReportRecord> = synchronized(DB_LOCK) {
         readableDatabase.query(
             PENDING_REPORTS, null,
             "status IN (?, ?)", arrayOf(ReportStatus.PENDING, ReportStatus.FAILED),
             null, null, "executed_at ASC",
         ).use { cursor -> cursor.mapRows(::toPendingReport) }
+    }
 
     /** Every received command, newest first. */
-    fun allCommands(): List<CommandRecord> =
+    fun allCommands(): List<CommandRecord> = synchronized(DB_LOCK) {
         readableDatabase.query(COMMANDS, null, null, null, null, null, "id DESC")
             .use { cursor -> cursor.mapRows(::toCommand) }
+    }
 
     private fun toPendingReport(c: Cursor) = PendingReportRecord(
         requestId = c.string("request_id")!!,
@@ -168,5 +178,6 @@ class CommandStore(context: Context) :
         private const val DATABASE_VERSION = 2
         private const val COMMANDS = "commands"
         private const val PENDING_REPORTS = "pending_reports"
+        private val DB_LOCK = Any()
     }
 }

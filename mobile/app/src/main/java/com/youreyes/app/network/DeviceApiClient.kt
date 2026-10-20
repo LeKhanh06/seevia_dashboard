@@ -2,10 +2,16 @@ package com.youreyes.app.network
 
 import com.youreyes.app.command.DeviceReportPayload
 import com.youreyes.app.command.ReportSender
+import com.youreyes.app.command.ReportOutcome
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+
+class HttpStatusException(val status: Int, message: String) : IllegalStateException(message)
+
+internal fun classifyReportStatus(status: Int): ReportOutcome =
+    if (status in setOf(400, 404, 409, 422)) ReportOutcome.REJECTED else ReportOutcome.RETRY
 
 /**
  * Blocking HTTP client for the server's phone-facing APIs. Call it off the main thread.
@@ -130,7 +136,13 @@ class DeviceApiClient {
 
     /** Adapts [sendReport] to the command pipeline's [ReportSender]. */
     fun asReportSender() = ReportSender { credentials, payload ->
-        sendReport(credentials.baseUrl, credentials.bearerToken, payload).getOrDefault(false)
+        val result = sendReport(credentials.baseUrl, credentials.bearerToken, payload)
+        if (result.isSuccess) ReportOutcome.SENT else {
+            when (val error = result.exceptionOrNull()) {
+                is HttpStatusException -> classifyReportStatus(error.status)
+                else -> ReportOutcome.RETRY
+            }
+        }
     }
 
     /** Sends one request; returns the parsed JSON body or throws with the error body. */
@@ -155,7 +167,7 @@ class DeviceApiClient {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            check(code in 200..299) { "$method $path failed ($code): $text" }
+            if (code !in 200..299) throw HttpStatusException(code, "$method $path failed ($code): $text")
             return if (text.isBlank()) JSONObject() else JSONObject(text)
         } finally {
             conn.disconnect()

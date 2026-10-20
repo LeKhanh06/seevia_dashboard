@@ -33,11 +33,11 @@ private class FakeLog : CommandLog {
         reports.values.filter { it.status == ReportStatus.PENDING || it.status == ReportStatus.FAILED }
 }
 
-private class FakeSender(var accept: Boolean = true) : ReportSender {
+private class FakeSender(var outcome: ReportOutcome = ReportOutcome.SENT) : ReportSender {
     val sent = mutableListOf<DeviceReportPayload>()
-    override fun send(credentials: DeviceCredentials, payload: DeviceReportPayload): Boolean {
+    override fun send(credentials: DeviceCredentials, payload: DeviceReportPayload): ReportOutcome {
         sent += payload
-        return accept
+        return outcome
     }
 }
 
@@ -47,9 +47,10 @@ class CommandPipelineTest {
     private val log = FakeLog()
     private val sender = FakeSender()
     private var handlerRuns = 0
+    private var handlerParams = ""
     private var outcome: ActionExecutionResult = ActionExecutionResult.Success(mapOf("call_state" to "calling"))
     private val registry = ActionRegistry(
-        mapOf("contact_call" to ActionHandler { _, _ -> handlerRuns++; outcome })
+        mapOf("contact_call" to ActionHandler { _, params -> handlerRuns++; handlerParams = params; outcome })
     )
     private val dispatcher = CommandDispatcher(log, registry, sender, context = null, clock = { 1_600_000_000_000 })
 
@@ -67,6 +68,55 @@ class CommandPipelineTest {
         for (key in listOf("request_id", "user_id", "device_id", "action")) {
             assertNull(key, PushCommand.fromData(data - key))
         }
+    }
+
+    @Test
+    fun `fromData parses expiry variants and maps url`() {
+        val base = mapOf("request_id" to "r", "user_id" to "u", "device_id" to "d", "action" to "navigation_start")
+        val utc = PushCommand.fromData(base + mapOf(
+            "expires_at" to "2026-10-19T08:01:00.000000+00:00",
+            "maps_url" to " https://maps.example/route ",
+        ))
+        val local = PushCommand.fromData(base + ("expires_at" to "2026-10-19T15:01:00+07:00"))
+        val invalid = PushCommand.fromData(base + ("expires_at" to "rác"))
+
+        assertEquals(1_792_396_860_000L, utc?.expiresAtMillis)
+        assertEquals(utc?.expiresAtMillis, local?.expiresAtMillis)
+        assertEquals(" https://maps.example/route ", utc?.mapsUrl)
+        assertNull(invalid?.expiresAtMillis)
+        assertNull(PushCommand.fromData(base + ("maps_url" to ""))?.mapsUrl)
+    }
+
+    @Test
+    fun `expired command is not executed and reports COMMAND_EXPIRED`() {
+        val expiring = CommandDispatcher(log, registry, sender, null, clock = { 1_600_000_000_001 })
+        val result = expiring.dispatch(command().copy(expiresAtMillis = 1_600_000_000_000), credentials)
+
+        assertEquals(0, handlerRuns)
+        assertEquals(ExecutionState.FAILED, (result as DispatchResult.Executed).executionState)
+        assertEquals("COMMAND_EXPIRED", sender.sent.single().error?.code)
+        assertEquals("Command expired before execution", sender.sent.single().error?.message)
+        assertEquals("req-1", sender.sent.single().requestId)
+        assertEquals(DispatchResult.DuplicateIgnored("req-1"), expiring.dispatch(command(), credentials))
+    }
+
+    @Test
+    fun `command without expiry still runs`() {
+        dispatcher.dispatch(command().copy(expiresAtMillis = null), credentials)
+
+        assertEquals(1, handlerRuns)
+    }
+
+    @Test
+    fun `maps url is passed to handler unless params already define it`() {
+        dispatcher.dispatch(command().copy(mapsUrl = "https://maps.example/route"), credentials)
+        assertEquals("https://maps.example/route", org.json.JSONObject(handlerParams).getString("maps_url"))
+
+        dispatcher.dispatch(command("req-2").copy(
+            paramsJson = """{"maps_url":"https://params.example/route"}""",
+            mapsUrl = "https://maps.example/route",
+        ), credentials)
+        assertEquals("https://params.example/route", org.json.JSONObject(handlerParams).getString("maps_url"))
     }
 
     @Test
@@ -96,11 +146,11 @@ class CommandPipelineTest {
 
     @Test
     fun `an unsent report is retried later without re-running the handler`() {
-        sender.accept = false
+        sender.outcome = ReportOutcome.RETRY
         dispatcher.dispatch(command(), credentials)
         assertEquals(ReportStatus.FAILED, log.reports.getValue("req-1").status)
 
-        sender.accept = true
+        sender.outcome = ReportOutcome.SENT
         val resent = ReportFlusher(log, sender).flush(credentials)
 
         assertEquals(1, resent)
@@ -126,9 +176,9 @@ class CommandPipelineTest {
         outcome = ActionExecutionResult.Error(
             ReportErrorPayload("MULTIPLE_CONTACTS_FOUND", "Multiple contacts matched", mapOf("candidates" to candidates))
         )
-        sender.accept = false
+        sender.outcome = ReportOutcome.RETRY
         dispatcher.dispatch(command(), credentials)
-        sender.accept = true
+        sender.outcome = ReportOutcome.SENT
 
         ReportFlusher(log, sender).flush(credentials)
 
@@ -154,7 +204,7 @@ class CommandPipelineTest {
 
     @Test
     fun `a report the server keeps refusing is abandoned after max attempts`() {
-        sender.accept = false
+        sender.outcome = ReportOutcome.RETRY
         dispatcher.dispatch(command(), credentials)
         val flusher = ReportFlusher(log, sender)
 
@@ -162,6 +212,30 @@ class CommandPipelineTest {
 
         assertEquals(ReportStatus.ABANDONED, log.reports.getValue("req-1").status)
         assertEquals(ReportFlusher.MAX_ATTEMPTS, sender.sent.size)
+    }
+
+    @Test
+    fun `rejected report is abandoned immediately`() {
+        sender.outcome = ReportOutcome.REJECTED
+
+        dispatcher.dispatch(command(), credentials)
+        val first = log.reports.getValue("req-1")
+        val flushed = ReportFlusher(log, sender).flush(credentials)
+
+        assertEquals(ReportStatus.ABANDONED, first.status)
+        assertEquals(1, first.attempts)
+        assertEquals(0, flushed)
+        assertEquals(1, sender.sent.size)
+    }
+
+    @Test
+    fun `retry report stays failed`() {
+        sender.outcome = ReportOutcome.RETRY
+
+        dispatcher.dispatch(command(), credentials)
+
+        assertEquals(ReportStatus.FAILED, log.reports.getValue("req-1").status)
+        assertEquals(1, log.reports.getValue("req-1").attempts)
     }
 
     @Test

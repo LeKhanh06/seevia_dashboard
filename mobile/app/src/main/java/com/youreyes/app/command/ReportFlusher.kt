@@ -28,7 +28,7 @@ class ReportFlusher(
                 store.updateReportStatus(record.requestId, ReportStatus.ABANDONED, record.attempts)
                 continue
             }
-            if (sendOnce(store, sender, credentials, record)) sent++
+            if (sendOnce(store, sender, credentials, record) == ReportOutcome.SENT) sent++
         }
         if (pending.isNotEmpty()) Log.i(TAG, "Re-sent $sent of ${pending.size} pending report(s)")
         return sent

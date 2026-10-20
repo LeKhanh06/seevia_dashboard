@@ -141,4 +141,10 @@ dependencies {
     // App Remote's protocol layer serialises over gson and the .aar declares no
     // POM, so this transitive dependency has to be named explicitly.
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // WebSocket audio for internet calls with the glasses (WS /v2/call) and the
+    // session-authenticated care/calls/messages REST calls.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Re-sends device reports once the network is back, not only before the next command.
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
 }

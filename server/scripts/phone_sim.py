@@ -175,6 +175,7 @@ class PhoneSim:
             params=json.loads(data.get("params_json") or "{}"),
             duplicate=dup,
             glasses_device_id=data.get("device_id"),
+            maps_url=data.get("maps_url"),
         )
         if dup:
             return

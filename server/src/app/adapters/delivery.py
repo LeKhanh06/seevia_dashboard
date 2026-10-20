@@ -13,13 +13,15 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+from urllib.parse import quote
 
 import firebase_admin
 import httpx
 from firebase_admin import credentials, messaging
 from firebase_admin.exceptions import FirebaseError
 
+from app.actions import Action
 from app.config import DeliveryTransport, Settings
 
 if TYPE_CHECKING:
@@ -98,6 +100,28 @@ def _get_fcm_app(settings: Settings) -> firebase_admin.App:
         )
 
 
+def _maps_url(params: dict[str, Any]) -> str | None:
+    """URL chỉ đường đi bộ Google Maps cho navigation_start, hoặc None nếu thiếu đích.
+
+    Ưu tiên địa chỉ; không có địa chỉ thì dùng "lat,lng". App mở URL này để dẫn đường.
+    """
+    destination = params.get("destination")
+    if not isinstance(destination, dict):
+        return None
+    address = destination.get("address")
+    lat, lng = destination.get("lat"), destination.get("lng")
+    if isinstance(address, str) and address.strip():
+        target = address.strip()
+    elif all(isinstance(v, int | float) and not isinstance(v, bool) for v in (lat, lng)):
+        target = f"{lat},{lng}"
+    else:
+        return None
+    return (
+        "https://www.google.com/maps/dir/?api=1"
+        f"&destination={quote(target, safe=',')}&travelmode=walking"
+    )
+
+
 def _command_data(operation: Operation) -> dict[str, str]:
     """Build the data payload the Android receiver expects.
 
@@ -105,7 +129,7 @@ def _command_data(operation: Operation) -> dict[str, str]:
     thoại thật nhận. Payload không mang credential: điện thoại báo kết quả bằng
     URL và token đã lưu lúc đăng ký.
     """
-    return {
+    data = {
         "request_id": str(operation.request_id),
         "user_id": operation.user_id,
         "device_id": operation.device_id or "",
@@ -116,6 +140,9 @@ def _command_data(operation: Operation) -> dict[str, str]:
         "expires_at": operation.expires_at.isoformat(),
         "requested_priority": "high",
     }
+    if operation.action is Action.NAVIGATION_START and (url := _maps_url(operation.params)):
+        data["maps_url"] = url  # trường thêm: app mở thẳng Google Maps, không đổi params_json
+    return data
 
 
 def _build_message(*, push_token: str, operation: Operation) -> messaging.Message:

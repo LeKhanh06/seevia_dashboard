@@ -19,6 +19,8 @@ EXPECTED_KEYS = {
     "expires_at",
     "requested_priority",
 }
+# Khoá bổ sung (additive) theo action: navigation_start mang maps_url cho app mở Google Maps.
+EXTRA_KEYS = {"navigation_start": {"maps_url"}}
 
 
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.stem)
@@ -26,7 +28,7 @@ def test_fixture_matches_command_payload_shape(path: Path) -> None:
     """Mỗi fixture có đủ khoá, giá trị chuỗi, params_json là JSON object."""
     data = json.loads(path.read_text(encoding="utf-8"))
 
-    assert set(data) == EXPECTED_KEYS
+    assert set(data) == EXPECTED_KEYS | EXTRA_KEYS.get(path.stem, set())
     assert all(isinstance(value, str) for value in data.values())
     assert data["action"] == path.stem
     assert isinstance(json.loads(data["params_json"]), dict)

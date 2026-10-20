@@ -1,5 +1,9 @@
 # Session app SeeVia: đọc file này trước
 
+## Đợt 2 — spec ĐÃ DUYỆT, CHƯA thực thi (chờ người dùng bảo)
+
+`docs/superpowers/specs/2026-10-20-app-dot2-design.md`. Khi được bảo: `superpowers:writing-plans` → thực thi (Sonnet cho UI/logic phức tạp, Codex gpt-6-luna cho việc cơ học — xem memory `seevia-dung-codex-luna`). Người dùng muốn thử APK đợt 1 trên máy thật (`mobile/docs/THU_TAY_GIAO_TIEP.md`).
+
 ## Đợt 1 (giao tiếp tối thiểu) — xong 2026-10-20
 
 Đã hoàn tất trên nhánh `app-giao-tiep`, chưa push. Tài liệu của đợt: `docs/superpowers/specs/2026-10-20-app-giao-tiep-toi-thieu-design.md` và `docs/superpowers/plans/2026-10-20-app-giao-tiep-toi-thieu.md`. Phần còn lại của spec lớn `docs/superpowers/specs/2026-10-20-seevia-mobile-app-design.md` dành cho đợt sau: gọi/nhắn điện thoại↔điện thoại; danh bạ hai chiều không cần kính và chọn người từ danh bạ máy; sửa alias/ưu tiên bằng `PATCH`; đổi tên/nhận diện SeeVia; ẩn màn hình khi không có server; màn debug echo/RTT.

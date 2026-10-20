@@ -1,5 +1,9 @@
 # Session app SeeVia: đọc file này trước
 
+## Đợt 1 (giao tiếp tối thiểu) — xong 2026-10-20
+
+Đã hoàn tất trên nhánh `app-giao-tiep`, chưa push. Tài liệu của đợt: `docs/superpowers/specs/2026-10-20-app-giao-tiep-toi-thieu-design.md` và `docs/superpowers/plans/2026-10-20-app-giao-tiep-toi-thieu.md`. Phần còn lại của spec lớn `docs/superpowers/specs/2026-10-20-seevia-mobile-app-design.md` dành cho đợt sau: gọi/nhắn điện thoại↔điện thoại; danh bạ hai chiều không cần kính và chọn người từ danh bạ máy; sửa alias/ưu tiên bằng `PATCH`; đổi tên/nhận diện SeeVia; ẩn màn hình khi không có server; màn debug echo/RTT.
+
 Cập nhật 2026-10-20. Việc: code app Android SeeVia (đổi từ "Your Eyes") chạy thật, gọi/nhắn qua internet, danh bạ, debug; giao APK.
 Spec: `docs/superpowers/specs/2026-10-20-seevia-mobile-app-design.md` (CHƯA được người dùng duyệt chính thức, CHƯA qua builder check).
 

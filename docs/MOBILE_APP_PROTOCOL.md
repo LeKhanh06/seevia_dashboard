@@ -177,10 +177,11 @@ nên cần chuyển thêm qua `CommandExecutionService` cùng thay đổi `navig
 
 ### 3.2. Luồng trên máy
 
-`FcmPushReceiver` (chỉ parse) → `CommandExecutionService` (foreground service, chạy từng lệnh một) →
-`ReportFlusher` gửi lại report còn treo → `CommandDispatcher` → `ActionRegistry` chọn handler → lưu report
-→ gửi `POST /api/v1/device/report`. Action lạ trả `failed / UNSUPPORTED_ACTION`; handler ném ngoại lệ trả
-`failed / EXECUTION_FAILED`.
+`FcmPushReceiver` (chỉ parse) → `CommandExecutionService` (foreground service, phân lệnh vào hai làn chạy
+độc lập) → `ReportFlusher` gửi lại report còn treo → `CommandDispatcher` → `ActionRegistry` chọn handler →
+lưu report → gửi `POST /api/v1/device/report`. Làn FAST gồm `emergency_call`, `call_answer`, `call_reject`,
+`location_get`, `capabilities_get`; mọi action còn lại chạy ở làn SLOW. Mỗi làn tuần tự xử lý lệnh của mình.
+Action lạ trả `failed / UNSUPPORTED_ACTION`; handler ném ngoại lệ trả `failed / EXECUTION_FAILED`.
 
 ### 3.3. Hạn, TTL, retry
 
@@ -188,11 +189,17 @@ nên cần chuyển thêm qua `CommandExecutionService` cùng thay đổi `navig
   90s, `music_play` 45s, `music_stop` 30s, `music_volume` 30s, `navigation_start` 90s, `navigation_stop`
   45s, `emergency_call` 21 phút, `contact_call` 60s, `location_get` 30s, `capabilities_get` 30s,
   `call_answer` 20s, `call_reject` 20s (`server/src/app/actions.py`).
+- Trước khi gọi handler, app so giờ hiện tại với `expires_at`. Lệnh đã hết hạn bị bỏ qua và app lưu/gửi
+  report `failed / COMMAND_EXPIRED`; server kính phát câu: “Điện thoại nhận lệnh quá muộn nên chưa làm.
+  Bạn nói lại giúp tôi nhé.”
 - Quá `expires_at` mà chưa có report, `TimeoutWorker` chuyển thao tác sang `timed_out / REPORT_TIMEOUT`;
   report đến sau đó bị `409`.
 - FCM TTL chỉ 10 giây: máy tắt hoặc mất mạng quá 10 giây thì FCM bỏ thông điệp, thao tác sẽ hết hạn.
 - Lỗi gửi tạm thời (mạng, 5xx, quota) server thử lại sau 5s rồi 20s; token FCM chết (`Unregistered`) thì
   thao tác `failed / DELIVERY_FAILED` ngay.
+- Khi app gửi report, HTTP `400`, `404`, `409`, `422` được coi là từ chối vĩnh viễn và bỏ ngay. Lỗi khác
+  (gồm lỗi mạng, `401`, `429`, `5xx`) được thử lại trước lệnh kế tiếp và bằng WorkManager khi có mạng,
+  backoff mũ từ 15 giây; tối đa 8 lần. Chỉ gửi lại report, không chạy lại handler.
 
 ### 3.4. Xử lý trùng
 
@@ -238,13 +245,11 @@ Ví dụ `result` của `contact_call` và `error` của `MULTIPLE_CONTACTS_FOUN
   "details": { "candidates": [ { "name": "Nam", "phone_number": "***111" }, { "name": "Nam", "phone_number": "***922" } ] } }
 ```
 
-### 4.1. `navigation_start`: thông báo chỉ đường (thay đổi so với hiện tại)
+### 4.1. `navigation_start`: thông báo chỉ đường (đã cài đặt)
 
-**Hành vi hiện tại** (`NavigationActions.kt`): app tự mở Google Maps (`google.navigation:q=...&mode=w`, hoặc
-`geo:` nếu thiếu Maps) qua full-screen notification, đợi rồi báo `succeeded`. Cách này hay bị Android chặn mở
-activity từ nền nên người dùng không thấy gì.
+Lịch sử: trước đây app cố tự mở Google Maps từ nền; Android có thể chặn việc mở activity đó.
 
-**Hành vi mới:**
+**Hành vi đã cài:**
 
 1. Server thêm `maps_url` vào FCM data (top-level, cạnh `params_json`):
    `https://www.google.com/maps/dir/?api=1&destination=<urlencode(address, hoặc "lat,lng")>&travelmode=walking`.
@@ -311,10 +316,11 @@ Quy tắc (`schemas/device.py`, `services/device.py`):
 - Trạng thái công khai: `processing` → `succeeded` | `failed` | `timed_out`; server kính đọc qua
   `GET /api/v1/requests/{request_id}` hoặc callback.
 
-**Retry trên máy** (`CommandStore`, `ReportFlusher`): report được lưu `PENDING` trước khi gửi (timeout HTTP
-5 giây). Gửi lỗi thì thành `FAILED` và `ReportFlusher.flush` thử lại **trước mỗi lệnh mới** (không có bộ đếm
-giờ nền), tối đa 8 lần rồi `ABANDONED`. Report chỉ được gửi lại, không bao giờ chạy lại handler. Report bị
-server từ chối vĩnh viễn (ví dụ đã hết hạn) cũng đi hết 8 lần rồi bị bỏ.
+**Retry trên máy** (`CommandStore`, `ReportFlusher`, `ReportRetryWorker`): report được lưu trước khi gửi
+(timeout HTTP 5 giây). HTTP `400`, `404`, `409`, `422` bị đánh dấu từ chối và bỏ ngay. Lỗi mạng, `401`,
+`429`, `5xx` và lỗi khác ở lại trạng thái chờ; `ReportFlusher.flush` thử lại **trước mỗi lệnh mới**, còn
+WorkManager thử lại độc lập khi có mạng với backoff mũ từ 15 giây. Tối đa 8 lần, sau đó report thành
+`ABANDONED`. Report chỉ được gửi lại, không bao giờ chạy lại handler.
 
 ## 6. Sự kiện điện thoại → server
 
@@ -347,6 +353,11 @@ Không có sự kiện tự phát. Hai thông tin này là **lệnh** `location_
 thoại chỉ trả lời khi được hỏi.
 
 ## 7. Gọi điện / nhắn tin với kính
+
+**Đã cài trong app (2026-10-20):** màn “Người thân” cho lời mời, gọi kính và nhắn tin; màn cuộc gọi đến/đang
+gọi có “Nghe”, “Từ chối”, “Tắt mic”, “Loa ngoài”, “Cúp máy”; màn “Hội thoại” hiển thị lịch sử và trạng thái
+“Đã nghe”. Cuộc gọi đến trước hết được đăng ký qua Telecom self-managed; nếu Telecom từ chối hoặc tài khoản
+chưa bật, app lùi về thông báo cuộc gọi toàn màn hình. App tự dừng chuông sau 45 giây nếu chưa nhận kết thúc.
 
 Người khiếm thị nói và nghe **ngay trên kính**; người thân dùng chính app này. Cuộc gọi và tin nhắn đi **qua internet
 giống Messenger**: gọi thoại bằng WebSocket `WS /v2/call` (PCM16) và báo cuộc gọi/tin bằng FCM. **Gọi/nhắn thường không dùng SIM,

@@ -318,8 +318,10 @@ async def test_start_errors_and_callback_order(
     assert sorted(many.json()["error"]["details"]["candidates"]) == ["Mẹ", "Mẹ Hai"]
     assert await world.rows(Call) == []
 
+    async with build_session_factory(world.engine)() as session:
+        twin_id = (await UserRepository(session).get_by_phone("0951000004")).public_user_id  # type: ignore[union-attr]
+    await _register_phone(world.engine, twin_id, "twin-push-token")
     call_id = (await world.start(alias="mẹ hai")).json()["data"]["call_id"]
-    # "mẹ hai" không có phone -> không push, nhưng call vẫn ringing; relative thứ hai nghe máy.
     answer = await world.client.post(f"/api/v1/calls/{call_id}/answer", headers=twin)
     assert answer.status_code == 200
     await world.client.post(f"/api/v1/calls/{call_id}/hangup", headers=twin)
@@ -353,3 +355,160 @@ async def test_start_errors_and_callback_order(
     await worker.run_once()
     assert [e for _, _, e in seen] == ["call_answered", "call_answered", "call_ended"]
     assert {c.state.value for c in await world.rows(CallCallback)} == {"delivered"}
+
+
+async def _sql(world: World, statement: str) -> None:
+    async with world.engine.begin() as conn:
+        await conn.execute(text(statement))
+
+
+async def _call_row(world: World) -> Call:
+    return (await world.rows(Call))[-1]
+
+
+async def test_revoke_ends_open_call(world: World) -> None:
+    """Thu hồi link giữa cuộc gọi: ended/revoked, VH nhận call_ended, app nhận FCM call_ended."""
+    call_id = (await world.start()).json()["data"]["call_id"]
+    await world.client.post(f"/api/v1/calls/{call_id}/answer", headers=world.relative)
+    world.push.sent.clear()
+
+    links = await world.client.get("/api/v1/care/links", headers=world.owner)
+    link_id = links.json()["data"]["links"][0]["id"]
+    assert (
+        await world.client.delete(f"/api/v1/care/{link_id}", headers=world.owner)
+    ).status_code == 200
+
+    call = await _call_row(world)
+    assert (call.state.value, call.end_reason) == ("ended", "revoked")
+    events = [(c.payload["event"], c.payload["reason"]) for c in await world.rows(CallCallback)]
+    assert events == [("call_answered", None), ("call_ended", "revoked")]
+    assert world.push.sent == [
+        (
+            "relative-push-token",
+            {"type": "call_ended", "call_id": call_id, "reason": "revoked"},
+        )
+    ]
+
+
+async def test_revoked_link_gets_no_media_token(world: World) -> None:
+    """Link mất giữa chừng (kể cả khi chưa kịp kết thúc cuộc gọi): không FCM/GET nào mang token."""
+    revoke = "UPDATE care_links SET status = 'revoked'"
+    # Đường 1: kính nghe máy sau khi link đã bị thu hồi -> ended/revoked, không push call_answered.
+    created = await world.client.post(
+        "/api/v1/calls", json={"owner_user_id": world.owner_id}, headers=world.relative
+    )
+    first = created.json()["data"]["call_id"]
+    await _sql(world, revoke)
+    answered = await world.client.post(
+        f"/api/v1/service/call/{first}/answer", json={"media_token": "glasses-token-1"}, headers=SVC
+    )
+    assert answered.json()["data"]["state"] == "ended"
+    assert "call_answered" not in [d["type"] for _, d in world.push.sent]
+
+    # Đường 2: đã active, link bị thu hồi trước khi app lấy token qua GET.
+    await _sql(world, "UPDATE care_links SET status = 'active'")
+    second = (
+        await world.client.post(
+            "/api/v1/calls", json={"owner_user_id": world.owner_id}, headers=world.relative
+        )
+    ).json()["data"]["call_id"]
+    await world.client.post(
+        f"/api/v1/service/call/{second}/answer",
+        json={"media_token": "glasses-token-2"},
+        headers=SVC,
+    )
+    await _sql(world, revoke)
+    got = (await world.client.get(f"/api/v1/calls/{second}", headers=world.relative)).json()["data"]
+    assert (got["state"], got["media_token"]) == ("ended", None)
+    assert (await _call_row(world)).media_token_pending is None
+
+
+async def test_glasses_offline_only_fails_ringing(world: World) -> None:
+    """glasses_offline: đang chuông -> failed; đang active -> ended (không phá máy trạng thái)."""
+    active = (await world.start()).json()["data"]["call_id"]
+    await world.client.post(f"/api/v1/calls/{active}/answer", headers=world.relative)
+    done = await world.client.post(
+        f"/api/v1/service/call/{active}/hangup", json={"reason": "glasses_offline"}, headers=SVC
+    )
+    assert done.json()["data"] == {
+        "call_id": active,
+        "state": "ended",
+        "end_reason": "glasses_offline",
+    }
+    ringing = (await world.start(token="media-token-5678")).json()["data"]["call_id"]
+    failed = await world.client.post(
+        f"/api/v1/service/call/{ringing}/hangup", json={"reason": "glasses_offline"}, headers=SVC
+    )
+    assert failed.json()["data"]["state"] == "failed"
+
+
+async def test_token_window_and_max_active_sweep(world: World) -> None:
+    """Token chỉ giao trong 60 s sau khi nghe máy rồi bị xoá; cuộc gọi active quá hạn bị đóng."""
+    call_id = (
+        await world.client.post(
+            "/api/v1/calls", json={"owner_user_id": world.owner_id}, headers=world.relative
+        )
+    ).json()["data"]["call_id"]
+    await world.client.post(
+        f"/api/v1/service/call/{call_id}/answer",
+        json={"media_token": "glasses-token-1"},
+        headers=SVC,
+    )
+    await _sql(world, "UPDATE calls SET answered_at = now() - interval '61 s'")
+    got = (await world.client.get(f"/api/v1/calls/{call_id}", headers=world.relative)).json()[
+        "data"
+    ]
+    assert (got["state"], got["media_token"]) == ("active", None)
+    assert (await _call_row(world)).media_token_pending is None
+
+    world.push.sent.clear()
+    await _sql(world, "UPDATE calls SET answered_at = now() - interval '3 hours'")
+    worker = TimeoutWorker(build_session_factory(world.engine), world.settings)
+    assert await worker.run_once() == 1
+    call = await _call_row(world)
+    assert (call.state.value, call.end_reason) == ("ended", "max_duration")
+    last = (await world.rows(CallCallback))[-1].payload
+    assert (last["event"], last["reason"]) == ("call_ended", "max_duration")
+    assert [d["type"] for _, d in world.push.sent] == []  # FCM do worker dùng adapter của settings
+    assert await worker.run_once() == 0
+
+
+async def test_relative_without_phone_fails_fast(
+    world: World, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Người thân không có điện thoại active: missed sau một chu kỳ worker, không chờ 30 s."""
+    twin = await _session(world.client, caplog, "0951000004")
+    await _link(world.client, world.owner, twin, ("0951000004", "Chú Hai", ["hai"]))
+    world.push.sent.clear()
+    started = await world.start(alias="hai")
+    assert started.status_code == 200
+    assert world.push.sent == []
+
+    worker = TimeoutWorker(build_session_factory(world.engine), world.settings)
+    assert await worker.run_once() == 1  # giờ thật, không đẩy đồng hồ
+    call = await _call_row(world)
+    assert (call.state.value, call.end_reason) == ("missed", "timeout")
+    assert (await world.rows(CallCallback))[-1].payload["event"] == "call_missed"
+
+
+async def test_double_tap_reuses_call_and_reject(world: World) -> None:
+    """Bấm đúp gọi kính -> cùng call_id, một call_incoming; từ chối cuộc gọi của kính idempotent."""
+    body = {"owner_user_id": world.owner_id}
+    ids = {
+        (await world.client.post("/api/v1/calls", json=body, headers=world.relative)).json()[
+            "data"
+        ]["call_id"]
+        for _ in range(2)
+    }
+    assert len(ids) == 1
+    assert [c.payload["event"] for c in await world.rows(CallCallback)] == ["call_incoming"]
+
+    call_id = (await world.start()).json()["data"]["call_id"]
+    for _ in range(2):
+        rejected = await world.client.post(
+            f"/api/v1/calls/{call_id}/reject", headers=world.relative
+        )
+        assert rejected.status_code == 200, rejected.text
+        assert rejected.json()["data"]["state"] == "rejected"
+    events = [c.payload["event"] for c in await world.rows(CallCallback)]
+    assert events == ["call_incoming", "call_rejected"]  # reject lặp không phát thêm

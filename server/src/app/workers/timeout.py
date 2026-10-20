@@ -64,14 +64,16 @@ class TimeoutWorker:
         return count + await self._expire_calls(now)
 
     async def _expire_calls(self, now: datetime) -> int:
-        """Mark calls still ringing after ``CALL_RING_TIMEOUT_S`` as ``missed``."""
+        """Mark unanswered calls ``missed``; close ``active`` calls past the max duration."""
         async with self._session_factory() as session:
             service = CallService(session, self._settings, get_delivery_adapter(self._settings))
-            count = await service.expire_ringing(now=now, limit=self._settings.worker_batch_size)
+            limit = self._settings.worker_batch_size
+            count = await service.expire_ringing(now=now, limit=limit)
+            count += await service.sweep_active(now=now, limit=limit)
             await session.commit()
         await service.dispatch_pushes()
         if count:
-            logger.info("Marked %d unanswered call(s) as missed", count)
+            logger.info("Closed %d stale call(s) (missed or over max duration)", count)
         return count
 
     async def run_loop(self, shutdown_event: asyncio.Event) -> None:

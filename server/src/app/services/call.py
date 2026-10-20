@@ -57,6 +57,9 @@ _MANY_CONTACTS_MSG = "Several relatives match that name"
 _REQUEST_ID_MSG = "request_id was already used for a different glasses device"
 _OWNER_FALLBACK_NAME = "Chủ kính"
 _REASON_OFFLINE = "glasses_offline"
+_REASON_REVOKED = "revoked"
+# Token media gốc chỉ được giao trong chừng này giây kể từ lúc nghe máy; quá hạn thì xoá.
+_TOKEN_HANDOUT_WINDOW = timedelta(seconds=60)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,7 +147,7 @@ class CallService:
             ring_deadline_at=self._deadline(),
         )
         owner = await self._users.get_by_public_user_id(link.owner_user_id)
-        await self._push(
+        queued = await self._push(
             call.relative_user_id,
             call,
             {
@@ -155,6 +158,11 @@ class CallService:
                 "emergency": "true" if emergency else "false",
             },
         )
+        if not queued:
+            # Không có điện thoại nào để đổ chuông: cho hết hạn ngay, timeout worker báo
+            # missed trong một chu kỳ poll thay vì bắt kính và chuỗi khẩn cấp chờ 30 s.
+            call.ring_deadline_at = datetime.now(UTC)
+            await self._calls.touch(call)
         return call
 
     async def answer_from_glasses(self, call_id: UUID, *, media_token: str) -> Call:
@@ -166,6 +174,11 @@ class CallService:
             return call
         if call.state is not CallState.RINGING:
             raise CallStateConflictError(_CONFLICT_MSG)
+        if not await self._has_link(call):
+            # Link bị thu hồi lúc đang chuông: không đẩy token cho người đã mất quyền.
+            await self._finish(call, CallState.ENDED, _REASON_REVOKED)
+            await self._push_ended(call)
+            return call
         call.state = CallState.ACTIVE
         call.answered_at = datetime.now(UTC)
         call.media_token_hash = hash_token(media_token)
@@ -194,7 +207,7 @@ class CallService:
             default = "rejected" if callee_declines else "cancelled"
         else:
             state, default = CallState.ENDED, "hangup"
-        if reason == _REASON_OFFLINE:
+        if reason == _REASON_OFFLINE and call.state is CallState.RINGING:
             state = CallState.FAILED  # kính không có phiên: chưa từng đổ chuông
         await self._finish(call, state, reason or default)
         await self._push_ended(call)
@@ -210,6 +223,11 @@ class CallService:
         glasses_device_id = await self._glasses.get_active_device_id(owner_user_id)
         if glasses_device_id is None:
             raise GlassesDeviceNotLinkedError(_NOT_LINKED_MSG)
+        existing = await self._calls.get_ringing_to_glasses(
+            owner_user_id, relative_user_id, now=datetime.now(UTC)
+        )
+        if existing is not None:
+            return existing  # bấm đúp "gọi": cùng một cuộc đang đổ chuông, không gọi kính lần nữa
         call = await self._calls.create(
             owner_user_id=owner_user_id,
             relative_user_id=relative_user_id,
@@ -278,9 +296,31 @@ class CallService:
             and call.state is CallState.ACTIVE
             and call.media_token_pending
         ):
-            token, call.media_token_pending = call.media_token_pending, None
-            await self._calls.touch(call)
+            in_window = (
+                call.answered_at is not None
+                and datetime.now(UTC) - call.answered_at <= _TOKEN_HANDOUT_WINDOW
+            )
+            if not await self._has_link(call):
+                await self._finish(call, CallState.ENDED, _REASON_REVOKED)
+                await self._enqueue(call, "call_ended")
+            else:
+                if in_window:
+                    token = call.media_token_pending
+                call.media_token_pending = None  # giao một lần, hoặc quá hạn thì huỷ
+                await self._calls.touch(call)
         return call, token
+
+    async def end_open_calls_for_pair(self, owner_user_id: str, relative_user_id: str) -> int:
+        """End ringing/active calls of a pair whose care link was just revoked.
+
+        VH nhận ``call_ended`` để cắt cầu âm thanh; app nhận FCM ``call_ended``.
+        """
+        calls = await self._calls.lock_open_for_pair(owner_user_id, relative_user_id)
+        for call in calls:
+            await self._finish(call, CallState.ENDED, _REASON_REVOKED)
+            await self._enqueue(call, "call_ended")
+            await self._push_ended(call)
+        return len(calls)
 
     # ------------------------------------------------------------------ timeout worker
 
@@ -292,6 +332,18 @@ class CallService:
             await self._enqueue(call, "call_missed")
             await self._push_ended(call, reason="missed")
         return len(expired)
+
+    async def sweep_active(self, *, now: datetime, limit: int) -> int:
+        """Close ``active`` calls older than ``CALL_MAX_ACTIVE_S`` and drop stale raw tokens."""
+        await self._calls.clear_stale_tokens(answered_before=now - _TOKEN_HANDOUT_WINDOW)
+        stale = await self._calls.lock_overstayed_active(
+            answered_before=now - timedelta(seconds=self._settings.call_max_active_s), limit=limit
+        )
+        for call in stale:
+            await self._finish(call, CallState.ENDED, "max_duration")
+            await self._enqueue(call, "call_ended")
+            await self._push_ended(call)
+        return len(stale)
 
     # ------------------------------------------------------------------ effects
 
@@ -336,9 +388,14 @@ class CallService:
             raise CallNotFoundError(_NOT_FOUND_MSG)
         return call
 
+    async def _has_link(self, call: Call) -> bool:
+        return (
+            await self._links.get_active_pair(call.owner_user_id, call.relative_user_id) is not None
+        )
+
     async def _require_link(self, call: Call) -> None:
         """Refuse when the link was revoked while the call rang."""
-        if await self._links.get_active_pair(call.owner_user_id, call.relative_user_id) is None:
+        if not await self._has_link(call):
             raise CallNotAllowedError(_NOT_ALLOWED_MSG)
 
     async def _finish(self, call: Call, state: CallState, reason: str) -> None:
@@ -365,14 +422,16 @@ class CallService:
             },
         )
 
-    async def _push(self, user_id: str, call: Call, data: dict[str, str]) -> None:
+    async def _push(self, user_id: str, call: Call, data: dict[str, str]) -> bool:
+        """Queue a push for the user's active phone; ``False`` when there is none."""
         device = await self._devices.get_latest_active_device(user_id)
         if device is None:
             logger.warning("No active phone to push %s for call %s", data["type"], call.id)
-            return
+            return False
         self._pushes.append(
             _Push(device.push_token_ciphertext, data, f"call {call.id} {data['type']}")
         )
+        return True
 
     async def _push_ended(self, call: Call, *, reason: str | None = None) -> None:
         await self._push(

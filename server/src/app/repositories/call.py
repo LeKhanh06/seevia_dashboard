@@ -5,18 +5,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, exists, select
+from sqlalchemy import and_, exists, select, update
 from sqlalchemy.orm import aliased
 
 from app.models.call import Call, CallCallback
-from app.models.enums import CallCallbackState, CallState
+from app.models.enums import CallCallbackState, CallDirection, CallState
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from app.models.enums import CallDirection
 
 
 class CallRepository:
@@ -90,6 +88,56 @@ class CallRepository:
             .with_for_update(skip_locked=True)
         )
         return list(result.scalars())
+
+    async def lock_open_for_pair(self, owner_user_id: str, relative_user_id: str) -> list[Call]:
+        """Lock the ``ringing`` / ``active`` calls between an owner and a relative."""
+        result = await self._session.execute(
+            select(Call)
+            .where(
+                Call.owner_user_id == owner_user_id,
+                Call.relative_user_id == relative_user_id,
+                Call.state.in_((CallState.RINGING, CallState.ACTIVE)),
+            )
+            .with_for_update()
+        )
+        return list(result.scalars())
+
+    async def get_ringing_to_glasses(
+        self, owner_user_id: str, relative_user_id: str, *, now: datetime
+    ) -> Call | None:
+        """Return the not-yet-expired ringing call this relative already placed to the glasses."""
+        result = await self._session.execute(
+            select(Call)
+            .where(
+                Call.owner_user_id == owner_user_id,
+                Call.relative_user_id == relative_user_id,
+                Call.direction == CallDirection.TO_GLASSES,
+                Call.state == CallState.RINGING,
+                Call.ring_deadline_at > now,
+            )
+            .order_by(Call.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def lock_overstayed_active(self, *, answered_before: datetime, limit: int) -> list[Call]:
+        """Lock ``active`` calls answered before the cutoff (orphans after a lost hangup)."""
+        result = await self._session.execute(
+            select(Call)
+            .where(Call.state == CallState.ACTIVE, Call.answered_at <= answered_before)
+            .order_by(Call.answered_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return list(result.scalars())
+
+    async def clear_stale_tokens(self, *, answered_before: datetime) -> None:
+        """Drop pending raw media tokens of calls answered before the cutoff."""
+        await self._session.execute(
+            update(Call)
+            .where(Call.media_token_pending.is_not(None), Call.answered_at <= answered_before)
+            .values(media_token_pending=None)
+        )
 
     async def add_callback(self, call_id: UUID, payload: dict[str, object]) -> CallCallback:
         """Queue one event for the glasses server."""

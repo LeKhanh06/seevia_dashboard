@@ -131,6 +131,8 @@ class Settings(BaseSettings):
     # app nhận cùng media_token khi nghe máy.
     call_ring_timeout_s: float = Field(default=30.0, gt=0)
     call_media_url: str | None = None
+    # Cuộc gọi `active` quá lâu (VH sập, mất hangup) bị đóng để không mồ côi vô hạn.
+    call_max_active_s: float = Field(default=7200.0, gt=0)
 
     demo_time_scale: float = Field(default=1.0, gt=0)
     log_level: LogLevel = LogLevel.INFO

@@ -8,6 +8,7 @@ from uuid import UUID  # noqa: TC003
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.calls import Calls, Wake  # noqa: TC001
 from app.auth import UserPrincipal, require_user_session
 from app.database import get_db_session
 from app.repositories.care_link import CareLinkRepository
@@ -111,12 +112,15 @@ async def update_link(
 
 @router.delete("/{link_id}", response_model=OkResponse[CareLinkData])
 async def revoke_link(
-    link_id: UUID, principal: Principal, session: Session
+    link_id: UUID, principal: Principal, session: Session, calls: Calls, wake: Wake
 ) -> OkResponse[CareLinkData]:
-    """Either party revokes the link (idempotent)."""
+    """Either party revokes the link (idempotent); calls open between the pair are ended."""
     link = await care_service.revoke(
         CareLinkRepository(session), link_id=link_id, user_id=principal.public_user_id
     )
+    await calls.end_open_calls_for_pair(link.owner_user_id, link.relative_user_id)
     data = await _to_data(link, me=principal.public_user_id, users=UserRepository(session))
     await session.commit()
+    wake.callback.set()
+    await calls.dispatch_pushes()
     return OkResponse(data=data)

@@ -96,3 +96,73 @@ def test_class_table_covers_all_kinds():
         kinds |= {v[0] for v in json.load(open(CLASSES_VH)).values()}
     assert not kinds - set(CLASS_HEIGHT_M)
     assert set(hazard_geom.CLASS_HEIGHT_REL_SIGMA) <= set(CLASS_HEIGHT_M)
+
+
+# ---- Task 2: track + Kalman ----
+
+from live import hazard_track
+from live.hazard_geom import Estimate
+
+DT = 0.125
+
+
+def _obs(X, Z):
+    det = _person(X, Z)
+    return det, hazard_geom.estimate(det, CAM)
+
+
+def _step(ts, t, objs, **kw):
+    pairs = [_obs(X, Z) for X, Z in objs]
+    return ts.update([d for d, _ in pairs], [e for _, e in pairs], t, **kw)
+
+
+def test_track_velocity_converges():
+    ts = hazard_track.TrackSet(coast=3, q=1.0)
+    for k in range(16):
+        tracks = _step(ts, k * DT, [(0.0, 12.0 - 1.2 * k * DT)])
+    assert len(tracks) == 1 and abs(tracks[0].x[3] + 1.2) < 0.3
+
+
+def test_track_dt_nonpositive_safe():
+    ts = hazard_track.TrackSet(coast=3, q=1.0)
+    for t in (1.0, 1.0, 0.5, None, 0.5, 100.0):  # trùng, lùi, None, nhảy xa
+        tracks = _step(ts, t, [(0.0, 8.0)])
+        for tr in tracks:
+            assert np.isfinite(tr.x).all() and np.isfinite(tr.P).all()
+    assert len(tracks) == 1
+
+
+def test_track_coast_then_drop():
+    ts = hazard_track.TrackSet(coast=3, q=1.0)
+    for k in range(5):
+        tracks = _step(ts, k * DT, [(0.0, 12.0 - 2.0 * k * DT)])
+    old_id = tracks[0].id
+    assert abs(tracks[0].x[3]) > 0.5  # đã học được vận tốc
+    for k in range(5, 9):
+        tracks = _step(ts, k * DT, [])
+        assert len(tracks) == (1 if k < 8 else 0)  # coast 3 khung rồi xoá ở khung mất thứ 4
+    tracks = _step(ts, 9 * DT, [(0.0, 10.0)])
+    assert len(tracks) == 1 and tracks[0].id != old_id
+    assert abs(tracks[0].x[3]) < 1e-6 and tracks[0].hits == 1
+
+
+def test_track_two_objects_keep_ids():
+    ts = hazard_track.TrackSet(coast=3, q=1.0)
+    ids = None
+    for k in range(10):
+        tracks = _step(ts, k * DT, [(-1.0, 12.0 - 1.2 * k * DT), (1.0, 12.0 - 1.2 * k * DT)])
+        cur = {round(tr.x[0]): tr.id for tr in tracks}
+        assert len(tracks) == 2
+        ids = ids or cur
+        assert cur == ids
+
+
+def test_ego_shift_removed():
+    def run(shift):
+        ts = hazard_track.TrackSet(coast=3, q=1.0)
+        det = Detection("person", "person", 0.9, (0.4, 0.2, 0.6, 0.8))
+        for k in range(20):
+            tr, = ts.update([det], [Estimate(5.0, 5 * 0.04 * k, 0.3, "height")], k * DT, ego_shift_rad=shift)
+        return tr
+    assert abs(run(0.04).x[2]) < 0.3
+    assert abs(run(0.0).x[2]) > 1.0  # đối chứng âm: không bù thì vật đứng yên bị đọc thành đang trượt ngang

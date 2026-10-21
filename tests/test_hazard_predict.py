@@ -49,14 +49,14 @@ def test_estimate_height_source_recovers_distance(Z):
 
 def test_estimate_bottom_clipped_is_near():
     e = hazard_geom.estimate(_person(0.0, 1.0), CAM)
-    assert e.z_m < 1.5
+    assert e.source == "clipped" and math.isnan(e.z_m) and e.z_width < 1.5  # Z cần track; z_width = Z theo bề rộng bảng
     assert e.source != "height"
 
 
-def test_estimate_bottom_clipped_never_farther_than_truth():
-    for Z in (1.0, 2.0, 3.0):  # chân bị cắt: Z kẹp <= 1,5 m, luôn gần hơn hoặc bằng thật (thiên về an toàn)
+def test_estimate_bottom_clipped_width_z_reasonable():
+    for Z in (1.0, 2.0, 3.0):  # chân bị cắt: Z theo bề rộng bảng (người 0,5 m) phải sát Z thật
         e = hazard_geom.estimate(_person(0.0, Z), CAM)
-        assert e.z_m <= max(Z, 1.5) and e.source == "near"
+        assert e.source == "clipped" and abs(e.z_width - Z) < 0.2
 
 
 def test_estimate_unknown_kind_finite():
@@ -328,3 +328,42 @@ def test_pitch_estimate_converges():
     for k in range(40):  # người đi tới 12 -> 4,2 m, ảnh lệch góc cúi 0,03 rad
         tr.assess([_person(0.3, 12.0 - 0.2 * k, pitch=0.03)], k * DT)
     assert abs(tr.pitch_rad - 0.03) < 0.01
+
+
+# ---- Fix round 1: đáy hộp bị cắt -> Z theo tỉ lệ bề rộng ----
+
+def _pole(Z, X=0.0):
+    # kind traffic_light: bảng cao 3,0 m khớp hình học test (bảng "pole" = 1,0 m, cố ý σ lớn, sẽ làm lệch nguồn height)
+    return Detection("traffic_light", "static", 0.9, _proj(X, Z, 3.0, 0.15))
+
+
+def _approach_then_stop(z_stop, n_stop):
+    tr = _tracker()
+    zs = [8.0 - 1.2 * DT * k for k in range(int((8.0 - z_stop) / (1.2 * DT)) + 1)]
+    out = []
+    for k, z in enumerate(zs):
+        out.append((z, tr.assess([_pole(z)], k * DT).level))
+    k0 = len(zs)
+    for k in range(n_stop):
+        out.append((zs[-1], tr.assess([_pole(zs[-1])], (k0 + k) * DT).level))
+    return tr, zs, out
+
+
+def test_clipped_bottom_static_object_keeps_true_distance():
+    tr, zs, out = _approach_then_stop(3.0, 40)
+    assert abs(tr.tracks._tracks[0].x[1] - zs[-1]) < 0.4
+    after = out[len(zs):]
+    assert min(l for _, l in after[:8]) < 3
+
+
+def test_clipped_bottom_approach_still_warns():
+    tr, zs, out = _approach_then_stop(1.0, 0)
+    first3 = next(z for z, l in out if l == 3)
+    assert first3 >= 2.0
+
+
+def test_new_track_clipped_uses_width_table():
+    tr = _tracker()
+    tr.assess([_person(0.0, 2.0)], 0.0)
+    z = tr.tracks._tracks[0].x[1]
+    assert math.isfinite(z) and abs(z - 2.0) < 0.8

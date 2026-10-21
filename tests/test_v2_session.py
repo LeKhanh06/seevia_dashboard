@@ -368,10 +368,16 @@ def test_nav_outbox_and_turn_reply_never_interleave_on_the_audio_channel(world, 
         assert outside >= 1  # câu nav có được đọc, không bị nuốt
 
 
-def test_ocr_live_does_not_kill_nav_alerts_for_good(world):  # noqa: F811
+def test_ocr_live_does_not_kill_nav_alerts_for_good(world, monkeypatch):  # noqa: F811
     """I5: OCR live giữa lúc chỉ đường thay nav live tạm thời; OCR xong thì nav live được dựng lại."""
+    from lanes import ocr_live
     from live.session import sessions
     from tests.test_v2_api import _jpeg
+
+    async def no_text(jpeg, mode, device):  # bộ dò không thấy chữ -> đọc thử -> Gemma: không có chữ -> OCR live
+        yield ocr_live.NO_TEXT + "\n"
+
+    monkeypatch.setattr(ocr_live, "spoken", no_text)
 
     rec, labels, _ = world
     rec.text = "BẬT CẢNH BÁO"

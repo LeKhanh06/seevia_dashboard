@@ -49,8 +49,15 @@ def test_plan_read_uses_real_pixels_of_turn_image():
 
 
 def test_plan_read_ignores_flat_noise_boxes():
-    noise = [(0, 0, 3, 3)] * 5 + [(0, 0, 10, 12)] * 5
-    assert text_align.line_height(noise, 800, 800) == 0.0
+    noise = [(0, 0, 3, 3)] * 5 + [(0, 0, 40, 12)] * 5
+    assert text_align.line_height(noise, 800, 800) == 12.0
+    assert text_align.line_height([(0, 0, 2, 2)], 800, 800) == 0.0
+
+
+def test_line_height_falls_back_to_all_boxes_for_vertical_text():
+    """Toàn hộp cao hơn rộng (chữ dựng đứng / chữ rời): vẫn có số đo, không bị coi là chữ nhỏ vô vọng."""
+    boxes = [(0, 0, 20, 60), (30, 0, 50, 60), (60, 0, 80, 60)]
+    assert text_align.line_height(boxes, 800, 800) == 60.0
 
 
 def test_plan_read_never_asks_smaller_or_equal_size_than_turn_image():

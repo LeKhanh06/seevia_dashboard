@@ -194,8 +194,11 @@ class ReadPlan:
 
 
 def line_height(boxes: list[Box], gray_w: int, native_w: int) -> float:
-    """Chiều cao dòng điển hình (pixel thật của ảnh gốc). Trung vị hộp, bỏ hộp quá dẹt/bé (nhiễu của bộ dò)."""
+    """Chiều cao dòng điển hình (pixel thật của ảnh gốc): trung vị hộp, bỏ hộp quá dẹt/bé (nhiễu của bộ dò). Không có hộp
+    dạng dòng nào (toàn chữ dựng đứng / chữ rời) thì lấy trung vị mọi hộp đủ lớn, đừng coi là "không có chữ"."""
     heights = sorted(b[3] - b[1] for b in boxes if (b[2] - b[0]) >= 1.5 * (b[3] - b[1]) and (b[3] - b[1]) >= 3)
+    if not heights:
+        heights = sorted(b[3] - b[1] for b in boxes if (b[3] - b[1]) >= 3 and (b[2] - b[0]) >= 3)
     if not heights:
         return 0.0
     return heights[len(heights) // 2] * native_w / gray_w

@@ -212,7 +212,8 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
                 debug({"t": "ocr", "w": gray.shape[1], "h": gray.shape[0],
                        "boxes": [[int(v) for v in b] for b in boxes],
                        "cue": action.cue if action is not None and action.kind == "cue" else None,
-                       "capture": action is not None and action.kind == "capture"})
+                       "capture": action is not None and action.kind == "capture",
+                       protocol.DEBUG_JPEG: frame})
             if action is None:
                 continue
             if action.kind == "cue":

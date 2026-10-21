@@ -1,0 +1,323 @@
+{
+  "mode": "real",
+  "base": "https://localhost:18443",
+  "checks": [
+    {
+      "scenario": "describe",
+      "name": "bảng giám sát nối server",
+      "ok": true,
+      "detail": "Đã nối server · đang xem"
+    },
+    {
+      "scenario": "describe",
+      "name": "kính giả lập hiện là đã kết nối",
+      "ok": true,
+      "detail": "Kính đã kết nối · glasses-123"
+    },
+    {
+      "scenario": "describe",
+      "name": "kính giả lập nối không cần nhập token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "describe",
+      "name": "server trả lời xong lượt",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "describe",
+      "name": "POV hiện ảnh kính gửi lúc bấm nút",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "describe",
+      "name": "timeline có transcript và ý định",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "describe",
+      "name": "lịch sử có câu hỏi và câu trả lời",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "describe",
+      "name": "tiếng đầu < 1,5 s",
+      "ok": true,
+      "detail": "563"
+    },
+    {
+      "scenario": "describe",
+      "name": "không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "nav",
+      "name": "bảng giám sát nối server",
+      "ok": true,
+      "detail": "Đã nối server · đang xem"
+    },
+    {
+      "scenario": "nav",
+      "name": "kính giả lập hiện là đã kết nối",
+      "ok": true,
+      "detail": "Kính đã kết nối · glasses-123"
+    },
+    {
+      "scenario": "nav",
+      "name": "kính giả lập nối không cần nhập token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "nav",
+      "name": "chế độ Tránh vật cản sáng",
+      "ok": true,
+      "detail": "['obstacle']"
+    },
+    {
+      "scenario": "nav",
+      "name": "server xử lý khung live",
+      "ok": true,
+      "detail": "live qvga · 8 fps · server xử lý 8,0 fps"
+    },
+    {
+      "scenario": "nav",
+      "name": "nhãn nguồn: khung live server vừa xử lý",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "nav",
+      "name": "có cảnh báo vật cản trong log",
+      "ok": true,
+      "detail": "11:33:36 ¦ L3 ¦ truck · phía trước ¦ 11:33:34 ¦ L3 ¦ truck · phía trước ¦ 11:33:32 ¦ L3 ¦ truck · phía trước ¦ 11:33:31 "
+    },
+    {
+      "scenario": "nav",
+      "name": "kính giả lập hiện đang gửi live",
+      "ok": true,
+      "detail": "đang gửi live qvga · 8 fps · 8,0 fps"
+    },
+    {
+      "scenario": "nav",
+      "name": "tắt cảnh báo: chế độ về trống",
+      "ok": true,
+      "detail": "[] | server nghe: “Tắt cảnh báo vật cản” -> alert_off lane C model 100,0%"
+    },
+    {
+      "scenario": "nav",
+      "name": "người xem Python nối được qua proxy (không token)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "nav",
+      "name": "có khung det",
+      "ok": true,
+      "detail": "119"
+    },
+    {
+      "scenario": "nav",
+      "name": "mọi det đi sau đúng khung JPEG của nó",
+      "ok": true,
+      "detail": "(119, 0)"
+    },
+    {
+      "scenario": "nav",
+      "name": "người xem Python (không token) nhận cảnh báo",
+      "ok": true,
+      "detail": "8"
+    },
+    {
+      "scenario": "nav",
+      "name": "kính ngắt: bảng báo chưa kết nối",
+      "ok": true,
+      "detail": "Kính chưa kết nối"
+    },
+    {
+      "scenario": "nav",
+      "name": "không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "bảng giám sát nối server",
+      "ok": true,
+      "detail": "Đã nối server · đang xem"
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "kính giả lập hiện là đã kết nối",
+      "ok": true,
+      "detail": "Kính đã kết nối · glasses-123"
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "kính giả lập nối không cần nhập token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "đọc đúng chữ trên biển",
+      "ok": true,
+      "detail": "BẠN ¦  ¦ Đọc lá thư tôi đang cầm ¦  ¦ SEEVIA ¦  ¦ CÔNG TRƯỜNG ĐANG THI CÔNG"
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "không mở OCR live (ảnh rõ, đọc thẳng)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "ocr-direct",
+      "name": "không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "bảng giám sát nối server",
+      "ok": true,
+      "detail": "Đã nối server · đang xem"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "kính giả lập hiện là đã kết nối",
+      "ok": true,
+      "detail": "Kính đã kết nối · glasses-123"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "kính giả lập nối không cần nhập token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "chế độ Đọc chữ trực tiếp sáng",
+      "ok": true,
+      "detail": "['ocr']"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "hiện chip hướng dẫn căn khung",
+      "ok": true,
+      "detail": "Lại gần"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "lịch sử có bong bóng 'SeeVia · trực tiếp' gộp câu lặp",
+      "ok": true,
+      "detail": "ư tôi đang cầm ¦  ¦ SEEVIA ¦  ¦ Đưa sách ra trước mặt. ¦  ¦ SEEVIA · TRỰC TIẾP ¦  ¦ Lại gần hơn. ×10"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "người xem Python nối được qua proxy (không token)",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "mọi ocr đi sau đúng khung JPEG của nó",
+      "ok": true,
+      "detail": "(77, 0)"
+    },
+    {
+      "scenario": "ocr-live",
+      "name": "không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "layout",
+      "name": "bảng giám sát desktop không cuộn ngang",
+      "ok": true,
+      "detail": "1440 <= 1440"
+    },
+    {
+      "scenario": "layout",
+      "name": "desktop: hộp Cài đặt không còn ô camera/chế độ mô phỏng",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "layout",
+      "name": "desktop: không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "layout",
+      "name": "bảng giám sát phone không cuộn ngang",
+      "ok": true,
+      "detail": "390 <= 390"
+    },
+    {
+      "scenario": "layout",
+      "name": "phone: hộp Cài đặt không còn ô camera/chế độ mô phỏng",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "layout",
+      "name": "phone: không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "bad-token",
+      "name": "token sai: bảng báo 'Token sai'",
+      "ok": true,
+      "detail": "Token sai hoặc thiếu. Mở Cài đặt để nhập token"
+    },
+    {
+      "scenario": "bad-token",
+      "name": "token sai: không hiện kính đã kết nối",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "metrics": {
+    "describe": {
+      "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
+      "ttfa_ms": 563,
+      "audio_onsets": [
+        {
+          "sent_s": 5.56,
+          "speech_from_s": 0.6
+        }
+      ]
+    },
+    "nav": {
+      "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
+      "alert_on_heard": "“Cảnh báo vật cản” -> alert_on lane C model 98,6%",
+      "fps_text": "live qvga · 8 fps · server xử lý 8,0 fps",
+      "alert_off_heard": "“Tắt cảnh báo vật cản” -> alert_off lane C model 100,0%",
+      "det_frames": 119,
+      "det_with_prior_jpeg": {
+        "đúng": 119,
+        "sai": 0
+      }
+    },
+    "ocr-direct": {
+      "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình."
+    },
+    "ocr-live": {
+      "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
+      "ocr_chip": "Lại gần",
+      "ocr_frames": 77
+    },
+    "layout": {
+      "viewer_desktop_scrollWidth": 1440,
+      "viewer_phone_scrollWidth": 390
+    }
+  }
+}

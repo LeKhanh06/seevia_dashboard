@@ -134,7 +134,7 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
                 await ws.send_text(protocol.hazard(result.level, result.dir, result.kind))
                 logger.info("hazard level=%d dir=%s kind=%s", result.level, result.dir, result.kind)
             if debug is not None and size[0]:  # SAU hazard, không chờ gửi; JPEG hỏng (0x0) thì bỏ khung
-                debug(_det_frame(result, detections, size, bool(sent)))
+                debug({**_det_frame(result, detections, size, bool(sent)), protocol.DEBUG_JPEG: frame})
             frames += 1
             total_ms += (time.perf_counter() - started) * 1000
         if session.closed.is_set() and not box.closed:

@@ -1,0 +1,115 @@
+{
+  "mode": "fake",
+  "base": "http://localhost:18780",
+  "checks": [
+    {
+      "scenario": "fake-flow",
+      "name": "bảng giám sát nối server",
+      "ok": true,
+      "detail": "Đã nối server · đang xem"
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "kính giả lập hiện là đã kết nối",
+      "ok": true,
+      "detail": "Kính đã kết nối · kinh-hien-tai"
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "kính giả lập nối không cần nhập token",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "kết thúc ở chế độ Tránh vật cản",
+      "ok": true,
+      "detail": "['obstacle']"
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "log có cảnh báo vật cản",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "mọi det đi sau đúng khung JPEG của nó",
+      "ok": true,
+      "detail": "(87, (87, 0))"
+    },
+    {
+      "scenario": "fake-flow",
+      "name": "không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "layout",
+      "name": "bảng giám sát desktop không cuộn ngang",
+      "ok": true,
+      "detail": "1440 <= 1440"
+    },
+    {
+      "scenario": "layout",
+      "name": "desktop: hộp Cài đặt không còn ô camera/chế độ mô phỏng",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "layout",
+      "name": "desktop: không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "layout",
+      "name": "bảng giám sát phone không cuộn ngang",
+      "ok": true,
+      "detail": "390 <= 390"
+    },
+    {
+      "scenario": "layout",
+      "name": "phone: hộp Cài đặt không còn ô camera/chế độ mô phỏng",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "scenario": "layout",
+      "name": "phone: không có lỗi JS",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "scenario": "bad-token",
+      "name": "token sai: bảng báo 'Token sai'",
+      "ok": true,
+      "detail": "Token sai hoặc thiếu. Mở Cài đặt để nhập token"
+    },
+    {
+      "scenario": "bad-token",
+      "name": "token sai: không hiện kính đã kết nối",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "metrics": {
+    "fake-flow": {
+      "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
+      "1_describe_modes": [],
+      "1_describe_fps": "live: tắt",
+      "2_ocr_live_modes": [
+        "ocr"
+      ],
+      "2_ocr_live_fps": "live vga · 5 fps · server xử lý 5,0 fps",
+      "3_nav_modes": [
+        "obstacle"
+      ],
+      "3_nav_fps": "live qvga · 8 fps · server xử lý 8,0 fps"
+    },
+    "layout": {
+      "viewer_desktop_scrollWidth": 1440,
+      "viewer_phone_scrollWidth": 390
+    }
+  }
+}

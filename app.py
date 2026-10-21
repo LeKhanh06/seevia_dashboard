@@ -982,6 +982,15 @@ async def call_media_lane(ws: WebSocket, token: str = "") -> None:
     await call.attach_app(ws)
 
 
+@app.websocket("/v2/observe")
+async def observe_lane(ws: WebSocket) -> None:
+    """Phiên CHỈ XEM cho trang demo giám khảo: nhận bản sao thứ kính gửi/nhận + khung debug, không điều khiển gì."""
+    from live.observers import serve
+
+    await ws.accept()
+    await serve(ws)
+
+
 @app.websocket("/v2/session")
 async def device_session_lane(ws: WebSocket) -> None:
     """Một WebSocket mỗi kính (§5.4): lượt, audio trả lời, OCR/nav live cùng một socket.

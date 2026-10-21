@@ -415,3 +415,34 @@ def test_release_zero_is_old_behaviour():
 def test_pole_distance_ignores_height_prior(Z):
     e = hazard_geom.estimate(_pole(Z), CAM)
     assert e.source == "ground" and abs(e.z_m - Z) / Z < 0.15
+
+
+# ---- Fix round 3: hộp chạm mép bên ----
+
+def _walk_by(X_of, Z_of, n, H=1.7, W=0.5):
+    tr = _tracker()
+    out = []
+    for k in range(n):
+        X, Z = X_of(k), Z_of(k)
+        det = Detection("person", "person", 0.9, _proj(X, Z, H, W))
+        h = tr.assess([det], k * DT)
+        t = tr.tracks._tracks[0] if tr.tracks._tracks else None
+        out.append((X, Z, h.level, None if t is None else t.x.copy()))
+    return out
+
+
+def test_lateral_clip_no_fake_inward_velocity():
+    n = int((8.0 - 0.8) / (1.2 * DT)) + 1
+    out = _walk_by(lambda k: 1.2, lambda k: 8.0 - 1.2 * DT * k, n)
+    assert any(o[1] < 1.6 and _proj(1.2, o[1], 1.7, 0.5)[2] >= 0.99 for o in out)  # có khung bị cắt bên phải
+    assert all(abs(o[3][2]) < 0.25 for o in out if o[3] is not None)
+    assert all(o[2] < 2 for o in out)
+
+
+def test_lateral_clip_real_entry_still_warns():
+    n = 17  # người đi vào hành lang 1 m/s ngang, đồng thời tiến 1 m/s
+    xs = lambda k: max(1.5 - 1.0 * DT * k, 0.0)
+    zs = lambda k: 4.0 - 1.0 * DT * k
+    out = _walk_by(xs, zs, n)
+    first = next(i for i, o in enumerate(out) if o[2] >= 2)
+    assert abs(out[first][0]) >= 0.6

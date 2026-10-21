@@ -82,6 +82,8 @@ _PITCH_MIN_Z = 3.0    # mẫu góc cúi chỉ lấy khi Z theo chiều cao >= m�
 _GROUND_REL = 0.03    # σ_Z = Z²·0,03/cam_h (≈ ±4 px sai số đáy hộp ở QVGA)
 _GROUND_MIN_PX = 2.0  # đáy phải nằm dưới đường chân trời ít nhất ngần này px
 _Z_MAX = 60.0
+_LAT_VAR = 4.0        # hộp chạm mép bên: phương sai X ×4 (cạnh trong + bề rộng lớp kém tin hơn tâm)
+_LAT_VAR_BOTH = 25.0  # cắt cả hai bên: vật choán hết bề ngang, X = 0 với phương sai rất lớn
 _UNKNOWN_H = 1.0      # lớp ngoài bảng: chỉ dùng khi phải rơi về nguồn width
 
 
@@ -113,6 +115,11 @@ class Estimate:
     # `z_width` = Z theo bề rộng danh nghĩa của lớp (dùng khi track mới, σ = 0,4·Z).
     bearing: float = 0.0
     z_width: float = math.nan
+    # Hộp chạm mép trái/phải: tâm hộp sai (vật bị cắt). X lấy từ CẠNH TRONG: X = lat_bearing·Z + lat_off_m
+    # (lat_off_m = ∓ nửa bề rộng lớp); phương sai X nhân x_var_scale. lat_bearing = NaN: hộp không bị cắt ngang.
+    lat_bearing: float = math.nan
+    lat_off_m: float = 0.0
+    x_var_scale: float = 1.0
 
 
 def _height_z(det: hazard.Detection, cam: Camera, h_px: float) -> tuple[float, float] | None:
@@ -135,6 +142,20 @@ def _ground_z(cam: Camera, y_bot: float, pitch_rad: float) -> tuple[float, float
     return z, z * z * _GROUND_REL / cam.height_m
 
 
+def _lateral(det: hazard.Detection, cam: Camera) -> tuple[float, float, float]:
+    """(lat_bearing, lat_off_m, x_var_scale) theo cạnh trong khi hộp chạm mép trái/phải; NaN nếu không chạm."""
+    x0, _, x1, _ = det.box
+    left, right = x0 <= _EDGE, x1 >= 1 - _EDGE
+    half = CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) / 2
+    if left and right:
+        return 0.0, 0.0, _LAT_VAR_BOTH
+    if right:  # thấy cạnh trái của vật; tâm = cạnh trái + nửa bề rộng (ra phía ngoài = bên phải)
+        return (x0 * cam.w - cam.w / 2) / cam.f_px, half, _LAT_VAR
+    if left:
+        return (x1 * cam.w - cam.w / 2) / cam.f_px, -half, _LAT_VAR
+    return math.nan, 0.0, 1.0
+
+
 def estimate(det: hazard.Detection, cam: Camera, pitch_rad: float = 0.0) -> Estimate:
     """Hộp -> (Z, X, σ_Z). `pitch_rad` > 0 = ảnh trượt lên (camera ngẩng); chỉ nguồn ground phụ thuộc nó."""
     x0, y0, x1, y1 = det.box
@@ -153,13 +174,16 @@ def estimate(det: hazard.Detection, cam: Camera, pitch_rad: float = 0.0) -> Esti
         w_px = max((x1 - x0) * cam.w, 1.0)
         zw = min(cam.f_px * CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) / w_px, _Z_MAX)
         bearing = (cx_px - cam.w / 2) / cam.f_px
-        return Estimate(math.nan, math.nan, math.nan, "clipped", bearing, zw)
+        lb, lo, lv = _lateral(det, cam)
+        return Estimate(math.nan, math.nan, math.nan, "clipped", bearing, zw, lb, lo, lv)
     else:  # không nguồn nào hợp lệ (vd. đáy trên đường chân trời, lớp lạ): dùng bề rộng, rộng chuẩn = 0,5·H
         w_px = max((x1 - x0) * cam.w, 1.0)
         w_m = CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) if det.kind in NO_HEIGHT_KINDS else 0.5 * CLASS_HEIGHT_M.get(det.kind, _UNKNOWN_H)
         z = min(cam.f_px * w_m / w_px, _Z_MAX)
         sigma, source = z * _WIDTH_REL, "width"
-    return Estimate(z, (cx_px - cam.w / 2) * z / cam.f_px, sigma, source, (cx_px - cam.w / 2) / cam.f_px)
+    lb, lo, lv = _lateral(det, cam)
+    x = (cx_px - cam.w / 2) * z / cam.f_px if math.isnan(lb) else lb * z + lo
+    return Estimate(z, x, sigma, source, (cx_px - cam.w / 2) / cam.f_px, math.nan, lb, lo, lv)
 
 
 def pitch_sample(det: hazard.Detection, cam: Camera) -> float | None:

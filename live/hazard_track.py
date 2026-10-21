@@ -99,13 +99,13 @@ class TrackSet:
                 if zm is None:  # Z không quan sát được: chỉ dự đoán Z, X vẫn lấy từ góc ngang
                     _axis(tr.x, tr.P, 1, dt, self.q, None, 0.0)
                     zp = max(float(tr.x[1]), 0.3)
-                    _axis(tr.x, tr.P, 0, dt, self.q, est.bearing * zp, (X_REL_SIGMA * zp) ** 2 * r_scale)
+                    _axis(tr.x, tr.P, 0, dt, self.q, self._x_at(est, zp), (X_REL_SIGMA * zp) ** 2 * r_scale * est.x_var_scale)
                 else:
                     _axis(tr.x, tr.P, 1, dt, self.q, zm, (0.1 * zm) ** 2 * r_scale)
-                    _axis(tr.x, tr.P, 0, dt, self.q, est.bearing * zm, (X_REL_SIGMA * zm) ** 2 * r_scale)
+                    _axis(tr.x, tr.P, 0, dt, self.q, self._x_at(est, zm), (X_REL_SIGMA * zm) ** 2 * r_scale * est.x_var_scale)
             else:
                 z_sigma = max(est.z_sigma, 1e-3)
-                _axis(tr.x, tr.P, 0, dt, self.q, est.x_m, (X_REL_SIGMA * est.z_m) ** 2 * r_scale)
+                _axis(tr.x, tr.P, 0, dt, self.q, est.x_m, (X_REL_SIGMA * est.z_m) ** 2 * r_scale * est.x_var_scale)
                 _axis(tr.x, tr.P, 1, dt, self.q, est.z_m, z_sigma ** 2 * r_scale)
                 self._set_anchor(tr, est.z_m, det.box)
             tr.box, tr.kind, tr.hits, tr.misses = det.box, det.kind, tr.hits + 1, 0
@@ -130,6 +130,11 @@ class TrackSet:
         return list(tracks)
 
     @staticmethod
+    def _x_at(est: Estimate, z: float) -> float:
+        """X đo tại độ sâu z: theo cạnh trong nếu hộp bị cắt ngang, còn lại theo tâm hộp."""
+        return est.bearing * z if est.lat_bearing != est.lat_bearing else est.lat_bearing * z + est.lat_off_m
+
+    @staticmethod
     def _set_anchor(tr: Track, z: float, box: tuple) -> None:
         if box[0] > _EDGE_X and box[2] < 1 - _EDGE_X and box[2] - box[0] > 1e-4:
             tr.anchor_z, tr.anchor_w = z, box[2] - box[0]
@@ -148,7 +153,7 @@ class TrackSet:
     def _new(self, det: hazard.Detection, est: Estimate) -> Track:
         if est.source == "clipped":  # Z theo bề rộng danh nghĩa của lớp, σ = 0,4·Z
             z = est.z_width
-            est = Estimate(z, est.bearing * z, 0.4 * z, "width", est.bearing)
+            est = Estimate(z, self._x_at(est, z), 0.4 * z, "width", est.bearing, x_var_scale=est.x_var_scale)
         x = np.array([est.x_m, est.z_m, 0.0, 0.0])
         P = np.diag([(X_REL_SIGMA * est.z_m) ** 2, max(est.z_sigma, 1e-3) ** 2, V_SIGMA_NEW ** 2, V_SIGMA_NEW ** 2])
         tr = Track(self._next_id, det.kind, det.group, det.box, x, P)

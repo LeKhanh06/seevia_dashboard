@@ -102,6 +102,10 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <!-- Voice commands: SpeechRecognizer.isRecognitionAvailable() sees no recogniser on Android 11+ without this -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <!-- navigation_start falls back to any map app via geo: when Google Maps is missing -->
         <intent>
             <action android:name="android.intent.action.VIEW" />

@@ -7,7 +7,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.messaging.FirebaseMessaging
 import com.youreyes.app.BuildConfig
+import com.youreyes.app.calls.SessionApi
 import com.youreyes.app.core.AppConfig
+import com.youreyes.app.voice.AppVoiceEnv
+import com.youreyes.app.voice.GlassesBrief
+import com.youreyes.app.voice.VoiceContact
 import com.youreyes.app.network.DeviceRegisterPayload
 import com.youreyes.app.network.DeviceApiClient
 import com.youreyes.app.network.GlassesLinkPayload
@@ -20,7 +24,54 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+/** What the daily-use buttons on Home say underneath their titles. */
+data class QuickState(
+    val glasses: GlassesBrief = GlassesBrief(GlassesBrief.State.CHECKING),
+    /** People whose glasses this account can call or message. */
+    val contacts: List<VoiceContact> = emptyList(),
+    val loggedIn: Boolean = false,
+) {
+    val callDetail: String
+        get() = when {
+            !loggedIn -> "Cần đăng nhập"
+            contacts.isEmpty() -> "Chưa có người thân"
+            contacts.size == 1 -> contacts.first().name
+            else -> "${contacts.size} người thân"
+        }
+
+    val messageDetail: String
+        get() = when {
+            !loggedIn -> "Cần đăng nhập"
+            contacts.isEmpty() -> "Chưa có người thân"
+            contacts.size == 1 -> "Nhắn cho ${contacts.first().name}"
+            else -> "Chọn người để nhắn"
+        }
+}
+
 class OverviewViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val voiceEnv = AppVoiceEnv(application) {}
+
+    private val _quick = MutableStateFlow(QuickState(loggedIn = SessionApi.hasSession(application)))
+    val quick: StateFlow<QuickState> = _quick.asStateFlow()
+
+    /** Reloads who can be called and how the glasses are doing; call when Home is shown. */
+    fun refreshQuick() {
+        val loggedIn = SessionApi.hasSession(getApplication())
+        _quick.update { it.copy(loggedIn = loggedIn) }
+        viewModelScope.launch {
+            val brief = voiceEnv.glassesBrief()
+            _quick.update { it.copy(glasses = brief) }
+        }
+        if (loggedIn) {
+            viewModelScope.launch {
+                val contacts = voiceEnv.contacts()
+                _quick.update { it.copy(contacts = contacts) }
+            }
+        } else {
+            _quick.update { it.copy(contacts = emptyList()) }
+        }
+    }
 
     private val prefs = AppConfig.prefs(application)
 
@@ -51,7 +102,7 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
             deviceId = savedDevice,
             emergencyContact = savedEmergencyContact,
             isRegistered = registered,
-            registrationMessage = if (registered) "Đã đăng ký thành công" else "Chưa đăng ký",
+            registrationMessage = if (registered) "Đã kết nối máy chủ" else "Chưa kết nối máy chủ",
         )
     }
 
@@ -80,7 +131,7 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun register() {
-        _uiState.update { it.copy(isLoading = true, registrationMessage = "Đang kết nối...") }
+        _uiState.update { it.copy(isLoading = true, registrationMessage = "Đang kết nối máy chủ…") }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Without a real FCM token the server could never push to this phone.
@@ -92,7 +143,7 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
                         it.copy(
                             isLoading = false,
                             isRegistered = false,
-                            registrationMessage = "❌ Không lấy được FCM token (cần Google Play Services và mạng).",
+                            registrationMessage = "$REGISTER_FAILED Điện thoại cần Google Play Services và mạng để nhận lệnh từ kính.",
                         )
                     }
                     return@launch
@@ -128,18 +179,17 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
                             isLoading = false,
                             isRegistered = true,
                             pushToken = fcmToken,
-                            registrationMessage = "✅ Đăng ký thành công! FCM token đã gửi lên backend.",
+                            registrationMessage = "Đã kết nối máy chủ. Kính có thể gửi lệnh tới điện thoại.",
                         )
                     }
                 } else {
-                    val err = result.exceptionOrNull()?.message ?: "Lỗi không rõ nguyên nhân"
                     _uiState.update {
-                        it.copy(isLoading = false, registrationMessage = "❌ Lỗi: $err")
+                        it.copy(isLoading = false, registrationMessage = "$REGISTER_FAILED Máy chủ chưa nhận kết nối từ điện thoại. Thử lại sau ít phút.")
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, registrationMessage = "❌ Lỗi kết nối: ${e.message}")
+                    it.copy(isLoading = false, registrationMessage = "$REGISTER_FAILED Không có kết nối mạng. Kiểm tra mạng rồi thử lại.")
                 }
             }
         }
@@ -162,6 +212,9 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val TAG = "OverviewViewModel"
+
+        /** Prefix of every failed-registration message; the Home screen shows a retry button for it. */
+        const val REGISTER_FAILED = "Chưa kết nối được."
 
         // Build-time defaults from local.properties, so the demo user only taps "Đăng ký".
         const val DEFAULT_SERVER_URL = BuildConfig.SERVER_URL

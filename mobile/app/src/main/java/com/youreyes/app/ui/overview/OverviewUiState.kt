@@ -12,10 +12,14 @@ data class OverviewUiState(
     val pushToken: String = "push-token-demo-123",
     val isLoading: Boolean = false,
     val isRegistered: Boolean = false,
-    val registrationMessage: String = "Chưa đăng ký",
+    val registrationMessage: String = "Chưa kết nối máy chủ",
     val commands: List<CommandRecord> = emptyList(),
     val pendingReports: List<PendingReportRecord> = emptyList()
 ) {
+    /** The last attempt to register this phone failed (as opposed to never having been tried). */
+    val registrationFailed: Boolean
+        get() = registrationMessage.startsWith(OverviewViewModel.REGISTER_FAILED)
+
     val serverConfigured: Boolean
         get() = serverUrl.isNotBlank()
 

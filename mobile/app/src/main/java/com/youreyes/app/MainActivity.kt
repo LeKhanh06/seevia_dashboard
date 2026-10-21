@@ -152,8 +152,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
-            // Speaking in an internet call with the glasses wearer
-            Manifest.permission.RECORD_AUDIO,
+            // RECORD_AUDIO is not asked here: it is requested, with an explanation, the first
+            // time the person uses voice commands or answers a call.
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

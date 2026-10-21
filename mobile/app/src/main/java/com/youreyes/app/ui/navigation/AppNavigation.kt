@@ -1,5 +1,31 @@
 package com.youreyes.app.ui.navigation
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.youreyes.app.voice.MicRationaleDialog
+import com.youreyes.app.voice.VoiceFab
+import com.youreyes.app.voice.VoicePanel
+import com.youreyes.app.voice.VoiceUi
+import com.youreyes.app.voice.VoiceViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
@@ -40,6 +66,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.youreyes.app.care.CareRoute
+import com.youreyes.app.core.FeatureFlags
 import com.youreyes.app.messages.ChatRoute
 import com.youreyes.app.ui.activitylog.ActivityLogRoute
 import com.youreyes.app.ui.album.AlbumRoute
@@ -109,13 +136,21 @@ private data class BottomDestination(
     val icon: ImageVector,
 )
 
-private val bottomDestinations = listOf(
+private val allBottomDestinations = listOf(
     BottomDestination(Routes.HOME, "Trang chủ", Icons.Default.Home),
     BottomDestination(Routes.FEATURES, "Tính năng", Icons.Default.Star),
     BottomDestination(Routes.SAFETY, "An toàn", Icons.Default.Favorite),
     BottomDestination(Routes.COMMUNITY, "Cộng đồng", Icons.Default.Share),
     BottomDestination(Routes.PROFILE, "Hồ sơ", Icons.Default.Person),
 )
+
+/** The bottom bar without the destinations a [FeatureFlags] flag has switched off. */
+private val bottomDestinations = allBottomDestinations.filter {
+    it.route != Routes.COMMUNITY || FeatureFlags.COMMUNITY
+}
+
+/** Bottom-bar screens that also carry the floating "Nói lệnh" button (Home has its own big one). */
+private val voiceFabRoutes = setOf(Routes.FEATURES, Routes.SAFETY, Routes.PROFILE, Routes.CARE)
 
 @Composable
 fun AppRoot(requestedRoute: String? = null, onRouteHandled: () -> Unit = {}) {
@@ -131,6 +166,48 @@ fun AppRoot(requestedRoute: String? = null, onRouteHandled: () -> Unit = {}) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    // ---- voice control: one conversation shared by Home's big button and the floating button ----
+    val context = LocalContext.current
+    val view = LocalView.current
+    val voiceViewModel: VoiceViewModel = viewModel()
+    val voiceState by voiceViewModel.state.collectAsState()
+    var showMicRationale by remember { mutableStateOf(false) }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            voiceViewModel.startListening()
+        } else {
+            val activity = context.findActivity()
+            // After a refusal Android only says "explain again" the first time; later it never asks.
+            val canAskAgain = activity != null &&
+                ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+            voiceViewModel.onMicDenied(permanently = !canAskAgain)
+        }
+    }
+    val onMic: () -> Unit = {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) voiceViewModel.onMicPressed() else showMicRationale = true
+    }
+    val voiceUi = VoiceUi(
+        state = voiceState,
+        onMic = onMic,
+        onStop = { voiceViewModel.stop("Đã dừng.") },
+        onDismiss = voiceViewModel::dismissMessage,
+        onOpenSettings = {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        },
+    )
+
+    androidx.compose.runtime.LaunchedEffect(voiceViewModel) {
+        voiceViewModel.navigation.collect { route -> navController.openFromVoice(route) }
+    }
+    androidx.compose.runtime.LaunchedEffect(voiceViewModel, view) {
+        voiceViewModel.announcements.collect { text -> if (text.isNotBlank()) view.announceForAccessibility(text) }
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
@@ -143,32 +220,79 @@ fun AppRoot(requestedRoute: String? = null, onRouteHandled: () -> Unit = {}) {
             .fillMaxSize()
             .padding(padding)
 
-        NavHost(
-            navController = navController,
-            startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            appDestinations(navController, screenModifier)
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.HOME,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                appDestinations(navController, screenModifier, voiceUi)
+            }
+
+            // Floating voice controls, above the bottom bar. The chat keeps its own composer clear.
+            if (currentRoute != null && currentRoute != Routes.CHAT) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(padding)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    VoicePanel(ui = voiceUi)
+                    if (currentRoute in voiceFabRoutes) VoiceFab(ui = voiceUi)
+                }
+            }
         }
     }
+
+    if (showMicRationale) {
+        MicRationaleDialog(
+            onAllow = {
+                showMicRationale = false
+                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            onLater = { showMicRationale = false },
+        )
+    }
+}
+
+/** Opens [route] for a voice command: bottom-bar screens like the bar does, "Trang chủ" by going back to it. */
+private fun NavHostController.openFromVoice(route: String) {
+    runCatching {
+        when (route) {
+            Routes.HOME -> popBackStack(Routes.HOME, inclusive = false)
+            in bottomDestinations.map { it.route } -> navigate(route) {
+                popUpTo(Routes.HOME) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            else -> navigate(route) { launchSingleTop = true }
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun NavGraphBuilder.appDestinations(
     navController: NavHostController,
     modifier: Modifier,
+    voice: VoiceUi,
 ) {
     composable(Routes.HOME) {
         OverviewRoute(
+            voice = voice,
             modifier = modifier,
-            onNavigateToFeatures = { navController.navigate(Routes.FEATURES) },
-            onNavigateToProfile = { navController.navigate(Routes.PROFILE) },
             onNavigateToActivityLog = { navController.navigate(Routes.ACTIVITY_LOG) },
-            onNavigateToAlbum = { navController.navigate(Routes.ALBUM) },
             onNavigateToGuide = { navController.navigate(Routes.GUIDE) },
-            onNavigateToTranslation = { navController.navigate(Routes.TRANSLATION) },
-            onNavigateToMeeting = { navController.navigate(Routes.MEETING) },
             onNavigateToCare = { navController.navigate(Routes.CARE) },
+            onNavigateToGlasses = { navController.navigate(Routes.GLASSES) },
             onNavigateToReadiness = { navController.navigate(Routes.READINESS) },
+            onOpenChat = { peerUserId, name -> navController.navigate(Routes.chatRoute(peerUserId, name)) },
         )
     }
     composable(Routes.FEATURES) { FeaturesScreen(modifier = modifier) }
@@ -178,7 +302,7 @@ private fun NavGraphBuilder.appDestinations(
             onNavigateToProfile = { navController.navigate(Routes.PROFILE) },
         )
     }
-    composable(Routes.COMMUNITY) { CommunityScreen(modifier = modifier) }
+    if (FeatureFlags.COMMUNITY) composable(Routes.COMMUNITY) { CommunityScreen(modifier = modifier) }
     composable(Routes.PROFILE) {
         ProfileRoute(
             modifier = modifier,
@@ -206,10 +330,10 @@ private fun NavGraphBuilder.appDestinations(
     composable(Routes.ACTIVITY_LOG) { ActivityLogRoute(modifier = modifier, onBack = back) }
     composable(Routes.AUTH) { AuthRoute(modifier = modifier, onBack = back) }
     composable(Routes.SUPPORT) { SupportRoute(modifier = modifier, onBack = back) }
-    composable(Routes.ALBUM) { AlbumRoute(modifier = modifier, onBack = back) }
+    if (FeatureFlags.ALBUM) composable(Routes.ALBUM) { AlbumRoute(modifier = modifier, onBack = back) }
     composable(Routes.GUIDE) { UserGuideScreen(modifier = modifier, onBack = back) }
-    composable(Routes.TRANSLATION) { TranslationRoute(modifier = modifier, onBack = back) }
-    composable(Routes.MEETING) { MeetingRoute(modifier = modifier, onBack = back) }
+    if (FeatureFlags.TRANSLATION) composable(Routes.TRANSLATION) { TranslationRoute(modifier = modifier, onBack = back) }
+    if (FeatureFlags.MEETING) composable(Routes.MEETING) { MeetingRoute(modifier = modifier, onBack = back) }
     composable(Routes.DISPLAY) { DisplayRoute(modifier = modifier, onBack = back) }
     composable(Routes.DEV_TEST) { FunctionTestRoute(modifier = modifier, onBack = back) }
     composable(Routes.CARE) {

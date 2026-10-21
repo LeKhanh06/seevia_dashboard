@@ -367,3 +367,45 @@ def test_new_track_clipped_uses_width_table():
     tr.assess([_person(0.0, 2.0)], 0.0)
     z = tr.tracks._tracks[0].x[1]
     assert math.isfinite(z) and abs(z - 2.0) < 0.8
+
+
+# ---- Fix round 1: đuôi nhả ----
+
+class _Clk:
+    def __init__(self): self.t = 0.0
+    def __call__(self): return self.t
+
+
+def _run_anti(anti, clk, levels):
+    sent = []
+    for lv in levels:
+        sent.append((clk.t, anti.step(lv)))
+        clk.t += 0.125
+    return sent
+
+
+def test_release_tail_stops_after_tail():
+    clk = _Clk()
+    anti = hazard.AntiAnnoy(clk, down_hold=2, release_s=0.5)
+    sent = _run_anti(anti, clk, [3, 3] + [0] * 60)
+    assert sent[0][1] is True
+    t_clear = 2 * 0.125 + 0.125  # khung 0 thứ 2 (down_hold = 2)
+    assert not any(ok for t, ok in sent[2:] if t > t_clear + 0.5 + 0.125)
+    assert anti.current == 0
+    assert anti.step(3) is True  # nguy hiểm lại: gửi ngay như mức tăng mới
+
+
+def test_release_cancelled_when_danger_returns():
+    clk = _Clk()
+    anti = hazard.AntiAnnoy(clk, down_hold=2, release_s=0.5)
+    sent = _run_anti(anti, clk, [3, 3, 0, 0, 0, 3, 3, 3, 3])
+    assert anti.current == 3 and not any(ok for _, ok in sent[5:])  # không bíp thừa
+    sent = _run_anti(anti, clk, [0] * 6)
+    assert anti.current == 0
+
+
+def test_release_zero_is_old_behaviour():
+    seq = [0, 1, 1, 2, 2, 3, 3, 2, 0, 0, 3, 0, 2, 2, 2, 2, 1, 1, 0, 0, 3, 3, 3]
+    a, b = _Clk(), _Clk()
+    old, new = hazard.AntiAnnoy(a), hazard.AntiAnnoy(b, release_s=0.0)
+    assert [x for _, x in _run_anti(old, a, seq)] == [x for _, x in _run_anti(new, b, seq)]

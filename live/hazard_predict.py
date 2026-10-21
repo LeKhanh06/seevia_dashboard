@@ -34,6 +34,7 @@ class PredictParams:
     l3_vote: int = 2
     bypass_vote: bool = True
     down_hold: int = 2
+    release_s: float = 0.5
     danger_z_m: float = 2.0
     lane_half_m: float = 0.6
 
@@ -43,7 +44,7 @@ class PredictParams:
             tte_l3_s=config.HAZARD_TTE_L3_S, tte_l2_s=config.HAZARD_TTE_L2_S, horizon_s=config.HAZARD_HORIZON_S,
             new_near_m=config.HAZARD_NEW_NEAR_M, coast=config.HAZARD_COAST_FRAMES, sigma_k=config.HAZARD_SIGMA_K,
             q=config.HAZARD_KF_Q, l3_vote=config.HAZARD_L3_VOTE, bypass_vote=config.HAZARD_NEW_BYPASS_VOTE == "1",
-            down_hold=config.HAZARD_DOWN_HOLD, danger_z_m=config.HAZARD_DANGER_Z_M,
+            down_hold=config.HAZARD_DOWN_HOLD, release_s=config.HAZARD_RELEASE_S, danger_z_m=config.HAZARD_DANGER_Z_M,
             lane_half_m=config.HAZARD_LANE_HALF_M,
         )
 

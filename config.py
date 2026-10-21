@@ -408,6 +408,8 @@ HAZARD_NEW_BYPASS_VOTE = get("HAZARD_NEW_BYPASS_VOTE", "1")
 # Nhiễu quá trình của Kalman (gia tốc trắng, m^2/s^3).
 HAZARD_KF_Q = float(get("HAZARD_KF_Q", "1.0"))
 HAZARD_DOWN_HOLD = int(get("HAZARD_DOWN_HOLD", "2"))
+# Đuôi nhả (chỉ predict): hết dấu hiệu nguy hiểm thì kêu thêm chừng này giây rồi dừng hẳn. 0 = tắt.
+HAZARD_RELEASE_S = float(get("HAZARD_RELEASE_S", "0.5"))
 # Bảng lớp của detector: trống = COCO hard-code trong live/hazard.py; có giá trị = file JSON {id: [kind, nhóm]}
 # (định dạng evaluations/train/classes_vh.json) cho model fine-tune (ft_11s_last).
 HAZARD_CLASSES_JSON = get("HAZARD_CLASSES_JSON", "")

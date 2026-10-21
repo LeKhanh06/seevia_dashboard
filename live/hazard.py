@@ -195,9 +195,14 @@ class AntiAnnoy:
     - `down_hold` = n: `current` chỉ hạ khi mức thấp hơn giữ n khung liên tiếp (luật 2 khung ở trên đã là n = 2).
     """
 
-    def __init__(self, clock=time.monotonic, l3_vote: int = 1, down_hold: int = 1, bypass_vote: bool = True) -> None:
+    def __init__(self, clock=time.monotonic, l3_vote: int = 1, down_hold: int = 1, bypass_vote: bool = True,
+                 release_s: float = 0.0) -> None:
         self._clock = clock
         self.l3_vote, self.down_hold, self.bypass_vote = l3_vote, down_hold, bypass_vote
+        self.release_s = release_s
+        self._low = 0                       # số khung liên tiếp có mức < 2
+        self._rel_until: float | None = None  # đang nhả: tới mốc này thì dừng hẳn
+        self._muted = False                 # đã nhả xong: im tới khi có mức >= 2
         self._recent: list[int] = []  # mức thô của 3 khung gần nhất
         self._frame_level = -1
         self._streak = 0
@@ -211,6 +216,10 @@ class AntiAnnoy:
         if level == 3 and self.l3_vote > 1 and not (urgent and self.bypass_vote):
             if self._recent.count(3) < self.l3_vote:
                 level = 2  # chưa đủ phiếu: chưa dám kêu mức 3
+        if self.release_s > 0:
+            done = self._release(level, now)
+            if done is not None:
+                return done
         if level == self._frame_level:
             self._streak += 1
         else:
@@ -233,6 +242,28 @@ class AntiAnnoy:
             self.current = level
         return False
 
+    def _release(self, level: int, now: float) -> bool | None:
+        """Đuôi nhả (release_s > 0): hết dấu hiệu nguy hiểm (mức < 2 giữ `down_hold` khung) thì kêu thêm release_s giây
+        như mức cũ vẫn còn (một lần nhắc đến hạn vẫn gửi), rồi dừng hẳn, không nhắc 2 s nữa, tới khi có mức >= 2.
+        Trả bool khi đã xử lý xong khung này, None khi để luồng thường chạy."""
+        if level >= 2:
+            self._low, self._rel_until, self._muted = 0, None, False  # nguy hiểm quay lại: huỷ nhả
+            return None
+        self._low += 1
+        if self._muted:
+            return False
+        if self.current >= 2 and self._low >= self.down_hold:
+            if self._rel_until is None:
+                self._rel_until = now + self.release_s
+            if now >= self._rel_until:
+                self.current, self._rel_until, self._muted = 0, None, True
+                return False
+            if now - self._last_sent >= config.HAZARD_REPEAT_S:
+                self._send(self.current, now)
+                return True
+            return False
+        return None
+
     def _send(self, level: int, now: float) -> None:
         self.current, self._last_sent = level, now
         if level == 1:
@@ -251,5 +282,5 @@ def make_anti(clock=time.monotonic) -> AntiAnnoy:
     """AntiAnnoy theo HAZARD_LOGIC: predict thì bật phiếu mức 3 và giữ khi hạ; area giữ y hệt bản cũ."""
     if config.HAZARD_LOGIC == "predict":
         return AntiAnnoy(clock, l3_vote=config.HAZARD_L3_VOTE, down_hold=config.HAZARD_DOWN_HOLD,
-                         bypass_vote=config.HAZARD_NEW_BYPASS_VOTE == "1")
+                         bypass_vote=config.HAZARD_NEW_BYPASS_VOTE == "1", release_s=config.HAZARD_RELEASE_S)
     return AntiAnnoy(clock)

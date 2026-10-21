@@ -1,7 +1,7 @@
 """Chạy toàn tuyến SeeVia: client.html (kính giả lập) -> VH -> AB -> điện thoại; người dùng xem ở index.html."""
 import asyncio, os, sys, json, time
 
-REPO = "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/visioncare-host-demo"
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # worktree đang chạy, không cứng bản chính
 SEEVIA = os.path.dirname(REPO)
 sys.path.insert(0, os.path.join(REPO, "demo-web", "e2e"))
 import browser_e2e as B
@@ -82,7 +82,7 @@ async def turn(s, name, clip, wait=6, tail=2.5, shot=True):
 async def phase(title, cam, clips, body):
     say_log(f"\n========== {title} ==========")
     r = B.Report(OUT)
-    base = "https://localhost:18443"
+    base = os.environ.get("TOUR_BASE", "https://localhost:18443")  # trang demo trỏ vào VH cần kiểm
     async with B.Session(base, r, CAMS[cam](), clips=clips) as s:
         await s.start_devices()
         await asyncio.sleep(2)

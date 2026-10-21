@@ -67,6 +67,7 @@ ReplyAudio = Callable[..., Awaitable[tuple[dict, object]]]
 # Kính chỉ có MỘT phiên live: OCR live thay nav live thì cảnh báo vật cản tắt, phải nói ra; dựng lại thì nói lại.
 NAV_PAUSED = "Tạm tắt cảnh báo."
 NAV_RESUMED = "Bật lại cảnh báo."
+RESUME_WAIT_S = 20.0  # trần chờ lượt đang xử lý trước khi dựng lại cảnh báo
 STATIC_SPEECH: tuple[str, ...] = (NAV_PAUSED, NAV_RESUMED)
 
 # device -> phiên đang mở (phiên mới thay phiên cũ)
@@ -125,6 +126,10 @@ class DeviceSession:
         self._unread_task: asyncio.Task | None = None
         self._nav_suspended = False  # OCR live đã thay nav live: dựng lại nav khi OCR xong
         self._resume_task: asyncio.Task | None = None
+        # Có lượt nói đang xử lý (từ lúc nhận turn_start tới khi xong). Lượt mới huỷ OCR live thì việc dựng lại cảnh báo
+        # phải chờ lượt đó: nó có thể chính là "tắt cảnh báo" (nếu không, kính nói "Bật lại cảnh báo." rồi mới "Đã tắt").
+        self._turn_idle = asyncio.Event()
+        self._turn_idle.set()
         self._status_tasks: set[asyncio.Task] = set()  # lời báo đổi chế độ (NAV_PAUSED/NAV_RESUMED), nói ở task riêng
         self.debug = False  # hello.debug: trang demo muốn nhận khung trace/say/det/ocr/mode
         # Hàng đợi khung debug CÓ CHẶN (dùng chung _send_lock với hazard nên không được dồn): say/mode xếp hàng
@@ -575,12 +580,15 @@ class DeviceSession:
         call = calls.by_device(self.device)
         if call is not None and call.state in (call_bridge.RINGING_OUT, call_bridge.ACTIVE):
             return  # đang gọi: nút = cúp (`call_hangup`), không mở lượt lệnh (spec §6)
+        self._turn_idle.clear()  # TRƯỚC khi huỷ: việc dựng lại cảnh báo do huỷ OCR sinh ra sẽ chờ lượt này
         await self._cancel_work("lượt mới", keep_nav=True)
         if self._shut:
+            self._turn_idle.set()
             return
         # Sau huỷ: chỉ còn nav (OCR live đã dừng) nên `alerting` đúng nghĩa cảnh báo vật cản.
         state = {**device_state(), "alerting": sessions.active(self.device) is not None}
         if not guard.limiters()[0].allow(self.device):
+            self._turn_idle.set()
             await self.error("rate_limited")
             return
         turn = _Turn(str(frame.get("turn", "")))
@@ -613,6 +621,8 @@ class DeviceSession:
         finally:
             # Task chưa xong ở đây: để vòng sau mới kiểm "kính rảnh" thì tin đang xếp hàng mới được đọc.
             asyncio.get_running_loop().call_soon(self._kick_results)
+            if self._turn is turn:  # lượt đã bị lượt mới thay thì `_turn` không còn là nó: để lượt mới tự mở
+                self._turn_idle.set()
 
     async def _send_reply(self, turn: _Turn, reply: Reply, released: float) -> None:
         try:
@@ -790,6 +800,11 @@ class DeviceSession:
 
     async def _resume_nav(self, ended) -> None:
         """Dựng lại nav live sau OCR live (I5). Bỏ qua nếu giữa chừng đã có live khác thay vào."""
+        if not self._turn_idle.is_set():  # OCR bị lượt mới huỷ: đợi lượt đó xong rồi mới quyết định (có thể là "tắt cảnh báo")
+            try:
+                await asyncio.wait_for(self._turn_idle.wait(), RESUME_WAIT_S)
+            except asyncio.TimeoutError:
+                pass
         if self._shut or not self._nav_suspended or self._in_call():
             return  # đang gọi: để `_nav_suspended` nguyên, bật lại khi cúp (`_on_call_state`)
         if self._live_session is not None and self._live_session is not ended:

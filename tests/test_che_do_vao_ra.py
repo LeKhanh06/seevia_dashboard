@@ -173,6 +173,44 @@ def test_alert_off_while_paused_never_turns_alert_back_on(monkeypatch):
     _run(monkeypatch, scenario)
 
 
+def test_new_turn_that_turns_alert_off_cancels_the_resume(monkeypatch):
+    """Lượt mới huỷ OCR là "tắt cảnh báo": không được nói "Bật lại cảnh báo." rồi mới "Đã tắt" (ca đua nhau thật ở e2e)."""
+    async def scenario(w):
+        w.start_nav()
+        await w.settle()
+        await w.start_ocr()
+        await w.settle()
+        w.session._turn_idle.clear()  # turn_start đã nhận, lượt đang xử lý
+        await w.session._cancel_work("lượt mới", keep_nav=True)
+        await w.settle()
+        assert w.said == [PAUSED] and sessions.active(DEV) is None  # chưa dựng lại: chờ lượt
+        ctx = SimpleNamespace(device=DEV, single_shot=False)
+        await final_router._lane_c(ctx, Decision("alert_off"), "tắt cảnh báo")
+        w.session._turn_idle.set()
+        await w.settle()
+        assert w.said == [PAUSED] and sessions.active(DEV) is None
+        assert w.ran == ["nav", "ocr"]
+
+    _run(monkeypatch, scenario)
+
+
+def test_new_turn_that_is_not_alert_off_resumes_after_it_finishes(monkeypatch):
+    async def scenario(w):
+        w.start_nav()
+        await w.settle()
+        await w.start_ocr()
+        await w.settle()
+        w.session._turn_idle.clear()
+        await w.session._cancel_work("lượt mới", keep_nav=True)
+        await w.settle()
+        assert w.said == [PAUSED]
+        w.session._turn_idle.set()  # lượt xong (vd. hỏi giờ)
+        await w.settle()
+        assert w.said == [PAUSED, RESUMED] and w.ran == ["nav", "ocr", "nav"]
+
+    _run(monkeypatch, scenario)
+
+
 def test_alert_off_with_no_session_is_harmless(monkeypatch):
     monkeypatch.setattr(device_session, "_registry", {})
     ctx = SimpleNamespace(device="khong-co-phien", single_shot=False)

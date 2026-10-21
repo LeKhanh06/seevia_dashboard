@@ -122,3 +122,52 @@ async def test_webhook_4xx_permanent(
     )
     outcome = await adapter.send_command(device=device, push_token="sim", operation=operation)
     assert outcome.status is DeliveryOutcomeStatus.PERMANENT_FAILURE
+
+
+class _Recorder:
+    """Adapter giả ghi lại token nhận được."""
+
+    def __init__(self, name: str, sink: list[tuple[str, str]]) -> None:
+        self._name = name
+        self._sink = sink
+
+    async def send_command(self, *, device, push_token, operation):  # noqa: ANN001, ANN201, ARG002
+        self._sink.append((self._name, push_token))
+        return object()
+
+    async def send_data(self, *, push_token, data, label):  # noqa: ANN001, ANN201, ARG002
+        self._sink.append((self._name, push_token))
+        return object()
+
+
+@pytest.mark.asyncio
+async def test_hybrid_routes_sim_tokens_to_webhook(
+    device: Device, operation: OperationModel
+) -> None:
+    """Token `sim`/`sim-...` đi webhook, token khác (FCM thật) đi FCM."""
+    from app.adapters.delivery import HybridDeliveryAdapter
+
+    sink: list[tuple[str, str]] = []
+    hybrid = HybridDeliveryAdapter(_Recorder("fcm", sink), _Recorder("webhook", sink))
+    for tok in ("sim", "sim-0900000001", "dXyZ:APA91b-real-token"):
+        await hybrid.send_command(device=device, push_token=tok, operation=operation)
+        await hybrid.send_data(push_token=tok, data={}, label="x")
+    assert sink == [
+        ("webhook", "sim"), ("webhook", "sim"),
+        ("webhook", "sim-0900000001"), ("webhook", "sim-0900000001"),
+        ("fcm", "dXyZ:APA91b-real-token"), ("fcm", "dXyZ:APA91b-real-token"),
+    ]  # fmt: skip
+
+
+def test_get_delivery_adapter_fcm_with_webhook_url_is_hybrid(settings: Settings) -> None:
+    """FCM + DELIVERY_WEBHOOK_URL -> hybrid; FCM không URL -> FCM thuần."""
+    from app.adapters.delivery import (
+        FcmDeliveryAdapter,
+        HybridDeliveryAdapter,
+        get_delivery_adapter,
+    )
+
+    fcm = settings.model_copy(update={"delivery_transport": DeliveryTransport.FCM, "fcm_project_id": "p"})
+    assert isinstance(get_delivery_adapter(fcm), HybridDeliveryAdapter)
+    plain = fcm.model_copy(update={"delivery_webhook_url": None})
+    assert type(get_delivery_adapter(plain)) is FcmDeliveryAdapter

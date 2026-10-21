@@ -302,9 +302,54 @@ class WebhookDeliveryAdapter:
         return DeliveryOutcome(status=status, error_reason=f"webhook HTTP {code}")
 
 
+# Token giả lập (relative_sim: "sim-<số>", phone_sim: "sim"): không bao giờ là token FCM thật.
+_SIM_TOKEN_PREFIX = "sim"
+
+
+class HybridDeliveryAdapter:
+    """FCM cho điện thoại thật, webhook cho điện thoại giả lập (token bắt đầu bằng ``sim``).
+
+    Chỉ bật khi ``DELIVERY_TRANSPORT=fcm`` kèm ``DELIVERY_WEBHOOK_URL``: dùng cho stack thật có
+    người thân giả lập (``relative_sim.py``) chạy cạnh điện thoại chủ kính thật. Không đặt URL thì
+    hành vi như cũ (mọi token đi FCM).
+    """
+
+    def __init__(self, fcm: DeliveryAdapter, webhook: DeliveryAdapter) -> None:
+        """Bind the two transports."""
+        self._fcm = fcm
+        self._webhook = webhook
+
+    def _pick(self, push_token: str) -> DeliveryAdapter:
+        return self._webhook if push_token.startswith(_SIM_TOKEN_PREFIX) else self._fcm
+
+    async def send_command(
+        self,
+        *,
+        device: Device,
+        push_token: str,
+        operation: Operation,
+    ) -> DeliveryOutcome:
+        """Route the command by token shape."""
+        return await self._pick(push_token).send_command(
+            device=device, push_token=push_token, operation=operation
+        )
+
+    async def send_data(
+        self, *, push_token: str, data: dict[str, str], label: str
+    ) -> DeliveryOutcome:
+        """Route the data message by token shape."""
+        return await self._pick(push_token).send_data(
+            push_token=push_token, data=data, label=label
+        )
+
+
 def get_delivery_adapter(settings: Settings) -> DeliveryAdapter:
     """Return the configured delivery transport adapter."""
     if settings.delivery_transport is DeliveryTransport.FCM:
+        if settings.delivery_webhook_url is not None:
+            return HybridDeliveryAdapter(
+                FcmDeliveryAdapter(settings), WebhookDeliveryAdapter(settings)
+            )
         return FcmDeliveryAdapter(settings)
     if settings.delivery_transport is DeliveryTransport.WEBHOOK:
         return WebhookDeliveryAdapter(settings)

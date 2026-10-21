@@ -59,6 +59,32 @@ def test_estimate_bottom_clipped_width_z_reasonable():
         assert e.source == "clipped" and abs(e.z_width - Z) < 0.2
 
 
+def test_clipped_bottom_and_side_new_track_not_far():
+    det = Detection("person", "person", 0.9, _proj(1.3, 2.0, 1.7, 0.5))
+    est = hazard_geom.estimate(det, CAM)
+    assert est.source == "clipped"
+    assert det.box[2] == 1.0 and det.box[3] == 1.0
+
+    tracks = hazard_track.TrackSet(coast=3, q=1.0).update([det], [est], 0.0)
+    z_lim = CAM.height_m * CAM.f_px / (CAM.h - CAM.h / 2)
+    assert len(tracks) == 1
+    assert 1.0 <= tracks[0].x[1] <= z_lim * 1.15
+
+
+def test_clipped_width_ratio_capped():
+    ts = hazard_track.TrackSet(coast=3, q=1.0)
+    det, est = _obs(0.0, 6.0)
+    tr, = ts.update([det], [est], 0.0)
+    clipped = Detection("person", "person", 0.9, (0.49, 0.49, 0.51, 1.0))
+    est = hazard_geom.estimate(clipped, CAM)
+    assert est.source == "clipped"
+
+    for k in range(1, 5):
+        tracks = ts.update([clipped], [est], k * DT)
+    assert len(tracks) == 1
+    assert tracks[0].x[1] <= est.z_max
+
+
 def test_estimate_unknown_kind_finite():
     det = Detection("xyz", "static", 0.5, _proj(0.0, 4.0, 1.0, 0.5))
     e = hazard_geom.estimate(det, CAM)

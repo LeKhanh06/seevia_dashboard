@@ -5,6 +5,7 @@ mỗi trục là một bộ lọc 2 trạng thái (vị trí, vận tốc) tính
 ma trận 2×2, phần ngân sách 1 ms/khung). `x` và `P` vẫn giữ dạng 4 / 4×4 theo thứ tự [X, Z, vX, vZ].
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -96,6 +97,8 @@ class TrackSet:
             tr, det, est = tracks[ti], dets[di], ests[di]
             if est.source == "clipped":
                 zm = self._width_ratio_z(tr, det)
+                if zm is not None and math.isfinite(est.z_max):
+                    zm = min(zm, est.z_max)
                 if zm is None:  # Z không quan sát được: chỉ dự đoán Z, X vẫn lấy từ góc ngang
                     _axis(tr.x, tr.P, 1, dt, self.q, None, 0.0)
                     zp = max(float(tr.x[1]), 0.3)

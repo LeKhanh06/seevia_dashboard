@@ -77,6 +77,7 @@ CLASS_HEIGHT_REL_SIGMA: dict[str, float] = {
 }
 _REL_SIGMA_DEFAULT = 0.15
 _EDGE = 0.01          # cạnh hộp cách mép ảnh <= mức này (tỉ lệ) coi như bị cắt
+_CLIP_Z_MARGIN = 1.15  # chừa 15% sai số độ cao camera/góc cúi khi chặn Z của hộp cắt đáy
 _WIDTH_REL = 0.4     # σ_Z của Z theo bề rộng danh nghĩa
 _PITCH_MIN_Z = 3.0    # mẫu góc cúi chỉ lấy khi Z theo chiều cao >= mức này (gần quá thì sai số lớp phóng đại)
 _GROUND_REL = 0.03    # σ_Z = Z²·0,03/cam_h (≈ ±4 px sai số đáy hộp ở QVGA)
@@ -120,6 +121,7 @@ class Estimate:
     lat_bearing: float = math.nan
     lat_off_m: float = 0.0
     x_var_scale: float = 1.0
+    z_max: float = math.nan
 
 
 def _height_z(det: hazard.Detection, cam: Camera, h_px: float) -> tuple[float, float] | None:
@@ -173,9 +175,13 @@ def estimate(det: hazard.Detection, cam: Camera, pitch_rad: float = 0.0) -> Esti
     elif y_bot >= cam.h * (1 - _EDGE):
         w_px = max((x1 - x0) * cam.w, 1.0)
         zw = min(cam.f_px * CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) / w_px, _Z_MAX)
+        # Đáy bị cắt => chân vật dưới hàng ảnh cuối => vật gần hơn mặt đất thấy được gần nhất (pitch đã kẹp ±0,1 rad nên d > 0)
+        d = cam.h / 2 + cam.f_px * math.tan(pitch_rad)
+        z_max = cam.height_m * cam.f_px / d * _CLIP_Z_MARGIN
+        zw = min(zw, z_max)
         bearing = (cx_px - cam.w / 2) / cam.f_px
         lb, lo, lv = _lateral(det, cam)
-        return Estimate(math.nan, math.nan, math.nan, "clipped", bearing, zw, lb, lo, lv)
+        return Estimate(math.nan, math.nan, math.nan, "clipped", bearing, zw, lb, lo, lv, z_max)
     else:  # không nguồn nào hợp lệ (vd. đáy trên đường chân trời, lớp lạ): dùng bề rộng, rộng chuẩn = 0,5·H
         w_px = max((x1 - x0) * cam.w, 1.0)
         w_m = CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) if det.kind in NO_HEIGHT_KINDS else 0.5 * CLASS_HEIGHT_M.get(det.kind, _UNKNOWN_H)

@@ -86,6 +86,8 @@ class TrackSet:
         `box_shift_x`: cùng độ trượt ấy theo tỉ lệ bề rộng ảnh, để gán IoU không rớt khi quay nhanh.
         `r_scale`: nhân R (ảnh nhoè thì đo kém tin). `allow_new=False`: không tạo track từ khung này.
         """
+        if t is not None and self._t_prev is not None and t - self._t_prev > DT_MAX:
+            self.reset()  # mất khung lâu: track cũ không còn đáng tin
         dt = self._dt(t)
         tracks = old = self._tracks
         for tr in tracks:
@@ -120,7 +122,8 @@ class TrackSet:
                 _axis(tr.x, tr.P, 0, dt, self.q, None, 0.0)
                 _axis(tr.x, tr.P, 1, dt, self.q, None, 0.0)
                 tr.misses += 1
-        self._tracks = tracks = [tr for tr in tracks if tr.misses <= self.coast]
+        self._tracks = tracks = [tr for tr in tracks if tr.misses <= self.coast
+                                 and np.isfinite(tr.x).all() and np.isfinite(tr.P).all()]
         by_det: list[Track | None] = [None] * len(dets)
         for ti, di in pairs:
             by_det[di] = old[ti]

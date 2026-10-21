@@ -270,9 +270,24 @@ class AntiAnnoy:
             self._last_l1 = now
 
 
+_warned_logic = False
+
+
+def _logic() -> str:
+    """HAZARD_LOGIC hợp lệ ("area"/"predict"); giá trị lạ -> cảnh báo một lần và chạy area."""
+    global _warned_logic
+    v = config.HAZARD_LOGIC
+    if v in ("area", "predict"):
+        return v
+    if not _warned_logic:
+        _warned_logic = True
+        logger.warning("HAZARD_LOGIC=%r không hợp lệ (area|predict); chạy area", v)
+    return "area"
+
+
 def make_tracker():
     """HazardTracker (luật diện tích, mặc định) hoặc PredictTracker (HAZARD_LOGIC=predict)."""
-    if config.HAZARD_LOGIC == "predict":
+    if _logic() == "predict":
         from live import hazard_predict
         return hazard_predict.PredictTracker(hazard_predict.PredictParams.from_config())
     return HazardTracker()
@@ -280,7 +295,7 @@ def make_tracker():
 
 def make_anti(clock=time.monotonic) -> AntiAnnoy:
     """AntiAnnoy theo HAZARD_LOGIC: predict thì bật phiếu mức 3 và giữ khi hạ; area giữ y hệt bản cũ."""
-    if config.HAZARD_LOGIC == "predict":
+    if _logic() == "predict":
         return AntiAnnoy(clock, l3_vote=config.HAZARD_L3_VOTE, down_hold=config.HAZARD_DOWN_HOLD,
                          bypass_vote=config.HAZARD_NEW_BYPASS_VOTE == "1", release_s=config.HAZARD_RELEASE_S)
     return AntiAnnoy(clock)

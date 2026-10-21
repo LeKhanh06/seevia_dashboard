@@ -472,3 +472,69 @@ def test_lateral_clip_real_entry_still_warns():
     out = _walk_by(xs, zs, n)
     first = next(i for i, o in enumerate(out) if o[2] >= 2)
     assert abs(out[first][0]) >= 0.6
+
+
+# ---- Fix cuối: cổng nhoè tương đối, góc cúi trung vị, reset, NaN, HAZARD_LOGIC lạ ----
+
+def test_low_texture_scene_still_creates_tracks():
+    tr = _tracker()  # cảnh ít chi tiết: blur cố định 10 (dưới ngưỡng tuyệt đối cũ 30) vẫn phải có track
+    ego = ego_motion.Ego(0.0, 10.0)
+    lvls = {}
+    for k in range(40):
+        z = 8.0 - 0.15 * k
+        if z < 2.5:
+            break
+        lvls[round(z, 2)] = tr.assess([_person(0.0, z)], k * DT, ego).level
+    assert tr.tracks._tracks
+    assert max(v for z, v in lvls.items() if z >= 3.8) >= 2
+
+
+def test_blur_burst_blocks_at_most_two_frames():
+    tr = _tracker()
+    sharp, blur = ego_motion.Ego(0.0, 100.0), ego_motion.Ego(0.0, 5.0)
+    for k in range(10):
+        tr.assess([], k * DT, sharp)
+    seen = []
+    for k in range(10, 16):
+        tr.assess([_person(0.0, 6.0)], k * DT, blur)
+        seen.append(bool(tr.tracks._tracks))
+    assert seen[:2] == [False, False] and seen[2] is True
+
+
+def test_pitch_children_do_not_push_far():
+    tr = _tracker()
+    for k in range(60):
+        z = 12.0 - 0.1 * k
+        kid = Detection("person", "person", 0.9, _proj(-1.0, z, 1.15, 0.4))
+        tr.assess([_person(0.8, z), kid] if k % 2 == 0 else [kid, kid, _person(0.8, z)], k * DT)
+    assert tr.pitch_rad >= -0.02
+    e = hazard_geom.estimate(_person(0.0, 4.0), CAM, tr.pitch_rad)
+    assert e.z_m <= 4.0 * 1.05
+
+
+def test_long_gap_resets_tracks():
+    tr = _tracker()
+    for k in range(5):
+        tr.assess([_person(0.0, 6.0)], k * DT)
+    assert tr.tracks._tracks
+    tr.assess([], 5.0)
+    assert not tr.tracks._tracks
+
+
+def test_nan_box_ignored():
+    tr = _tracker()
+    bad = Detection("person", "person", 0.9, (float("nan"), 0.2, 0.6, 0.8))
+    h = tr.assess([bad, _person(0.0, 6.0), Detection("person", "person", 0.9, (0.1, float("inf"), 0.3, 0.9))], 0.0)
+    assert len(h.levels) == 3 and h.levels[0] == 0 and h.levels[2] == 0
+    assert len(tr.tracks._tracks) == 1
+    assert np.isfinite(tr.tracks._tracks[0].x).all()
+
+
+def test_unknown_hazard_logic_warns_once_and_runs_area(monkeypatch, caplog):
+    monkeypatch.setattr(config, "HAZARD_LOGIC", "bogus")
+    monkeypatch.setattr(hazard, "_warned_logic", False)
+    with caplog.at_level("WARNING", logger="blind_assist"):
+        a, b = hazard.make_tracker(), hazard.make_tracker()
+        hazard.make_anti()
+    assert isinstance(a, hazard.HazardTracker) and isinstance(b, hazard.HazardTracker)
+    assert sum("HAZARD_LOGIC" in r.message for r in caplog.records) == 1

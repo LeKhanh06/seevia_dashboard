@@ -8,6 +8,7 @@ Bật bằng HAZARD_LOGIC=predict (`hazard.make_tracker`). Cùng chữ ký `asse
 """
 
 import math
+from collections import deque
 from dataclasses import dataclass
 
 import config
@@ -15,9 +16,12 @@ from live import ego_motion, hazard, hazard_geom
 from live.hazard_geom import Camera
 from live.hazard_track import DT_DEFAULT, TrackSet
 
-_PITCH_ALPHA = 0.1     # EMA của góc cúi
-_PITCH_MAX = 0.1       # rad, kẹp góc cúi
-_BLUR_MIN = 30.0       # phương sai Laplacian dưới mức này = ảnh nhoè (đang quay đầu nhanh)
+_PITCH_N = 31          # số mẫu góc cúi gần nhất; góc cúi = trung vị (chịu được 50 % mẫu lệch như trẻ em)
+_PITCH_LO = -0.02      # rad, kẹp bất đối xứng: cúi xuống thật hiếm, ngẩng/cúi lệch thì không để kéo Z ra xa
+_PITCH_HI = 0.10
+_BLUR_ALPHA = 0.1      # EMA độ nét của phiên
+_BLUR_REL = 0.35       # nhoè <=> độ nét < 0,35 · EMA (tương đối, cảnh ít chi tiết không bị coi là nhoè)
+_BLUR_MAX_RUN = 2      # tối đa chừng này khung nhoè liên tiếp bị chặn tạo track; khung kế luôn cho tạo
 _BLUR_R_SCALE = 4.0    # ảnh nhoè: nhân R lên chừng này lần, không tạo track mới
 _NEAR_LEVEL1_Z = 8.0   # không cắt hành lang mà gần hơn mức này (m) -> mức 1
 
@@ -77,26 +81,49 @@ class PredictTracker:
         self.cam = cam or Camera.default()
         self.tracks = TrackSet(self.params.coast, self.params.q)
         self.pitch_rad = 0.0
+        self._pitch_samples: deque[float] = deque(maxlen=_PITCH_N)
+        self._blur_ema: float | None = None
+        self._blur_run = 0  # số khung nhoè liên tiếp đã bị chặn tạo track
 
     def _learn_pitch(self, detections: list[hazard.Detection]) -> None:
         for det in detections:
             s = hazard_geom.pitch_sample(det, self.cam)
-            if s is not None:
-                s = min(max(s, -_PITCH_MAX), _PITCH_MAX)
-                self.pitch_rad = min(max(self.pitch_rad + _PITCH_ALPHA * (s - self.pitch_rad), -_PITCH_MAX), _PITCH_MAX)
+            if s is not None and math.isfinite(s):
+                self._pitch_samples.append(s)
+        if self._pitch_samples:
+            m = sorted(self._pitch_samples)
+            self.pitch_rad = min(max(m[len(m) // 2], _PITCH_LO), _PITCH_HI)
+
+    @staticmethod
+    def _finite(det: hazard.Detection) -> bool:
+        return all(math.isfinite(v) for v in det.box)
 
     def assess(
         self, detections: list[hazard.Detection], t: float | None = None, ego: "ego_motion.Ego | None" = None,
     ) -> hazard.Hazard:
         p, cam = self.params, self.cam
+        n_in = len(detections)
+        keep = [i for i, d in enumerate(detections) if self._finite(d)]  # box NaN/inf: bỏ qua, mức 0
+        if len(keep) != n_in:
+            detections = [detections[i] for i in keep]
         ests = [hazard_geom.estimate(d, cam, self.pitch_rad) for d in detections]
         rad = shift = 0.0
         r_scale, allow_new = 1.0, True
         if ego is not None:
             shift = ego.shift_x
             rad = shift * cam.w / cam.f_px  # góc: tỉ lệ bề rộng · w / f
-            if ego.blur < _BLUR_MIN:
-                r_scale, allow_new = _BLUR_R_SCALE, False
+            b = ego.blur
+            if math.isfinite(b):
+                self._blur_ema = b if self._blur_ema is None else self._blur_ema + _BLUR_ALPHA * (b - self._blur_ema)
+                if b < _BLUR_REL * self._blur_ema:
+                    r_scale = _BLUR_R_SCALE
+                    if self._blur_run < _BLUR_MAX_RUN:
+                        allow_new = False
+                        self._blur_run += 1
+                    else:
+                        self._blur_run = 0  # khung thứ 3 liên tiếp: cho tạo track, đếm lại
+                else:
+                    self._blur_run = 0
         tracks = self.tracks.update(detections, ests, t, ego_shift_rad=rad, box_shift_x=shift,
                                     r_scale=r_scale, allow_new=allow_new)
         if allow_new:  # khung nhoè cho Z sai, không dạy góc cúi từ nó
@@ -126,9 +153,12 @@ class PredictTracker:
             urgent = urgent or urg
             if lvl > best:
                 best, best_tr = lvl, tr
-        levels = []
-        for tr in self.tracks.last_matched:
-            levels.append(by_id[tr.id][0] if tr is not None else 0)
+        levels = [by_id[tr.id][0] if tr is not None else 0 for tr in self.tracks.last_matched]
+        if len(keep) != n_in:  # trả về đúng độ dài/thứ tự detection gốc
+            full = [0] * n_in
+            for i, lv in zip(keep, levels):
+                full[i] = lv
+            levels = full
         if best_tr is None:
             return hazard.Hazard(0, levels=levels)
         x = float(best_tr.x[0])

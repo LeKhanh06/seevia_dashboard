@@ -213,3 +213,23 @@ def test_per_device_token_cannot_claim_another_device(world, per_device_tokens):
         _observe_hello(obs, token=TOK_A, device="dev-b")
         msg = obs.receive()
         assert msg["type"] == "websocket.close" and msg["code"] == 4401
+
+
+def test_observer_sees_phone_result_for_the_phone_panel(world):  # noqa: F811
+    """Ô "Điện thoại" của bảng giám sát lấy kết quả lệnh từ `/v2/observe`: `reply`/`say`/`reply_end` mang turn `result-<id>`."""
+    import threading
+
+    from live import device_session
+
+    with client.websocket_connect("/v2/observe") as obs, client.websocket_connect("/v2/session") as glasses:
+        _observe_hello(obs)
+        _hello_ok(obs)
+        _hello(glasses, device="obs-phone")
+        glasses.receive_text()
+        pusher = threading.Thread(target=device_session.push_result, args=("obs-phone", "Đã mở nhạc trên điện thoại.", "req-9"))
+        pusher.start()
+        pusher.join()
+        seen = _read(obs, lambda f: f["t"] == "reply_end" and f.get("turn") == "result-req-9")
+    frames = [v for k, v in seen if k == "json"]
+    assert any(f["t"] == "reply" and f["turn"] == "result-req-9" for f in frames)
+    assert any(f["t"] == "say" and f["turn"] == "result-req-9" and f["text"] == "Đã mở nhạc trên điện thoại." for f in frames)

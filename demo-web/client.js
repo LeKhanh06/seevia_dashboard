@@ -76,7 +76,7 @@ function audioCtx() {
 
 function renderToggle(kind, on) {
   const label = kind === "cam" ? "camera" : "micro";
-  $(`btn-${kind}`).setAttribute("aria-pressed", String(on));
+  $(`btn-${kind}`).dataset.on = on ? "1" : "0";
   $(`${kind}-text`).textContent = on ? `Tắt ${label}` : `Bật ${label}`;
   $(`${kind}-icon`).setAttribute("href", `#i-${kind === "cam" ? "camera" : "mic"}${on ? "" : "-off"}`);
 }
@@ -129,6 +129,7 @@ async function enableMic() {
     return setNote("Chưa khởi tạo được micro. Tải lại trang rồi thử lại.");
   }
   renderToggle("mic", true);
+  uiRecording(false);
 }
 
 function disableMic() {
@@ -138,6 +139,7 @@ function disableMic() {
   media.mic?.getTracks().forEach((t) => t.stop());
   media.mic = null;
   renderToggle("mic", false);
+  uiRecording(false);
 }
 
 async function buildAudioGraph() {
@@ -317,6 +319,8 @@ function wsUrl() {
 function setConn(state, text) {
   $("conn-dot").dataset.state = state;
   $("conn-text").textContent = text;
+  $("banner").hidden = state !== "down";
+  $("banner-text").textContent = state === "down" ? text : "";
   if (state !== "ok") setStatus(text);
 }
 
@@ -397,7 +401,7 @@ const session = {
     if (buf[0] !== 0x02 || buf.length < 2) return;
     if (cur.releaseAt) {
       cur.releaseAt = 0;
-      setStatus("Server đang trả lời…");
+      setStatus("Kính đang trả lời, bạn nghe được qua loa của thiết bị này…");
     }
     speaker.push(buf.subarray(1));
     if (media.ctx?.state === "suspended") setNote("Chạm vào trang một lần để bật âm thanh.");
@@ -478,13 +482,29 @@ function uiRecording(on) {
   $("ptt-text").textContent = on ? "Đang nghe, thả để gửi" : "Giữ để nói";
   $("stage").dataset.rec = on ? "1" : "0";
   $("rec-badge").hidden = !on;
-  if (!on) b.style.setProperty("--lvl", "0");
+  $("meter-box").dataset.active = on ? "1" : "0";
+  if (!on) {
+    b.style.setProperty("--lvl", "0");
+    $("meter-fill").style.width = "0%";
+    $("meter").setAttribute("aria-valuenow", "0");
+    $("meter").setAttribute("aria-valuetext", "Micro đang nghỉ");
+    $("meter-state").textContent = media.mic ? "Micro sẵn sàng. Giữ nút Nói hoặc phím Space để nói." : "Micro đang tắt. Bấm “Bật micro” trước.";
+  }
+}
+
+/** Mức âm micro 0..100 (căn theo RMS: tiếng nói bình thường ~0,05-0,15). */
+function renderLevel(level) {
+  const pct = Math.round(Math.min(1, level * 6) * 100);
+  $("meter-fill").style.width = `${pct}%`;
+  $("meter").setAttribute("aria-valuenow", String(pct));
+  $("meter-state").textContent = pct < 4 ? "Đang nghe… chưa thấy tiếng nói, hãy nói to hơn hoặc lại gần micro." : pct > 92 ? "Tiếng quá to, có thể bị méo." : "Đang nghe bạn nói.";
 }
 
 function tickRecording() {
   if (!rec.active) return;
   $("rec-time").textContent = `${fmtNum((performance.now() - rec.t0) / 1000)} s`;
   $("ptt").style.setProperty("--lvl", String(Math.min(1, rec.level * 6)));
+  renderLevel(rec.level);
   rec.raf = requestAnimationFrame(tickRecording);
 }
 
@@ -575,8 +595,10 @@ document.addEventListener("pointerdown", () => {
   audioCtx().resume().then(() => $("note").textContent.startsWith("Chạm vào trang") && setNote("")).catch(() => {});
 }, { passive: true });
 
-$("btn-cam").addEventListener("click", () => (media.cam ? disableCam() : enableCam()));
-$("btn-mic").addEventListener("click", () => (media.mic ? disableMic() : enableMic()));
+// Bấm bằng chuột xong thì bỏ tiêu điểm khỏi nút, để phím Space ngay sau đó là "giữ để nói" chứ không bật/tắt lại nút.
+const afterPointer = (e) => { if (e.detail > 0) e.currentTarget.blur(); };
+$("btn-cam").addEventListener("click", (e) => { afterPointer(e); return media.cam ? disableCam() : enableCam(); });
+$("btn-mic").addEventListener("click", (e) => { afterPointer(e); return media.mic ? disableMic() : enableMic(); });
 
 const dlg = $("dlg-settings");
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));

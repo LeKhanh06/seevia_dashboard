@@ -18,7 +18,16 @@
   transition: background-color .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
 }
 .btn-toggle:hover { background: var(--panel-2); }
-.btn-toggle[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.btn-toggle[data-on="1"] { background: var(--action); border-color: var(--action); color: var(--on-action); }
+
+/* chỉ báo mức âm micro: đầy lên theo tiếng nói khi đang giữ nút */
+.meter-box { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; }
+.meter-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.meter { height: 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--sapphire), var(--sky)); transition: width .08s linear; }
+.meter-box[data-active="1"] .meter { border-color: var(--action); }
+.meter-state { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.meter-box[data-active="1"] .meter-state { color: var(--text); font-weight: 600; }
 
 .status { font-size: 14px; font-weight: 500; color: var(--muted); min-height: 21px; }
 
@@ -44,6 +53,8 @@
 }
 .ptt[aria-pressed="true"] { background: var(--navy); color: #FFFFFF; transform: scale(.98); }
 .ptt:disabled { cursor: not-allowed; background: var(--panel-2); color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
 
 @media (min-width: 1000px) {
   /* styles.css cho .stage-box co theo chiều cao còn lại (cột POV); ở đây cột camera cao tuỳ nội dung. */

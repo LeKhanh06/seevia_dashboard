@@ -1,6 +1,6 @@
 {
   "mode": "real",
-  "base": "https://localhost:18443",
+  "base": "http://localhost:18090",
   "checks": [
     {
       "scenario": "describe",
@@ -48,7 +48,7 @@
       "scenario": "describe",
       "name": "tiếng đầu < 1,5 s",
       "ok": true,
-      "detail": "563"
+      "detail": "322"
     },
     {
       "scenario": "describe",
@@ -96,7 +96,7 @@
       "scenario": "nav",
       "name": "có cảnh báo vật cản trong log",
       "ok": true,
-      "detail": "11:33:36 ¦ L3 ¦ truck · phía trước ¦ 11:33:34 ¦ L3 ¦ truck · phía trước ¦ 11:33:32 ¦ L3 ¦ truck · phía trước ¦ 11:33:31 "
+      "detail": "15:20:25 ¦ L3 ¦ truck · phía trước ¦ 15:20:23 ¦ L3 ¦ truck · phía trước ¦ 15:20:21 ¦ L3 ¦ truck · phía trước ¦ 15:20:20 "
     },
     {
       "scenario": "nav",
@@ -108,7 +108,7 @@
       "scenario": "nav",
       "name": "tắt cảnh báo: chế độ về trống",
       "ok": true,
-      "detail": "[] | server nghe: “Tắt cảnh báo vật cản” -> alert_off lane C model 100,0%"
+      "detail": "[] | server nghe: “Tắt cảnh báo vật cản” -> alert_off lane C model-cache 100,0%"
     },
     {
       "scenario": "nav",
@@ -120,13 +120,13 @@
       "scenario": "nav",
       "name": "có khung det",
       "ok": true,
-      "detail": "119"
+      "detail": "116"
     },
     {
       "scenario": "nav",
       "name": "mọi det đi sau đúng khung JPEG của nó",
       "ok": true,
-      "detail": "(119, 0)"
+      "detail": "(116, 0)"
     },
     {
       "scenario": "nav",
@@ -168,7 +168,7 @@
       "scenario": "ocr-direct",
       "name": "đọc đúng chữ trên biển",
       "ok": true,
-      "detail": "BẠN ¦  ¦ Đọc lá thư tôi đang cầm ¦  ¦ SEEVIA ¦  ¦ CÔNG TRƯỜNG ĐANG THI CÔNG"
+      "detail": " cầm ¦  ¦ Ý ĐỊNH ¦ ocr ¦ làn B ¦ model-cache ¦ 100,0% ¦ KÍNH TRẢ LỜI ¦  ¦ CÔNG TRƯỜNG ĐANG THI CÔNG ¦  ¦ Ảnh lúc bấm nút"
     },
     {
       "scenario": "ocr-direct",
@@ -216,7 +216,7 @@
       "scenario": "ocr-live",
       "name": "lịch sử có bong bóng 'SeeVia · trực tiếp' gộp câu lặp",
       "ok": true,
-      "detail": "ư tôi đang cầm ¦  ¦ SEEVIA ¦  ¦ Đưa sách ra trước mặt. ¦  ¦ SEEVIA · TRỰC TIẾP ¦  ¦ Lại gần hơn. ×10"
+      "detail": "a trước mặt. ¦  ¦ Ảnh lúc bấm nút ¦ Kính nói · trực tiếp ¦ 15:21:01 ¦ KÍNH NÓI ¦  ¦ Lại gần hơn. ×10"
     },
     {
       "scenario": "ocr-live",
@@ -228,7 +228,7 @@
       "scenario": "ocr-live",
       "name": "mọi ocr đi sau đúng khung JPEG của nó",
       "ok": true,
-      "detail": "(77, 0)"
+      "detail": "(76, 0)"
     },
     {
       "scenario": "ocr-live",
@@ -288,22 +288,22 @@
   "metrics": {
     "describe": {
       "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
-      "ttfa_ms": 563,
+      "ttfa_ms": 322,
       "audio_onsets": [
         {
-          "sent_s": 5.56,
+          "sent_s": 5.49,
           "speech_from_s": 0.6
         }
       ]
     },
     "nav": {
       "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
-      "alert_on_heard": "“Cảnh báo vật cản” -> alert_on lane C model 98,6%",
+      "alert_on_heard": "“Bật cảnh báo vật cản” -> alert_on lane C model-cache 100,0%",
       "fps_text": "live qvga · 8 fps · server xử lý 8,0 fps",
-      "alert_off_heard": "“Tắt cảnh báo vật cản” -> alert_off lane C model 100,0%",
-      "det_frames": 119,
+      "alert_off_heard": "“Tắt cảnh báo vật cản” -> alert_off lane C model-cache 100,0%",
+      "det_frames": 116,
       "det_with_prior_jpeg": {
-        "đúng": 119,
+        "đúng": 116,
         "sai": 0
       }
     },
@@ -313,7 +313,7 @@
     "ocr-live": {
       "empty_state": "Kính đã kết nối. Bấm nút trên kính để gửi hình.",
       "ocr_chip": "Lại gần",
-      "ocr_frames": 77
+      "ocr_frames": 76
     },
     "layout": {
       "viewer_desktop_scrollWidth": 1440,

@@ -16,7 +16,7 @@ giữ số đo để **so trước/sau khi sửa giao diện**. Thoát 0 nếu m
 ```
 
 Ảnh và `report.json` nằm ở `storage/e2e-demo-web/run-<giờ>/` (đã nằm trong `.gitignore`). Số đo nền đã chạy xong nằm ở
-[`baseline-real.json`](baseline-real.json) (47/47 đạt) và [`baseline-fake.json`](baseline-fake.json) (15/15), cả hai ngày 2026-10-21.
+[`baseline-real.json`](baseline-real.json) (47/47 đạt) và [`baseline-fake.json`](baseline-fake.json) (47/47), cả hai ngày 2026-10-21, sau khi sửa giao diện (D1-D5).
 
 ## Cài đặt (một lần)
 
@@ -41,6 +41,9 @@ Cần thêm `ffmpeg` (dựng camera giả) và **dữ liệu thật của worksp
 | `ocr-direct` | "Đọc lá thư tôi đang cầm" trước biển "CÔNG TRƯỜNG ĐANG THI CÔNG" | Server đọc thẳng đúng chữ, không mở OCR live |
 | `ocr-live` | Cùng câu nhưng trước ảnh không có chữ | Chế độ OCR sáng; chip "Lại gần"; bong bóng "SeeVia · trực tiếp" gộp câu lặp (×N); mọi `ocr` đi sau đúng khung JPEG |
 | `fake-flow` | (chỉ `--mode fake`) hỏi cảnh → đọc chữ live → tránh vật cản với server giả | Cùng các kiểm tra hiển thị, không cần GPU: dùng khi chỉnh UX nhanh |
+| `fake-tour` | (chỉ `--mode fake`, 1920x1080) cả kịch bản 8 lượt: hỏi cảnh, đọc chữ live, tránh vật cản, gọi điện hai lượt, nhạc hai lượt | Thẻ hội thoại đủ mọi lượt (người dùng nói, ý định, kính trả lời, độ trễ); chip lệnh điện thoại Chờ -> Xong + kết quả; ô Điện thoại; ảnh thu nhỏ ở log cảnh báo và thẻ trực tiếp; **không chữ bị cắt**, không cuộn ngang; câu rỗng |
+| `fake-client` | (chỉ `--mode fake`) `client.html`: giữ phím Space | Space = bấm nói, `role=meter` nhích lên khi có tiếng, trạng thái "Đang nghe bạn…", thả phím gửi lượt, không kẹt |
+| `phone-mirror` | (chỉ `--mode fake`) `serve.py --phone-mirror` với adb GIẢ (ffmpeg testsrc; không gọi adb thật) | Ô Điện thoại hiện ảnh 540 px thật qua `/phone/stream.mjpg`, thẻ tác vụ nằm dưới khung |
 | `layout` | Bảng giám sát ở 1440×900 và 390×800, hộp Cài đặt | Không cuộn ngang; Cài đặt không còn ô camera / Mô phỏng |
 | `bad-token` | Chạy một proxy cấu hình token SAI | Trang báo "Token sai", không hiện kính đã kết nối (đối chứng âm cho cấu hình sẵn) |
 

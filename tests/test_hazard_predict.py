@@ -166,3 +166,165 @@ def test_ego_shift_removed():
         return tr
     assert abs(run(0.04).x[2]) < 0.3
     assert abs(run(0.0).x[2]) > 1.0  # đối chứng âm: không bù thì vật đứng yên bị đọc thành đang trượt ngang
+
+
+# ---- Task 3: xếp mức theo TTE, AntiAnnoy phiếu/hysteresis, ego ----
+
+import time
+
+import cv2
+
+from lanes import nav_live
+from live import ego_motion, hazard_predict
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def _tracker():
+    return hazard_predict.PredictTracker(hazard_predict.PredictParams(), CAM)
+
+
+def test_area_default_unchanged(monkeypatch):
+    monkeypatch.setattr(config, "HAZARD_LOGIC", "area")
+    assert type(hazard.make_tracker()) is hazard.HazardTracker
+    assert hazard.make_anti().l3_vote == 1
+    levels = [0, 1, 1, 2, 2, 2, 3, 2, 2, 0, 0, 3, 3, 1, 1, 2, 2, 0, 0, 1, 1]
+    c_old, c_new = _Clock(), _Clock()
+    old, new = hazard.AntiAnnoy(c_old), hazard.make_anti(c_new)
+    got_old, got_new = [], []
+    for lvl in levels:
+        c_old.t = c_new.t = c_old.t + 0.9
+        got_old.append(old.step(lvl))
+        got_new.append(new.step(lvl))
+    assert got_old == got_new and any(got_old)
+    monkeypatch.setattr(config, "HAZARD_LOGIC", "predict")
+    assert isinstance(hazard.make_tracker(), hazard_predict.PredictTracker) and hazard.make_anti().l3_vote == 2
+
+
+def _walk(tracker, objs, closing, n=80, stop_z=1.5):
+    """Người dùng đi `closing` m/s: Z mỗi vật giảm closing·t. objs = [(X0, Z0, vX)] -> [(Z thật, X thật, Hazard)]."""
+    out = []
+    for k in range(n):
+        t = k * DT
+        pos = [(x0 + vx * t, z0 - closing * t) for x0, z0, vx in objs]
+        if min(z for _, z in pos) < stop_z:
+            break
+        out.append((pos, tracker.assess([_person(x, z) for x, z in pos], t)))
+    return out
+
+
+def test_predict_static_person_timely():
+    run = _walk(_tracker(), [(0.0, 12.0, 0.0)], 1.2)
+    first = next(pos[0][1] for pos, h in run if h.level >= 2)
+    assert first >= 2 + 1.5 * 1.2  # bíp mức >= 2 sớm >= 1,5 s trước khi vào Z < 2
+
+
+def test_predict_pass_by_no_level2():
+    run = _walk(_tracker(), [(1.0, 14.0, 0.0)], 2.4, stop_z=1.6)
+    assert len(run) > 30 and all(h.level < 2 for _, h in run)
+
+
+def test_predict_crossing_dir_left():
+    # người dùng đi 1,2 m/s, người kia đi ngang từ X = -3 sang phải 1,0 m/s: sẽ vào hành lang (X > -0,6) lúc Z ~ 3
+    run = _walk(_tracker(), [(-3.0, 6.0, 1.0)], 1.2, stop_z=2.0)
+    hits = [(pos[0], h) for pos, h in run if h.level >= 2]
+    assert hits and hits[0][1].dir == "left" and hits[0][0][0] < -0.6  # báo khi còn ngoài hành lang, phía trái
+
+
+def test_predict_new_near_urgent():
+    h = _tracker().assess([_person(0.0, 2.5)], 0.0)
+    assert h.level == 3 and h.urgent
+
+
+def test_anti_l3_vote():
+    a = hazard.AntiAnnoy(l3_vote=2)
+    assert [a.step(3), a.step(0), a.step(0)] == [False, False, False]
+    b = hazard.AntiAnnoy(l3_vote=2)
+    assert [b.step(3), b.step(3)] == [False, True]
+    c = hazard.AntiAnnoy(l3_vote=2)
+    assert c.step(3, urgent=True) is True
+    d = hazard.AntiAnnoy(l3_vote=2, bypass_vote=False)
+    assert d.step(3, urgent=True) is False
+
+
+def test_anti_down_hold():
+    anti = hazard.AntiAnnoy(l3_vote=1, down_hold=2)
+    assert anti.step(3) is True and anti.current == 3
+    assert anti.step(2) is False and anti.current == 3  # 1 khung thấp hơn chưa hạ
+    assert anti.step(3) is False and anti.current == 3  # trở lại 3: không gửi lại
+    assert anti.step(2) is False and anti.step(2) is False and anti.current == 2  # giữ 2 khung -> hạ
+    held = hazard.AntiAnnoy(down_hold=3)
+    held.step(3); held.step(2); held.step(2)
+    assert held.current == 3
+    held.step(2)
+    assert held.current == 2
+
+
+def test_predict_crowded_frame_fast():
+    tracker = _tracker()
+    rng = np.random.default_rng(0)
+    objs = [(float(rng.choice([-1, 1]) * rng.uniform(0.9, 1.5)), 10.0 + 1.0 * i) for i in range(20)]  # dãy xe đỗ 2 bên
+    times, levels = [], []
+    for k in range(200):  # người dùng đi 0,25 m/s dọc dãy xe: Z giảm dần, không xe nào vào |X| < 0,6
+        dets = [Detection("motorbike", "vehicle", 0.9, _proj(x, z - 0.25 * k * DT, 1.2, 0.6)) for x, z in objs]
+        t0 = time.perf_counter()
+        h = tracker.assess(dets, k * DT)
+        times.append(time.perf_counter() - t0)
+        levels.append(h.level)
+    assert float(np.percentile(times, 90)) < 1e-3
+    assert max(levels) < 2
+
+
+def test_ego_meter_shift_sign():
+    rng = np.random.default_rng(1)
+    img = cv2.GaussianBlur(rng.integers(0, 255, (240, 320, 3), dtype=np.uint8), (3, 3), 0)
+    meter = ego_motion.EgoMeter()
+    first = meter.measure(img)
+    assert first.shift_x == 0.0
+    ego = meter.measure(np.roll(img, 16, axis=1))
+    assert abs(ego.shift_x - 0.05) < 0.01
+    assert ego.blur > ego_motion.EgoMeter().measure(cv2.GaussianBlur(img, (0, 0), 15)).blur
+
+
+def test_process_frame_passes_time():
+    seen = []
+
+    class Det:
+        def detect(self, bgr):
+            return []
+
+    class Tracker:
+        def assess(self, dets, t=None, ego=None):
+            seen.append((t, ego))
+            return hazard.Hazard(0)
+
+    ok, jpg = cv2.imencode(".jpg", np.zeros((240, 320, 3), np.uint8))
+    nav_live.process_frame(Det(), Tracker(), jpg.tobytes(), 12.5)
+    nav_live.process_frame(Det(), Tracker(), jpg.tobytes(), 13.0, ego_motion.EgoMeter())
+    assert seen[0] == (12.5, None) and seen[1][0] == 13.0 and isinstance(seen[1][1], ego_motion.Ego)
+
+
+def test_predict_no_ghost_after_vanish_and_bad_clock():
+    tr = _tracker()
+    for k in range(10):
+        tr.assess([_person(0.0, 9.0 - 1.2 * k * DT)], k * DT)
+    levels = [tr.assess([], (10 + k) * DT).level for k in range(6)]
+    assert levels[-1] == 0  # sau coast khung không còn track ma
+    h = tr.assess([_person(0.0, 8.0)], 20 * DT)
+    assert h.level < 3 and not h.urgent
+    for t in (20 * DT, 5.0, None, -1.0):  # mốc trùng/lùi/None: không NaN, không lỗi
+        h = tr.assess([_person(0.0, 7.0)], t)
+        assert 0 <= h.level <= 3
+
+
+def test_pitch_estimate_converges():
+    tr = _tracker()
+    for k in range(40):  # người đi tới 12 -> 4,2 m, ảnh lệch góc cúi 0,03 rad
+        tr.assess([_person(0.3, 12.0 - 0.2 * k, pitch=0.03)], k * DT)
+    assert abs(tr.pitch_rad - 0.03) < 0.01

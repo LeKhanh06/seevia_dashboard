@@ -148,8 +148,8 @@ class TrackSet:
         area_d = (db[:, 2] - db[:, 0]) * (db[:, 3] - db[:, 1])
         union = area_t[:, None] + area_d[None, :] - inter
         iou = np.where(union > 1e-12, inter / np.maximum(union, 1e-12), 0.0)
-        cand = np.argwhere(iou >= IOU_MIN)
-        order = sorted(((float(iou[i, j]), int(i), int(j)) for i, j in cand), reverse=True)
+        rows, cols = np.nonzero(iou >= IOU_MIN)
+        order = sorted(zip(iou[rows, cols].tolist(), rows.tolist(), cols.tolist()), reverse=True)
         pairs, used_t, used_d = [], set(), set()
         for _, i, j in order:
             if i in used_t or j in used_d or tracks[i].group != dets[j].group:

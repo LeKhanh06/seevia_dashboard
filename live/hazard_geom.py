@@ -11,6 +11,7 @@ Toạ độ: X ngang (dương = bên phải), Z phía trước, mét, gốc là 
 
 import math
 from dataclasses import dataclass
+from functools import cached_property
 
 import config
 from live import hazard
@@ -65,7 +66,7 @@ class Camera:
     hfov_deg: float
     height_m: float
 
-    @property
+    @cached_property  # gọi mỗi detection mỗi khung: tính một lần
     def f_px(self) -> float:
         return (self.w / 2) / math.tan(math.radians(self.hfov_deg / 2))
 

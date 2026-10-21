@@ -197,3 +197,19 @@ def test_demo_credentials_read_env_file_and_cli_wins(tmp_path, monkeypatch):
     assert serve.demo_credentials(env_file=str(tmp_path / "khong-co")) == ("", "glasses-shell")
     monkeypatch.delenv("VISIONCARE_DEVICE_ID")
     assert serve.demo_credentials(env_file=str(tmp_path / "khong-co")) == ("", "glasses-123")  # như config.py
+
+
+def test_demo_credentials_token_file(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("demo_serve_tokfile", _SERVE)
+    serve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serve)
+    env = tmp_path / ".env"
+    env.write_text("VISIONCARE_DEVICE_CLIENT_TOKEN=tok-env\nVISIONCARE_DEVICE_ID=glasses-env\n")
+    tf = tmp_path / "kinh.token"
+    tf.write_text("tok-file\n")
+    for key in ("VISIONCARE_DEVICE_CLIENT_TOKEN", "VISIONCARE_DEVICE_ID"):
+        monkeypatch.delenv(key, raising=False)
+    assert serve.demo_credentials(env_file=str(env), token_file=str(tf)) == ("tok-file", "glasses-env")  # thắng .env
+    assert serve.demo_credentials("tok-cli", env_file=str(env), token_file=str(tf))[0] == "tok-cli"  # --token thắng
+    with pytest.raises(SystemExit):
+        serve.demo_credentials(env_file=str(env), token_file=str(tmp_path / "khong-co"))

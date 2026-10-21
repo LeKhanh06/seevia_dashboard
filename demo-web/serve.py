@@ -75,9 +75,23 @@ def read_env_file(path: str = ENV_FILE) -> dict[str, str]:
     return out
 
 
-def demo_credentials(token: str = "", device: str = "", env_file: str = ENV_FILE) -> tuple[str, str]:
-    """(token, mã kính) cho trang: tham số CLI > biến môi trường > `.env`; mã kính mặc định như `config.py`."""
+def read_token_file(path: str) -> str:
+    """Dòng đầu (bỏ khoảng trắng) của file token; file không đọc được thì thoát với thông báo (không in token)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.readline().strip()
+    except OSError as exc:
+        sys.exit(f"--token-file không đọc được ({path}): {exc.strerror}")
+
+
+def demo_credentials(token: str = "", device: str = "", env_file: str = ENV_FILE,
+                     token_file: str = "") -> tuple[str, str]:
+    """(token, mã kính) cho trang: `--token` > `--token-file` > biến môi trường > `.env`; mã kính mặc định như `config.py`.
+
+    `--token-file` dành cho token RIÊNG của kính (`~/.config/seevia/<kính>.token`, quyền 600): không phải đưa token qua
+    dòng lệnh (lộ trong `ps`) hay `.env`."""
     env = read_env_file(env_file)
+    token = token or (read_token_file(token_file) if token_file else "")
 
     def pick(arg: str, key: str, default: str = "") -> str:
         return arg or os.environ.get(key) or env.get(key) or default
@@ -318,10 +332,11 @@ def main():
     p.add_argument("--cert", help="file chứng chỉ PEM, bật https")
     p.add_argument("--key", help="file khoá PEM đi kèm --cert")
     p.add_argument("--token", default="", help="token thiết bị tự gắn vào WS (mặc định: VISIONCARE_DEVICE_CLIENT_TOKEN / .env)")
+    p.add_argument("--token-file", default="", help="file chứa token RIÊNG của kính (dòng đầu); thắng biến môi trường/.env, thua --token")
     p.add_argument("--device", default="", help="mã kính hiện tại (mặc định: VISIONCARE_DEVICE_ID / .env)")
     args = p.parse_args()
 
-    Handler.device_token, Handler.device_id = demo_credentials(args.token, args.device)
+    Handler.device_token, Handler.device_id = demo_credentials(args.token, args.device, token_file=args.token_file)
     Handler.upstream = urlsplit(args.upstream)
     if not Handler.upstream.hostname:
         sys.exit(f"--upstream không hợp lệ: {args.upstream}")

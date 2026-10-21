@@ -76,6 +76,8 @@ class TurnContext:
         self.loop = loop
         # `/process` (firmware cũ): một lần HTTP, không WS -> làn B/C không mở live.
         self.single_shot = False
+        # Trạng thái kính lúc bắt đầu lượt (music_playing, navigating, ride_quote_pending...).
+        self.device_state: dict = {}
         self.gen: int | None = None  # thế hệ lượt (pending_action.begin_turn)
         self.spec_answer: Speculation | None = None
         # (intent, text) -> task trích tham số chạy song song với Clef.
@@ -99,7 +101,10 @@ FILLER_SEARCHING = "Để tôi tra cứu."
 # Chỉ gặp ở `/process` (firmware cũ, không có WS): bật cảnh báo vật cản liên tục
 # cần kênh realtime nên nói thẳng là chưa làm được, thay vì nói "đã bật" rồi im.
 NO_LIVE_MESSAGE = "Kính bản này chưa hỗ trợ cảnh báo liên tục."
-STATIC_SPEECH: tuple[str, ...] = (NO_LIVE_MESSAGE,)
+# "Đúng"/"Không" đứng một mình khi không có câu hỏi nào đang chờ: không chạy lệnh nào.
+NO_QUESTION_MESSAGE = "Mình chưa hỏi gì cả. Bạn cần mình giúp gì?"
+CANCELLED_MESSAGE = "Đã huỷ."
+STATIC_SPEECH: tuple[str, ...] = (NO_LIVE_MESSAGE, NO_QUESTION_MESSAGE, CANCELLED_MESSAGE)
 
 
 def _sync(ctx: TurnContext, agen: AsyncIterator[str]):
@@ -322,6 +327,16 @@ async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None 
 async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if d.source == "no_speech":
         return Reply(cues=["no_speech"])
+
+    # Lời đáp có/không đứng một mình mà KHÔNG có câu hỏi nào đang chờ: bộ phân loại hay đoán bừa ra nav_stop /
+    # ride_confirm. Không chạy lệnh nào. (Chuyến xe đang chờ xác nhận là một câu hỏi đang chờ.)
+    if (phone.is_bare_reply(text) and not phone.has_pending(ctx.device)
+            and not ctx.device_state.get("ride_quote_pending")):
+        ctx.cancel_speculation()
+        if pending_action.take_recent_cancel(ctx.device) and phone.is_no(text):
+            return Reply(speech=[CANCELLED_MESSAGE], intent="chat", lane="A")
+        logger.info("lời đáp có/không không có câu hỏi chờ: '%s' -> không chạy lệnh", text)
+        return Reply(speech=[NO_QUESTION_MESSAGE], intent="chat", lane="A")
 
     # Lượt trước hỏi "... phải không?": câu này là có/không.
     confirm = phone.take_pending_confirm(ctx.device)

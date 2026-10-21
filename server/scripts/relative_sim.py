@@ -22,6 +22,11 @@ mono khung 20 ms (640 B) đúng nhịp thời gian thực, và ghi tiếng nhậ
 (80 mẫu nhiễu giả ngẫu nhiên) mỗi ``click_period_s`` giây; dò tách ở đầu kia bằng tương quan chéo. Đồng hồ thu âm của
 nguồn phát: mẫu ``n`` được "thu" lúc ``tx_t0 + n/16000`` và khung chứa nó gửi đi khi khung đầy.
 
+Stack thật (AB ``DELIVERY_TRANSPORT=fcm`` + ``DELIVERY_WEBHOOK_URL``): token ``sim*`` đi webhook, FCM thật đi FCM.
+``--media-url ws://127.0.0.1:18888/v2/call`` ghi đè ``media_url`` công khai của AB (sim cùng máy VH);
+``--auto-reply "câu"`` (hoặc ``defaults.auto_reply``) tự nhắn lại chủ kính khi nhận ``message_in``;
+mật khẩu tài khoản sim lấy từ ``RELSIM_PASSWORD`` (stack thật phải đặt mạnh). Xem ``scripts/live_calls_setup.py``.
+
 Điều khiển (HTTP, chỉ localhost): ``POST /ctl/behavior`` ``{user?, ...}``, ``POST /ctl/call_glasses``
 ``{user, owner_user_id}``, ``POST /ctl/message`` ``{user, owner_user_id, text}``, ``POST /ctl/hangup`` ``{user}``, ``POST /ctl/get_call`` ``{user, call_id}``, ``POST /ctl/history`` ``{user, owner_user_id}``,
 ``GET /ctl/users``. Log JSONL (``--log``): mọi push nhận, HTTP gửi đi, mở/đóng media, kèm ``wall`` (time.time()).
@@ -41,6 +46,7 @@ import os
 import re
 import sys
 import time
+import uuid
 import wave
 from array import array
 from datetime import UTC, datetime
@@ -65,8 +71,10 @@ DEFAULT_BEHAVIOR: dict[str, Any] = {
     "play_wav": None,
     "click_first_s": 0.3,
     "click_period_s": 1.0,
+    "auto_reply": None,  # chuỗi: tự nhắn lại chủ kính khi nhận message_in; None = không
+    "auto_reply_delay_s": 1.5,
 }
-PASSWORD = "relsim-pass-1"
+PASSWORD = os.environ.get("RELSIM_PASSWORD") or "relsim-pass-1"  # stack thật: đặt RELSIM_PASSWORD mạnh
 _DEFAULT_ENV = Path(__file__).resolve().parents[3] / ".env"
 _OTP_RE = re.compile(r"Demo OTP for (\S+): (\d+)")
 
@@ -148,6 +156,7 @@ class Sim:
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.ab_log = Path(args.ab_log) if args.ab_log else None
         self.forward = args.forward_sim
+        self.media_url = args.media_url
         self.scenario = scenario
         self.device_token = device_token
         self.http = httpx.AsyncClient(base_url=self.app_url, timeout=10.0)
@@ -205,6 +214,7 @@ class User:
         }
         self.media: dict[str, Media] = {}
         self.last_call_id = ""
+        self.owner_ids: list[str] = []  # chủ kính đã nhận lời mời (để tự trả lời tin)
 
     def auth(self) -> dict[str, str]:
         """Header Bearer của phiên app."""
@@ -279,6 +289,12 @@ class User:
         if resp.status_code != httpx.codes.OK:
             return
         for link in resp.json()["data"]["links"]:
+            if (
+                link["role"] == "relative"
+                and link["status"] == "active"
+                and link["owner_user_id"] not in self.owner_ids
+            ):
+                self.owner_ids.append(link["owner_user_id"])
             if link["role"] == "relative" and link["status"] == "pending":
                 done = await self.sim.http.post(
                     f"/api/v1/care/{link['id']}/accept", headers=self.auth()
@@ -306,6 +322,10 @@ class User:
             from_display_name=data.get("from_display_name"),
             text=data.get("text"),
         )
+        if kind == "message_in":
+            reply = self.behavior.get("auto_reply")
+            if reply:
+                self.sim.spawn(self._auto_reply(str(reply)))
         if kind == "call_incoming":
             self.last_call_id = data["call_id"]
             self.sim.spawn(self._incoming(data))
@@ -319,6 +339,14 @@ class User:
             media = self.media.get(data["call_id"])
             if media is not None:
                 media.stop("call_ended_push")
+
+    async def _auto_reply(self, text: str) -> None:
+        """Nhắn lại chủ kính một câu ngắn (kiểm tin hai chiều: kính phải đọc được tin này)."""
+        await asyncio.sleep(float(self.behavior["auto_reply_delay_s"]))
+        if not self.owner_ids:
+            await self.accept_pending()  # lần đầu: tải danh sách link để biết chủ kính
+        for owner in self.owner_ids:
+            await self.send_message(owner, text, str(uuid.uuid4()))
 
     async def _incoming(self, data: dict[str, str]) -> None:
         """Cuộc gọi tới: nghe / từ chối / bỏ qua theo hành xử."""
@@ -349,7 +377,7 @@ class User:
             await self._open_media(call_id, body["media_url"], body["media_token"])
 
     async def _open_media(self, call_id: str, url: str, token: str) -> None:
-        media = Media(self, call_id, url, token)
+        media = Media(self, call_id, self.sim.media_url or url, token)
         self.media[call_id] = media
         await media.run()
 
@@ -607,8 +635,6 @@ def build_app(sim: Sim) -> FastAPI:
 
     @app.post("/ctl/message")
     async def message(request: Request) -> dict[str, Any]:
-        import uuid  # noqa: PLC0415
-
         body = await request.json()
         return await pick(body).send_message(
             body["owner_user_id"], body["text"], body.get("request_id") or str(uuid.uuid4())
@@ -653,6 +679,8 @@ async def _main(args: argparse.Namespace) -> int:
     scenario: dict[str, Any] = (
         json.loads(Path(args.scenario).read_text(encoding="utf-8")) if args.scenario else {}
     )
+    if args.auto_reply:
+        scenario.setdefault("defaults", {})["auto_reply"] = args.auto_reply
     sim = Sim(args, scenario, token)
     server = uvicorn.Server(
         uvicorn.Config(build_app(sim), host=args.host, port=args.port, log_level="warning")
@@ -695,6 +723,16 @@ def main() -> None:
         "--forward-sim",
         default=None,
         help="URL /push của phone_sim (chủ kính) cho push token 'sim'",
+    )
+    ap.add_argument(
+        "--media-url",
+        default=None,
+        help="ghi đè media_url của AB (vd ws://127.0.0.1:18888/v2/call khi sim chạy cùng máy VH)",
+    )
+    ap.add_argument(
+        "--auto-reply",
+        default=None,
+        help="câu tự nhắn lại chủ kính mỗi khi nhận tin (mọi người thân); mặc định không",
     )
     ap.add_argument("--env-file", default=str(_DEFAULT_ENV))
     sys.exit(asyncio.run(_main(ap.parse_args())))

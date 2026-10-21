@@ -205,6 +205,7 @@ class Session:
             self.spawn(self.result_later("result-9f1c", "Cuộc gọi đã kết nối với mẹ.", 2.5))
         elif after == "music":
             self.flags["music"] = True
+            self.spawn(self.result_later("result-3a7e", "Đã mở nhạc không lời thư giãn trên điện thoại.", 2.0))
         elif after == "stop_nav":
             await self.end_live()
             self.flags["music"] = False
@@ -216,6 +217,8 @@ class Session:
                          "audio": {"format": "ima_adpcm;rate=16000;channels=1;block=256", "sample_rate": RATE, "preroll_s": 0.2}})
         await self.speak(rid, text)
         await self.text({"t": "reply_end", "turn": rid})
+        if rid == "result-9f1c" and self.flags.get("call"):
+            await self.text({"t": "call_state", "call": "c-demo", "state": "active", "peer": self.flags["call"]})
 
     async def end_live(self):
         if self.live:

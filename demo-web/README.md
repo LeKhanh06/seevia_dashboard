@@ -28,16 +28,25 @@ Bảng giám sát cho thấy:
 - **Server xử lý lượt hiện tại** (phải): Nghe, Nhận dạng giọng nói (transcript), Hiểu ý định
   (`intent` · lane · source · độ tin cậy), Hành động (params, cue, live), Trả lời (các câu `say`),
   kèm mili-giây từ `timings` và "tiếng đầu sau X ms" đo ngay trên trình duyệt.
-- **Lịch sử hội thoại**: bong bóng người dùng = transcript, SeeVia = các `say` gom theo lượt.
-  `result-*` hiện là "Kết quả từ điện thoại"; lượt có `pending` gắn "Đang chờ trả lời: …" và
-  nối với lượt sau bằng đường kẻ đứt để thấy hội thoại nhiều lượt.
-- **Vật cản đã cảnh báo kính**: log rút gọn, chỉ khung `det` có `sent`.
+- **Hội thoại** (cột giữa, to nhất): mỗi lượt là một thẻ, mọi lượt đều giữ lại (cuộn lên xem cũ, lượt mới tự cuộn vào; cuộn
+  lên rồi thì hiện nút "Lượt mới nhất" thay vì giật về). Thẻ gồm: *Người dùng nói* (transcript), *Ý định* (intent + làn + nguồn
+  + độ tin cậy), *Kính trả lời* (các `say`, câu lặp gộp "×N"), chip **Tiếng đầu X ms**, và với lệnh làn D hàng *Điện thoại* có
+  trạng thái **Chờ bạn trả lời / Đã gửi lệnh / Đang làm / Xong / Lỗi / Chưa có kết quả** (suy từ `trace` làn D + `pending`,
+  `reply_end` của lượt, câu `result-*` và `call_state`; chưa có kết quả sau 25 s thì "Chưa có kết quả", không khẳng định lỗi).
+  `result-*` hiện thành thẻ "Kết quả từ điện thoại", câu live thành thẻ "Kính nói · trực tiếp". Lượt có `pending` nối với
+  lượt sau bằng đường kẻ đứt.
+- **Ảnh thu nhỏ đúng khung hình**: thẻ trực tiếp và log cảnh báo gắn ảnh nhỏ (có vẽ box) của khung JPEG server vừa xử lý lúc
+  cảnh báo (`det` có `sent`) / lúc chụp để đọc chữ (`ocr` có `capture`); thẻ lượt hỏi cảnh, đọc chữ có ảnh lúc bấm nút (`0x01`).
+- **Vật cản đã cảnh báo kính**: log rút gọn, chỉ khung `det` có `sent`, mỗi dòng kèm ảnh thu nhỏ.
+- **Điện thoại** (cột phải): xem mục "Ô Điện thoại" bên dưới.
 
 Nút **Âm thanh kính: bật/tắt** ở bảng giám sát điều khiển việc phát lại tiếng server trả về kính (`0x02` IMA-ADPCM
 16 kHz khối 256 byte, giải mã bằng `adpcm.js` và phát liên tục qua WebAudio) cùng tiếng bíp cảnh báo. Trình duyệt chặn
 âm thanh tự phát nên chạm vào trang một lần để mở khoá.
 
-Trên `client.html`, giữ nút **Giữ để nói** (hoặc phím `Space`) để nói, thả để gửi. Trang gửi ảnh `0x01` lúc bấm
+Trên `client.html`, giữ nút **Giữ để nói** (hoặc phím `Space` ở bất kỳ đâu trừ ô nhập/hộp thoại/nút khác) để nói, thả để gửi; khi đang
+nghe có **thanh mức âm micro** (`role="meter"`, kèm câu "đang nghe / chưa thấy tiếng nói / tiếng quá to"), trạng thái đọc được bằng
+trình đọc màn hình (`role="status"` + `aria-live`), lỗi nối hiện dải đỏ trên đầu trang. Trang gửi ảnh `0x01` lúc bấm
 (camera tắt thì lượt không có ảnh), audio `0x03` là WAV PCM16 16 kHz mono stream dần (header RIFF kích thước
 `0xFFFFFFFF` + các khối PCM ~100 ms), rồi `turn_end`. Server yêu cầu live (`cam`/`capture`) thì trang gửi khung `0x04`
 từ camera.
@@ -86,6 +95,24 @@ python demo-web/serve.py --upstream http://127.0.0.1:18990        # http://local
 Lệnh dẫn đường, gọi điện, nhạc... cần **app server (AB)** nối với điện thoại: `VISIONCARE_HOST_URL` trong
 `.env` của server trỏ tới đó. Không có AB thì lượt vẫn ra `trace`/`say` đúng nhưng kết quả `result-*`
 không bao giờ về (server nói câu lỗi/hết giờ). Hỏi đáp, tránh vật cản và đọc chữ không cần AB.
+
+### Ô Điện thoại (D5)
+
+Bảng giám sát có cột "Điện thoại" bên phải (màn >= 1500 px; hẹp hơn thì thành thẻ trong cột hội thoại). Hai chế độ:
+
+- **Không cáp (mặc định): khung điện thoại vẽ bằng HTML.** Hiện các tác vụ điện thoại đang/vừa làm: tên lệnh (Chỉ đường, Gọi điện,
+  Nhắn tin, Gọi khẩn cấp, Tìm xe, Phát nhạc...), tham số chính (điểm đến, người nhận, bài hát), chip trạng thái (Đã gửi lệnh / Đang làm /
+  Xong / Lỗi), câu kết quả, và trạng thái cuộc gọi từ `call_state`. Dữ liệu hoàn toàn từ `/v2/observe` (`trace` làn D, `reply_end`,
+  `result-*`, `call_state`): không cần server sửa gì.
+- **Có cáp: ảnh THẬT của màn hình điện thoại** (`serve.py --phone-mirror`). Trang đọc `/phone/stream.mjpg` (multipart MJPEG, 540x1170
+  ~10 fps) qua thẻ `<img>`; thẻ tác vụ nhỏ nằm dưới khung. Nguồn: `adb exec-out screenrecord --output-format=h264 --size 540x1170
+  --bit-rate 2000000 -` | `ffmpeg -f h264 -i - -f mjpeg -q:v 6 -r 10 -`. Chỉ chạy khi có người xem (tab ẩn thì trang ngắt luồng),
+  dừng khi không còn ai, tự chạy lại khi screenrecord hết 180 s, một đường ống dùng chung cho mọi người xem. **adb chỉ được gọi khi cổng
+  adb server (mặc định `127.0.0.1:5037`, vd. SSH `RemoteForward`) đang LISTEN** (thử kết nối trước mỗi lần chạy); không có thì coi như không
+  có điện thoại: `/phone/stream.mjpg` trả 503 và ô Điện thoại về khung vẽ (trang thử lại sau 20 s). Không bao giờ để adb tự khởi động daemon
+  cục bộ. Biến môi trường: `SEEVIA_ADB` (mặc định `~/android-sdk/platform-tools/adb`), `SEEVIA_FFMPEG`, `SEEVIA_ADB_PORT`, `SEEVIA_ADB_SERIAL`.
+  **Ai mở được trang đều xem được màn hình điện thoại** (kể cả `--lan`): chỉ bật trong mạng demo. Kiểm tự động với adb giả (ffmpeg testsrc):
+  `tests/test_demo_serve_proxy.py` và kịch bản `phone-mirror` của `e2e/browser_e2e.py`.
 
 ### Việc nên thử trong buổi demo
 

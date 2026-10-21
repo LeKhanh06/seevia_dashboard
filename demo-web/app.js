@@ -186,37 +186,257 @@ function showTrace(f) {
 }
 
 // ---------------------------------------------------------------------------
-// Lịch sử hội thoại
+// Lệnh gửi điện thoại (làn D): mô hình dùng chung cho thẻ lượt và ô "Điện thoại"
+// ---------------------------------------------------------------------------
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function icon(id, cls = "i") {
+  const s = document.createElementNS(SVGNS, "svg");
+  s.setAttribute("class", cls);
+  s.setAttribute("aria-hidden", "true");
+  const u = document.createElementNS(SVGNS, "use");
+  u.setAttribute("href", `#${id}`);
+  s.append(u);
+  return s;
+}
+
+const CMD_STATE = {
+  wait: ["i-help", "Chờ bạn trả lời"],
+  sent: ["i-send", "Đã gửi lệnh"],
+  doing: ["i-loader", "Đang làm"],
+  done: ["i-check", "Xong"],
+  error: ["i-warn", "Lỗi"],
+  late: ["i-clock", "Chưa có kết quả"],
+  cancelled: ["i-x", "Đã bỏ"],
+};
+function stateChip(state) {
+  const [ic, text] = CMD_STATE[state] || CMD_STATE.sent;
+  const c = h("span", "chip", icon(ic), text);
+  c.dataset.state = state;
+  return c;
+}
+
+// intent làn D -> [tên hiển thị, icon, hàm lấy tham số chính]
+const PHONE_INTENTS = {
+  nav_start: ["Chỉ đường", "i-route", (p) => p.destination],
+  nav_stop: ["Dừng chỉ đường", "i-route"],
+  contact_call: ["Gọi điện", "i-phone", (p) => p.contact_name],
+  call: ["Gọi điện", "i-phone", (p) => p.contact_name || p.contact],
+  emergency_call: ["Gọi khẩn cấp", "i-siren"],
+  message_send: ["Nhắn tin", "i-msg", (p) => [p.contact_name, p.text].filter(Boolean).join(": ")],
+  message_read: ["Đọc tin nhắn", "i-msg"],
+  ride_quote: ["Tìm xe", "i-car", (p) => p.destination],
+  ride_confirm: ["Xác nhận chuyến xe", "i-car"],
+  music_play: ["Phát nhạc", "i-music", (p) => p.song || p.query],
+  music_stop: ["Dừng nhạc", "i-music"],
+  music_volume: ["Chỉnh âm lượng", "i-music", (p) => p.level ?? p.volume ?? p.direction],
+};
+const GENERIC_ANSWER = new Set(["confirm", "yes", "no", "cancel", "deny", "reject"]);
+const NEGATIVE_ANSWER = new Set(["no", "cancel", "deny", "reject"]);
+const ERROR_RE = /lỗi|thất bại|không thể|không thực hiện|không tìm thấy|không kết nối|không liên lạc|hết thời gian|hết giờ|từ chối|chưa gọi được|chưa gửi được/i;
+const LATE_MS = 25000;
+
+function mainArg(intent, params) {
+  const spec = PHONE_INTENTS[intent];
+  const v = spec?.[2]?.(params);
+  if (v != null && v !== "") return String(v);
+  for (const k of ["contact_name", "contact", "destination", "song", "query", "text", "name"]) if (params[k]) return String(params[k]);
+  const first = Object.values(params)[0];
+  return first == null || typeof first === "object" ? "" : String(first);
+}
+
+const tasks = (() => {
+  const list = []; // mới nhất ở cuối
+  const open = (t) => t.state === "sent" || t.state === "doing";
+  const emit = (t) => { for (const id of t.turns) history.cmd(id, t); renderPhone(); };
+  return {
+    list,
+    /** Khung `trace` của lượt: chỉ làn D là lệnh điện thoại. */
+    trace(f) {
+      if (f.lane !== "D" || !f.intent) return;
+      const params = f.params && typeof f.params === "object" ? f.params : {};
+      const waiting = list.findLast?.((t) => t.state === "wait") ?? [...list].reverse().find((t) => t.state === "wait");
+      let t = null;
+      if (waiting && (GENERIC_ANSWER.has(f.intent) || waiting.intent === f.intent)) {
+        t = waiting; // trả lời câu hỏi treo: cùng một lệnh
+        t.turns.push(f.turn);
+        if (NEGATIVE_ANSWER.has(f.intent)) { t.state = "cancelled"; clearTimeout(t.timer); return emit(t); }
+        t.args = mainArg(t.intent, { ...t.params, ...params }) || t.args;
+        t.params = { ...t.params, ...params };
+        t.turn = f.turn;
+      } else {
+        if (waiting) { waiting.state = "cancelled"; emit(waiting); }
+        const spec = PHONE_INTENTS[f.intent];
+        t = { id: f.turn, turn: f.turn, turns: [f.turn], intent: f.intent, name: spec?.[0] || f.intent, icon: spec?.[1] || "i-smartphone", params, args: mainArg(f.intent, params), result: "", at: Date.now(), state: "sent" };
+        list.push(t);
+        while (list.length > 8) list.shift();
+      }
+      t.state = f.pending ? "wait" : "sent";
+      t.sentAt = performance.now();
+      clearTimeout(t.timer);
+      if (t.state === "sent") t.timer = setTimeout(() => { if (open(t)) { t.state = "late"; emit(t); } }, LATE_MS);
+      emit(t);
+    },
+    /** `reply_end` của lượt đã gửi lệnh: server đã đọc xong câu mở đầu, điện thoại đang làm. */
+    replyEnd(turn) {
+      for (const t of list) if (t.turns.at(-1) === turn && t.state === "sent") { t.state = "doing"; emit(t); }
+    },
+    /** Câu `result-*`: kết quả của lệnh mở lâu nhất. */
+    result(text) {
+      const t = list.find(open) ?? list.find((x) => x.state === "late");
+      if (!t) return;
+      clearTimeout(t.timer);
+      t.result = t.result ? `${t.result} ${text}` : text;
+      t.state = ERROR_RE.test(text) ? "error" : "done";
+      emit(t);
+    },
+    callState(f) {
+      const t = [...list].reverse().find((x) => x.intent === "contact_call" || x.intent === "call" || x.intent === "emergency_call");
+      if (!t) return;
+      const peer = f.peer ? ` · ${f.peer}` : "";
+      if (f.state === "ended") {
+        clearTimeout(t.timer);
+        const failed = f.reason && /fail|reject|busy|timeout|error|declin/i.test(f.reason);
+        t.state = failed ? "error" : "done";
+        t.result = failed ? `Cuộc gọi không thành (${f.reason})` : t.result || "Cuộc gọi đã kết thúc";
+        t.live = failed ? "" : "Cuộc gọi đã kết thúc";
+      } else if (f.state) {
+        clearTimeout(t.timer);
+        t.state = f.state === "active" ? "done" : "doing";
+        t.live = f.state === "active" ? `Đang trong cuộc gọi${peer}` : `Đang đổ chuông${peer}`;
+      }
+      emit(t);
+    },
+  };
+})();
+
+// ---------------------------------------------------------------------------
+// Ảnh thu nhỏ của đúng khung hình (cảnh báo vật cản / chữ vừa đọc / ảnh lượt)
+// ---------------------------------------------------------------------------
+
+const THUMB_W = 240, THUMB_H = 180;
+/** JPEG nhỏ của khung `bmp`; `paint(ctx, rect)` vẽ thêm box trong hệ toạ độ của thumb. */
+function makeThumb(bmp, paint) {
+  if (!bmp) return "";
+  try {
+    const c = document.createElement("canvas");
+    c.width = THUMB_W;
+    c.height = THUMB_H;
+    const x = c.getContext("2d");
+    x.fillStyle = STAGE_BG;
+    x.fillRect(0, 0, THUMB_W, THUMB_H);
+    const R = fitRect(THUMB_W, THUMB_H, bmp.width, bmp.height);
+    x.drawImage(bmp, R.x, R.y, R.w, R.h);
+    x.lineJoin = "round";
+    paint?.(x, R);
+    return c.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return "";
+  }
+}
+function paintDet(boxes) {
+  return (x, R) => {
+    const strong = boxes.filter((b) => (b.level || 0) >= 2);
+    for (const b of strong.length ? strong : boxes) {
+      const [x0, y0, x1, y1] = b.box.map((v, i) => (i % 2 ? R.y + v * R.h : R.x + v * R.w));
+      const st = lvStyle(b.level || 0);
+      x.strokeStyle = "rgba(2,10,59,.7)"; x.lineWidth = 5; x.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      x.strokeStyle = st.color; x.lineWidth = 2.5; x.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    }
+  };
+}
+function paintOcr(o) {
+  return (x, R) => {
+    for (const [a, b, c, d] of o.boxes) {
+      const x0 = R.x + (a / o.w) * R.w, x1 = R.x + (c / o.w) * R.w, y0 = R.y + (b / o.h) * R.h, y1 = R.y + (d / o.h) * R.h;
+      x.strokeStyle = "rgba(2,10,59,.7)"; x.lineWidth = 4; x.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      x.strokeStyle = OCR_INK; x.lineWidth = 2; x.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    }
+  };
+}
+// Bằng chứng gần nhất: thumbnail khung vừa cảnh báo / vừa chụp để đọc chữ.
+const evidence = { hazard: null, ocr: null };
+const EVIDENCE_TTL = 12000;
+function freshEvidence() {
+  const now = performance.now();
+  return [evidence.hazard, evidence.ocr].filter((e) => e && now - e.at < EVIDENCE_TTL).sort((a, b) => b.at - a.at)[0] || null;
+}
+
+// ---------------------------------------------------------------------------
+// Dòng hội thoại: mỗi lượt là một thẻ (người dùng nói, ý định, kính trả lời, độ trễ, lệnh điện thoại)
 // ---------------------------------------------------------------------------
 
 const history = (() => {
   const root = $("history");
-  const groups = new Map(); // id -> {el, user, sv, pending, ended}
-  let pendingGroup = null; // lượt đang chờ câu trả lời ở lượt sau
+  const jump = $("jump");
+  const groups = new Map(); // id -> nhóm của lượt (hoặc kết quả)
+  let pendingGroup = null; // lượt đang chờ trả lời ở lượt sau
   let liveGroup = null;
+  let seq = 0;
 
-  // Bám đáy khi người xem chưa cuộn lên. Ô lịch sử co lại khi thẻ timeline phía trên cao thêm
-  // (trace tới sau lượt đầu), mà scrollTop không đổi nên phải bám lại theo kích thước.
-  // Sự kiện scroll tới trễ một nhịp, lúc đó nội dung có thể đã dài thêm: chỉ cuộn LÊN mới bỏ bám.
+  // Bám đáy khi người xem chưa cuộn lên; cuộn lên đọc lượt cũ thì không giật về, hiện nút "Lượt mới nhất".
+  // Sự kiện scroll tới trễ một nhịp: chỉ cuộn LÊN mới bỏ bám.
   let pinned = true;
+  let unseen = false;
   let prevTop = 0;
+  const syncJump = () => { jump.hidden = pinned || !unseen; };
   root.addEventListener("scroll", () => {
     const atBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 40;
     if (root.scrollTop < prevTop) pinned = atBottom;
     else if (atBottom) pinned = true;
+    if (pinned) unseen = false;
     prevTop = root.scrollTop;
+    syncJump();
   });
   new ResizeObserver(() => { if (pinned) root.scrollTop = root.scrollHeight; }).observe(root);
+  jump.addEventListener("click", () => { pinned = true; unseen = false; root.scrollTop = root.scrollHeight; syncJump(); root.focus({ preventScroll: true }); });
   const stick = (fn) => {
     fn();
     if (pinned) root.scrollTop = root.scrollHeight;
+    else { unseen = true; syncJump(); }
   };
   const add = (el) => {
     $("history-empty")?.remove();
     root.append(el);
+    const n = root.querySelectorAll(".turn").length;
+    $("turn-count").hidden = false;
+    $("turn-count").textContent = `${n} mục`;
   };
-  function svBubble(label, cls) {
-    return h("div", `bubble sv ${cls || ""}`, h("span", "who", label));
+
+  const row = (cls, label, body) => {
+    const r = h("div", `row row-${cls}`, h("span", "row-label", label), body);
+    return r;
+  };
+
+  function newGroup(kind, title) {
+    const badges = h("span", "grow");
+    const head = h("div", "turn-head", h("span", "turn-no", title), h("span", "turn-time mono", clock()), badges);
+    const el = h("article", `turn is-new${kind === "live" ? " is-live" : kind === "result" ? " is-result" : ""}`, head);
+    el.addEventListener("animationend", () => el.classList.remove("is-new"), { once: true });
+    return { el, head, badges, kind, thumbs: null, thumbCount: 0, thumbAt: 0, sv: null, svBody: null, user: null, intentRow: null, cmdRow: null, pending: null, ended: false };
+  }
+  function ensureSv(g, label) {
+    if (g.sv) return;
+    g.svBody = h("div", "row-body");
+    g.sv = row("sv", label, g.svBody);
+    // đặt trước ảnh thu nhỏ / lệnh / câu chờ nếu đã có
+    const after = g.cmdRow || g.thumbs || g.pending;
+    after ? g.el.insertBefore(g.sv, after) : g.el.append(g.sv);
+  }
+  function addThumb(g, url, caption) {
+    if (!url) return;
+    if (!g.thumbs) {
+      g.thumbs = h("div", "thumbs");
+      g.pending ? g.el.insertBefore(g.thumbs, g.pending) : g.el.append(g.thumbs);
+    }
+    const img = h("img");
+    img.src = url;
+    img.alt = `Khung hình lúc đó: ${caption}`;
+    img.width = THUMB_W;
+    img.height = THUMB_H;
+    g.thumbs.append(h("figure", "thumb", img, h("figcaption", "", caption)));
+    g.thumbAt = performance.now();
+    if (++g.thumbCount > 3) { g.thumbs.firstElementChild.remove(); g.thumbCount--; }
   }
 
   return {
@@ -228,28 +448,67 @@ const history = (() => {
           pendingGroup.pending.dataset.answered = "1";
           pendingGroup = null;
         }
-        const user = h("div", "bubble user dim", h("span", "who", "Bạn"), h("p", "", "Đang nghe…"));
-        const el = h("article", "turn", user);
-        add(el);
-        groups.set(id, { el, user, sv: null, pending: null, ended: false });
+        const g = newGroup("turn", `Lượt ${++seq}`);
+        g.userBody = h("p", "", "Đang nghe…");
+        g.userBodyWrap = h("div", "row-body dim", g.userBody);
+        g.user = row("user", "Người dùng nói", g.userBodyWrap);
+        g.el.append(g.user);
+        add(g.el);
+        groups.set(id, g);
         liveGroup = null;
       });
     },
-    transcript(id, text) {
-      const g = groups.get(id);
-      if (!g) return;
+    /** Khung `trace`: transcript + ý định/làn + câu đang chờ. */
+    trace(f) {
+      const g = groups.get(f.turn);
+      if (!g || !g.user) return;
       stick(() => {
-        g.user.classList.toggle("dim", !text);
-        g.user.querySelector("p").textContent = text || "(không nhận ra lời nói)";
+        g.userBodyWrap.classList.toggle("dim", !f.transcript);
+        g.userBody.textContent = f.transcript || "(không nhận ra lời nói)";
+        const pills = h("div", "row-body");
+        if (f.intent) pills.append(pill(f.intent, true));
+        if (f.lane) pills.append(pill(`làn ${f.lane}`));
+        if (f.source) pills.append(pill(f.source));
+        if (typeof f.confidence === "number") pills.append(pill(`${fmtNum(f.confidence * 100, 1)}%`));
+        if (!pills.childNodes.length) pills.append(h("span", "quote dim", "Chưa xác định ý định"));
+        const r = row("intent", "Ý định", pills);
+        g.intentRow ? g.intentRow.replaceWith(r) : g.user.after(r);
+        g.intentRow = r;
+        g.intent = f.intent || "";
+        g.lane = f.lane || "";
+        if (f.pending) {
+          g.pending = h("p", "pending", `Đang chờ trả lời: ${f.pending}`);
+          g.el.append(g.pending);
+          pendingGroup = g;
+        }
+        if (g.photo && wantsPhoto(g)) { addThumb(g, g.photo, "Ảnh lúc bấm nút"); g.photo = null; }
       });
     },
-    pending(id, text) {
+    /** Ảnh kính chụp lúc bấm nút: chỉ gắn vào thẻ của lượt cần nhìn (hỏi cảnh, đọc chữ...). */
+    photo(id, url) {
       const g = groups.get(id);
-      if (!g || !text) return;
+      if (!g || !url) return;
+      g.photo = url;
+      if (g.intent !== undefined && wantsPhoto(g)) stick(() => { addThumb(g, url, "Ảnh lúc bấm nút"); g.photo = null; });
+    },
+    latency(id, ms) {
+      const g = groups.get(id);
+      if (!g || g.latChip) return;
+      g.latChip = h("span", "chip lat", icon("i-clock"), `Tiếng đầu ${fmtMs(ms)}`);
+      g.latChip.title = "Từ lúc kính nhả nút tới lúc tiếng trả lời đầu tiên tới (đo ở trang xem)";
+      g.badges.append(g.latChip);
+    },
+    /** Trạng thái lệnh gửi điện thoại của lượt (khung `trace` làn D, `reply_end`, kết quả `result-*`). */
+    cmd(id, t) {
+      const g = groups.get(id);
+      if (!g || !g.user) return;
       stick(() => {
-        g.pending = h("p", "pending", `Đang chờ trả lời: ${text}`);
-        g.el.append(g.pending);
-        pendingGroup = g;
+        const body = h("div", "row-body", stateChip(t.state), h("span", "cmd-text", [t.name, t.args].filter(Boolean).join(" · ")));
+        if (t.result) body.append(h("span", "cmd-text quote", `“${t.result}”`));
+        const r = row("cmd", "Điện thoại", body);
+        if (g.cmdRow) g.cmdRow.replaceWith(r);
+        else (g.sv && g.sv.after(r)) || (g.intentRow || g.user).after(r);
+        g.cmdRow = r;
       });
     },
     /** `reply_end` của lượt: câu nói sau đó mang cùng `turn` là của live (nav/OCR), không phải của lượt này. */
@@ -263,43 +522,111 @@ const history = (() => {
         const base = String(turn || "").replace(/\.\d+$/, "");
         const result = base.startsWith("result-");
         let g = groups.get(base) || groups.get(turn);
-        // Live mang id lượt đã mở nó: sau reply_end phải sang bong bóng riêng, nếu không
-        // nó chui lên bong bóng cũ (sai thứ tự thời gian) và phình mãi.
+        // Live mang id lượt đã mở nó: sau reply_end phải sang thẻ riêng, nếu không
+        // nó chui lên thẻ cũ (sai thứ tự thời gian) và phình mãi.
         if (g && g.ended && !result) g = null;
         if (!g) {
           if (!result && liveGroup && liveGroup.turn === base) g = liveGroup;
           else {
-            const sv = svBubble(result ? "Kết quả từ điện thoại" : "SeeVia · trực tiếp", result ? "is-result" : "is-live");
-            const el = h("article", "turn", sv);
-            add(el);
-            g = { el, user: null, sv, turn: base };
+            g = newGroup(result ? "result" : "live", result ? "Kết quả từ điện thoại" : "Kính nói · trực tiếp");
+            g.turn = base;
+            add(g.el);
             if (result) groups.set(base, g); else liveGroup = g;
           }
         }
-        if (!g.sv) {
-          g.sv = svBubble("SeeVia");
-          g.pending ? g.el.insertBefore(g.sv, g.pending) : g.el.append(g.sv);
-        }
+        ensureSv(g, g.kind === "turn" ? "Kính trả lời" : g.kind === "live" ? "Kính nói" : "Kết quả");
         // Cue lặp liền nhau ("Quay sang trái." mỗi khung) gộp thành một dòng có số lần.
-        const last = g.sv.lastElementChild;
-        if (last && last.tagName === "P" && last.dataset.text === text) {
+        const last = g.svBody.lastElementChild;
+        if (last && last.dataset.text === text) {
           const n = (Number(last.dataset.n) || 1) + 1;
           last.dataset.n = String(n);
           last.textContent = `${text} ×${n}`;
         } else {
           const p = h("p", "", text);
           p.dataset.text = text;
-          g.sv.append(p);
+          g.svBody.append(p);
+          if (g.kind === "live") {
+            const ev = freshEvidence();
+            if (ev && ev.at > g.thumbAt) addThumb(g, ev.url, ev.label);
+          }
         }
+        if (result) tasks.result(text);
       });
     },
   };
 })();
 
+const wantsPhoto = (g) => g.lane === "B" || /ocr|read|describe|find|money|scene|space/i.test(g.intent || "");
+
+// ---------------------------------------------------------------------------
+// Ô "Điện thoại": ảnh thật (adb, tuỳ chọn) hoặc khung vẽ bằng HTML theo lệnh server gửi
+// ---------------------------------------------------------------------------
+
+function taskCard(t) {
+  const card = h("article", "task",
+    h("div", "task-head", icon(t.icon), h("span", "task-name", t.name), stateChip(t.state)));
+  card.dataset.state = t.state;
+  if (t.args) card.append(h("p", "task-arg", t.args));
+  if (t.result) card.append(h("p", "task-res", `“${t.result}”`));
+  if (t.live) card.append(h("p", "ph-live", t.live));
+  const when = new Date(t.at).toLocaleTimeString("vi-VN", { hour12: false });
+  card.append(h("p", "task-meta mono", `${when} · ${CMD_STATE[t.state]?.[1] || ""}`));
+  return card;
+}
+
+function renderPhone() {
+  const box = $("ph-tasks");
+  box.replaceChildren();
+  if (!tasks.list.length) {
+    box.append(h("p", "ph-empty", "Chưa có lệnh nào gửi điện thoại. Thử nói “Dẫn đường”, “Gọi cho mẹ” hoặc “Phát nhạc”."));
+    return;
+  }
+  for (const t of [...tasks.list].reverse()) box.append(taskCard(t));
+}
+setInterval(() => { $("ph-clock").textContent = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false }); }, 5000);
+$("ph-clock").textContent = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+/** Luồng màn hình thật: bật khi serve.py chạy với --phone-mirror và điện thoại nối adb. Lỗi/mất thì về khung vẽ. */
+const phoneMirror = (() => {
+  const img = $("phone-img"), root = $("phone"), tasksBox = $("ph-tasks");
+  let retry = 0, active = false, enabled = false;
+  const place = (real) => {
+    root.dataset.mirror = real ? "on" : "off";
+    $("ph-sub").textContent = real ? "màn hình thật (adb)" : "mô phỏng theo lệnh server gửi";
+    // Có ảnh thật: thẻ tác vụ nằm dưới khung. Không có: nằm trong màn hình vẽ.
+    if (real) $("phone-frame").after(tasksBox); else $("phone-screen").append(tasksBox);
+  };
+  const off = () => {
+    active = false;
+    img.hidden = true;
+    img.removeAttribute("src");
+    place(false);
+  };
+  const schedule = () => { clearTimeout(retry); if (enabled && !document.hidden) retry = setTimeout(probe, 20000); };
+  img.addEventListener("load", () => { if (!active) { active = true; img.hidden = false; place(true); } });
+  img.addEventListener("error", () => { off(); schedule(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!enabled) return;
+    if (document.hidden) { clearTimeout(retry); off(); } else probe(); // tab ẩn: ngắt luồng để điện thoại khỏi quay vô ích
+  });
+  async function probe() {
+    try {
+      const c = await (await fetch("config.json", { cache: "no-store" })).json();
+      enabled = !!c.phone_mirror;
+    } catch { enabled = false; }
+    if (!enabled) return off();
+    img.src = `phone/stream.mjpg?ts=${Date.now()}`;
+    schedule();
+  }
+  return { probe };
+})();
+renderPhone();
+
 // ---------------------------------------------------------------------------
 // Chế độ hiện tại + thống kê khung live
 // ---------------------------------------------------------------------------
 
+let lastModes = null;
 function showMode(f) {
   const on = { obstacle: !!f.obstacle, ocr: !!f.ocr, nav: !!f.navigating, music: !!f.music, call: !!f.call };
   for (const li of document.querySelectorAll("#modes .mode")) {
@@ -307,6 +634,12 @@ function showMode(f) {
     li.dataset.on = on[k] ? "1" : "0";
     li.querySelector(".sr").textContent = on[k] ? "đang bật" : "đang tắt";
     if (k === "call") $("call-who").textContent = typeof f.call === "string" && f.call ? ` · ${f.call}` : "";
+  }
+  const names = [...document.querySelectorAll('#modes .mode[data-on="1"] .mode-name')].map((e) => e.textContent.trim());
+  const sig = names.join("|");
+  if (sig !== lastModes) {
+    lastModes = sig;
+    $("modes-live").textContent = names.length ? `Chế độ đang bật: ${names.join(", ")}` : "Không có chế độ nào đang bật";
   }
 }
 function resetMode() {
@@ -523,15 +856,23 @@ function onDet(f, bmp) {
       $("hz-text").textContent = `Mức ${level} · ${kind} ${DIR_VI[dir] || ""}`.trim();
     });
     speaker.beep(level, dir);
-    hazardLog(f.hazard);
+    const url = makeThumb(pov.bmp, paintDet(pov.det?.boxes || []));
+    if (url) evidence.hazard = { url, at: performance.now(), label: `Cảnh báo mức ${level} · ${kind} ${DIR_VI[dir] || ""}`.trim() };
+    hazardLog(f.hazard, url);
   }
 }
 
-function hazardLog({ level, dir, kind }) {
+function hazardLog({ level, dir, kind }, thumb) {
   const list = $("hlog");
   list.querySelector(".empty")?.remove();
+  let pic;
+  if (thumb) {
+    pic = h("img", "hthumb");
+    pic.src = thumb;
+    pic.alt = `Khung hình lúc cảnh báo ${kind}`;
+  } else pic = h("span", "hthumb none");
   list.prepend(
-    h("li", "", h("span", "t", clock()), h("span", `lv lv-${level}`, `L${level}`), h("span", "", `${kind} · ${DIR_VI[dir] || dir}`)),
+    h("li", "", pic, h("span", "t", clock()), h("span", `lv lv-${level}`, `L${level}`), h("span", "what", `${kind} · ${DIR_VI[dir] || dir}`)),
   );
   while (list.children.length > 30) list.lastChild.remove();
 }
@@ -541,6 +882,8 @@ function onOcr(f, bmp) {
   setPov(bmp, "live", { ocr: { w: f.w || 1, h: f.h || 1, boxes: Array.isArray(f.boxes) ? f.boxes : [] } });
   if (f.cue) ocrChip(f.cue);
   if (f.capture) {
+    const url = makeThumb(pov.bmp, pov.ocr ? paintOcr(pov.ocr) : undefined);
+    if (url) evidence.ocr = { url, at: performance.now(), label: "Ảnh chụp để đọc chữ" };
     retrigger($("flash"), "go", 400);
     if (!f.cue) ocrChip("captured");
   }
@@ -553,6 +896,8 @@ function onOcr(f, bmp) {
 function setConn(state, text) {
   $("conn-dot").dataset.state = state;
   $("conn-text").textContent = text;
+  $("banner").hidden = state !== "down";
+  $("banner-text").textContent = state === "down" ? text : "";
   renderEmpty();
 }
 
@@ -576,6 +921,14 @@ function renderEmpty() {
       ? "Kính chưa kết nối. Bật kính để bắt đầu."
       : "Kính đã kết nối. Bấm nút trên kính để gửi hình.";
   $("stage-empty-msg").textContent = msg;
+  const hmsg = $("history-empty-msg");
+  if (hmsg) {
+    hmsg.textContent = !session.ready
+      ? "Chưa nối server nên chưa có hội thoại. Kiểm tra Cài đặt."
+      : !glasses.online
+        ? "Kính chưa kết nối. Khi kính bật và bấm nút, từng lượt hội thoại hiện ở đây."
+        : "Chưa có lượt nào. Bấm nút trên kính và nói.";
+  }
 }
 
 // Trạng thái lượt hiện tại: id do KÍNH sinh (turn_start), trang chỉ quan sát.
@@ -682,7 +1035,11 @@ const session = {
     if (buf.length < 2) return;
     switch (buf[0]) {
       case 0x01: // ảnh kính gửi lúc bấm nút
-        decodeJpeg(buf.subarray(1)).then((bmp) => bmp && setPov(bmp, "turn"));
+        decodeJpeg(buf.subarray(1)).then((bmp) => {
+          if (!bmp) return;
+          setPov(bmp, "turn");
+          history.photo(cur.id, makeThumb(bmp));
+        });
         break;
       case 0x04: // khung live server vừa xử lý; JSON det/ocr của nó đến ngay sau
         pendingFrame = decodeJpeg(buf.subarray(1));
@@ -691,7 +1048,11 @@ const session = {
         if (!cur.firstAudio && cur.releaseAt) {
           cur.firstAudio = true;
           const d = timeline.el("reply").querySelector(".step-detail");
-          d.append(pill(`tiếng đầu sau ${fmtMs(performance.now() - cur.releaseAt)} (đo ở trang xem)`, true));
+          const ttfa = performance.now() - cur.releaseAt;
+          const tp = pill(`tiếng đầu sau ${fmtMs(ttfa)}`, true);
+          tp.title = "Đo ở trang xem, từ lúc kính nhả nút";
+          d.append(tp);
+          history.latency(cur.id, ttfa);
         }
         speaker.push(buf.subarray(1));
         if (settings.sound && media.ctx?.state === "suspended") setNote("Chạm vào trang một lần để bật âm thanh.");
@@ -733,8 +1094,8 @@ const session = {
         timeline.set("stt", "active", "Server đang nhận dạng…");
         break;
       case "trace":
-        history.transcript(f.turn, f.transcript);
-        history.pending(f.turn, f.pending);
+        history.trace(f);
+        tasks.trace(f);
         if (f.turn === cur.id) showTrace(f);
         break;
       case "say":
@@ -754,6 +1115,7 @@ const session = {
         break;
       case "reply_end":
         history.endTurn(f.turn);
+        tasks.replyEnd(f.turn);
         if (f.turn === cur.id) timeline.el("reply").dataset.state = "done";
         break;
       case "det":
@@ -769,7 +1131,8 @@ const session = {
       case "mode": showMode(f); break;
       case "cam": stats.cmd = `${f.size || "?"} · ${f.fps || "?"} fps`; stats.render(); break;
       case "end": stats.cmd = ""; stats.render(); break;
-      case "capture": case "hazard": case "reply": case "cue": case "call_state": case "pong": break; // đã thể hiện qua det/ocr/say
+      case "call_state": tasks.callState(f); break;
+      case "capture": case "hazard": case "reply": case "cue": case "pong": break; // đã thể hiện qua det/ocr/say
       case "error": setNote(`Server báo lỗi: ${f.code}`); setTimeout(() => setNote(""), 4000); break;
       default: break;
     }
@@ -823,4 +1186,4 @@ fetch("config.json", { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : {}))
   .then((c) => { serverDevice = typeof c.device === "string" ? c.device : ""; })
   .catch(() => {}) // mở bằng file:// hoặc server cũ: dùng giá trị nhập ở Cài đặt
-  .finally(() => session.connect());
+  .finally(() => { session.connect(); phoneMirror.probe(); });

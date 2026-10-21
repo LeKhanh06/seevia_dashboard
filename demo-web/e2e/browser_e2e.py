@@ -337,7 +337,7 @@ async def sc_describe(base, r, **_):
         hist = await s.text("#history")
         r.check("POV hiện ảnh kính gửi lúc bấm nút", await s.view.get_attribute("#stage", "data-frame") == "1" and "Ảnh kính gửi" in await s.text("#stat-src"))
         r.check("timeline có transcript và ý định", "Mô tả không gian" in timeline and "space" in timeline)
-        r.check("lịch sử có câu hỏi và câu trả lời", "Mô tả không gian" in hist and "SEEVIA" in hist.upper())
+        r.check("lịch sử có câu hỏi và câu trả lời", "Mô tả không gian" in hist and "KÍNH TRẢ LỜI" in hist.upper())
         ttfa = parse_ms(timeline)
         r.metric("ttfa_ms", ttfa)
         r.check("tiếng đầu < 1,5 s", ttfa is not None and ttfa < 1500, ttfa)
@@ -454,6 +454,140 @@ async def sc_fake_flow(base, r, **_):
     obs.stop()
 
 
+OVERFLOW_JS = """() => {
+  const sel = '.row-body, .row-label, .task-name, .task-arg, .chip, .mode, .step-head b, .turn-no, .glasses, .conn, .sec-title, .btn, .modes-title, .pill, .hlog .what, .ph-status';
+  return [...document.querySelectorAll(sel)].filter(e => e.offsetParent && e.getClientRects().length &&
+    e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== 'visible').map(e => (e.className || e.tagName) + ':' + e.textContent.trim().slice(0, 30));
+}"""
+
+
+async def sc_fake_tour(base, r, **_):
+    """(chỉ --mode fake) Cả kịch bản 8 lượt ở 1920x1080: thẻ hội thoại, lệnh điện thoại, ảnh thu nhỏ, ô Điện thoại, không chữ bị cắt."""
+    async with Session(base, r, cam_file("nav"), viewport={"width": 1920, "height": 1080}) as s:
+        await ready_checks(s, r, expect_device="kinh-hien-tai")
+        r.check("chưa có lượt: câu rỗng rõ ràng", "Bấm nút trên kính" in await s.text("#history-empty-msg"), await s.text("#history-empty-msg"))
+        r.check("ô Điện thoại rỗng có hướng dẫn", "Chưa có lệnh nào" in await s.text("#ph-tasks"))
+        await r.shot(s.view, "0_empty")
+        await s.start_devices()
+        for i, wait in enumerate((4, 9, 9, 4, 6, 4, 6, 4)):
+            await s.say(None, tail=0.8, silent=1.0)
+            await asyncio.sleep(wait)
+            if i == 3:  # lượt "gọi cho mẹ": đang chờ xác nhận
+                r.check("lệnh gọi điện chờ xác nhận", "CHỜ BẠN TRẢ LỜI" in (await s.text("#ph-tasks")).upper(), (await s.text("#ph-tasks"))[:80])
+        await asyncio.sleep(3)
+        turns = await s.view.locator("#history .turn").count()
+        r.metric("turn_cards", turns)
+        r.check("mọi lượt đều có thẻ (>= 8 thẻ người dùng)", await s.view.locator("#history .turn .row-user").count() >= 8, turns)
+        hist = await s.text("#history")
+        r.check("thẻ có 'Người dùng nói' + 'Kính trả lời' + ý định + độ trễ", all(k in hist.upper() for k in ("NGƯỜI DÙNG NÓI", "KÍNH TRẢ LỜI", "Ý ĐỊNH", "TIẾNG ĐẦU")), hist[:80])
+        r.check("thẻ lệnh điện thoại có trạng thái xong + kết quả", "XONG" in hist.upper() and "CUỘC GỌI ĐÃ KẾT NỐI" in hist.upper())
+        tasks = (await s.text("#ph-tasks")).upper()
+        r.metric("phone_tasks", tasks.replace("\n", " ¦ ")[:200])
+        r.check("ô Điện thoại: gọi điện + phát nhạc đã xong", "GỌI ĐIỆN" in tasks and "PHÁT NHẠC" in tasks and tasks.count("XONG") >= 2, tasks[:120])
+        r.check("ô Điện thoại có cuộc gọi đang diễn ra", "ĐANG TRONG CUỘC GỌI" in tasks)
+        r.check("log cảnh báo có ảnh thu nhỏ đúng khung", await s.view.locator("#hlog img.hthumb").count() >= 1)
+        r.check("thẻ trực tiếp gắn ảnh thu nhỏ", await s.view.locator("#history .thumb img").count() >= 1)
+        over = await s.view.evaluate(OVERFLOW_JS)
+        r.check("không chữ bị cắt ở 1920x1080", not over, over)
+        sw = await s.view.evaluate("document.documentElement.scrollWidth")
+        r.check("1920x1080 không cuộn ngang", sw <= 1920, sw)
+        await r.shot(s.view, "1_final")
+        await s.view.evaluate("document.getElementById('history').scrollTop = 0")
+        await asyncio.sleep(0.4)
+        await r.shot(s.view, "2_history_top")
+        r.check("không có lỗi JS", not s.errors, s.errors)
+
+
+async def sc_fake_client(base, r, **_):
+    """(chỉ --mode fake) client.html: giữ phím Space để nói, chỉ báo mức âm micro, trạng thái đọc được bằng trình đọc màn hình."""
+    async with Session(base, r, cam_file("nav"), clips=["alert_on"]) as s:
+        await ready_checks(s, r, expect_device="kinh-hien-tai")
+        attrs = await s.client.evaluate("""() => ({
+          meter: document.getElementById('meter').getAttribute('role'),
+          status: document.getElementById('status').getAttribute('role'),
+          shortcut: document.getElementById('ptt').getAttribute('aria-keyshortcuts'),
+          banner: !!document.getElementById('banner') })""")
+        r.check("client: có role=meter, vùng trạng thái aria-live, aria-keyshortcuts", attrs["meter"] == "meter" and attrs["status"] == "status" and attrs["shortcut"] == "Space" and attrs["banner"], attrs)
+        await s.start_devices()
+        r.check("client: micro bật, chưa nghe thì chỉ báo nghỉ", await s.client.get_attribute("#meter-box", "data-active") == "0")
+        n0 = len([1 for _, p in s.sent if isinstance(p, str) and '"turn_start"' in p])
+        await s.client.keyboard.down("Space")  # tiêu điểm không ở ô nhập nên Space = giữ để nói
+        await asyncio.sleep(0.15)
+        await s.client.evaluate("n=>window.__say(n)", "alert_on")
+        await asyncio.sleep(0.8)
+        r.check("client: giữ Space = nút Nói đang bấm", await s.client.get_attribute("#ptt", "aria-pressed") == "true")
+        status = await s.client.inner_text("#status")
+        r.check("client: trạng thái đọc được ('Đang nghe bạn…')", "Đang nghe" in status, status)
+        now = int(await s.client.get_attribute("#meter", "aria-valuenow"))
+        r.metric("meter_valuenow", now)
+        r.check("client: chỉ báo mức âm micro nhích lên khi có tiếng", now > 0 and await s.client.get_attribute("#meter-box", "data-active") == "1", now)
+        await r.shot(s.client, "1_listening")
+        await s.client.keyboard.up("Space")
+        await asyncio.sleep(0.6)
+        n1 = len([1 for _, p in s.sent if isinstance(p, str) and '"turn_start"' in p])
+        r.check("client: thả Space = gửi lượt", n1 == n0 + 1 and any(isinstance(p, str) and '"turn_end"' in p for _, p in s.sent))
+        r.check("client: thả phím thì chỉ báo về nghỉ", await s.client.get_attribute("#meter-box", "data-active") == "0" and await s.client.get_attribute("#ptt", "aria-pressed") == "false")
+        await asyncio.sleep(3)
+        await s.client.keyboard.press("Space")  # nhấn nhanh cũng phải là một lượt hợp lệ, không làm hỏng trạng thái
+        await asyncio.sleep(1.5)
+        r.check("client: sau lượt vẫn dùng được (không kẹt)", await s.client.get_attribute("#ptt", "aria-pressed") == "false")
+        r.check("client: không có lỗi JS", not s.errors, s.errors)
+
+
+async def sc_phone_mirror(base, r, upstream="", **_):
+    """(chỉ --mode fake) serve.py --phone-mirror với adb GIẢ (ffmpeg testsrc, KHÔNG gọi adb thật): ô Điện thoại hiện ảnh thật + thẻ tác vụ dưới."""
+    import socket
+    import threading
+
+    fake_adb = os.path.join(r.out, "fake_adb.sh")
+    with open(fake_adb, "w") as fh:
+        fh.write("#!/bin/sh\nexec ffmpeg -v error -f lavfi -i testsrc=size=540x1170:rate=10 -t 20 -f h264 -\n")
+    os.chmod(fake_adb, 0o755)
+    ls = socket.socket()
+    ls.bind(("127.0.0.1", 0))
+    ls.listen(8)
+    ls.settimeout(0.2)
+    stop = threading.Event()
+
+    def accept():
+        while not stop.is_set():
+            try:
+                ls.accept()[0].close()
+            except OSError:
+                pass
+
+    threading.Thread(target=accept, daemon=True).start()
+    web = 18781
+    env = dict(os.environ, SEEVIA_ADB=fake_adb, SEEVIA_ADB_PORT=str(ls.getsockname()[1]))
+    proc = subprocess.Popen([sys.executable, os.path.join(DEMO, "serve.py"), "--port", str(web), "--upstream", upstream, "--token", "tok-chi-nam-o-server",
+                             "--device", "kinh-hien-tai", "--phone-mirror"], cwd=REPO, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        await asyncio.sleep(1.5)
+        async with Session(f"http://localhost:{web}", r, cam_file("nav"), viewport={"width": 1920, "height": 1080}) as s:
+            for _ in range(30):
+                if await s.view.get_attribute("#phone", "data-mirror") == "on":
+                    break
+                await asyncio.sleep(0.5)
+            r.check("ô Điện thoại: có luồng thật thì hiện ảnh", await s.view.get_attribute("#phone", "data-mirror") == "on")
+            await asyncio.sleep(1.5)
+            w = await s.view.evaluate("document.getElementById('phone-img').naturalWidth")
+            r.metric("phone_img_naturalWidth", w)
+            r.check("ảnh điện thoại đã giải mã (540 px rộng)", w == 540, w)
+            await s.start_devices()
+            await s.say(None, tail=0.8, silent=1.0)
+            await asyncio.sleep(3)
+            await s.say(None, tail=0.8, silent=1.0)
+            await asyncio.sleep(3)
+            r.check("thẻ tác vụ nằm dưới khung ảnh", await s.view.evaluate("(() => { const a = document.getElementById('phone-frame'), b = document.getElementById('ph-tasks'); return !!(a.nextElementSibling === b); })()"))
+            await r.shot(s.view, "1_mirror")
+            r.check("không có lỗi JS", not s.errors, s.errors)
+    finally:
+        stop.set()
+        proc.terminate()
+        proc.wait(5)
+        ls.close()
+
+
 async def sc_layout(base, r, **_):
     """Bố cục: máy tính và điện thoại, hộp Cài đặt, không cuộn ngang."""
     for name, vp in (("desktop", {"width": 1440, "height": 900}), ("phone", {"width": 390, "height": 800})):
@@ -488,9 +622,9 @@ async def sc_bad_token(base, r, upstream=None, **_):
 
 
 SCENARIOS = {"describe": sc_describe, "nav": sc_nav, "ocr-direct": sc_ocr_direct, "ocr-live": sc_ocr_live,
-             "fake-flow": sc_fake_flow, "layout": sc_layout, "bad-token": sc_bad_token}
+             "fake-flow": sc_fake_flow, "fake-tour": sc_fake_tour, "fake-client": sc_fake_client, "phone-mirror": sc_phone_mirror, "layout": sc_layout, "bad-token": sc_bad_token}
 DEFAULT = {"real": ["describe", "nav", "ocr-direct", "ocr-live", "layout", "bad-token"],
-           "fake": ["fake-flow", "layout", "bad-token"]}
+           "fake": ["fake-flow", "fake-tour", "fake-client", "phone-mirror", "layout", "bad-token"]}
 
 
 # ---------------------------------------------------------------------------

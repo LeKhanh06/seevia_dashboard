@@ -42,6 +42,9 @@ CLASS_HEIGHT_M: dict[str, float] = {
     "parking_meter": 1.2,         # cột thu phí đỗ xe
 }
 
+# Lớp KHÔNG có chiều cao điển hình (cột phố cao ~1-8 m): không cho Z theo chiều cao, chỉ mặt đất + tỉ lệ bề rộng.
+NO_HEIGHT_KINDS = frozenset({"pole", "warning_column", "traffic_light", "stop_sign", "plant", "parking_meter"})
+
 # Bề rộng điển hình (m) của từng `kind`, chỉ để định Z cho track MỚI có đáy hộp bị cắt (σ = 0,4·Z).
 CLASS_WIDTH_M: dict[str, float] = {
     "person": 0.5,                # vai người lớn nhìn thẳng
@@ -115,7 +118,7 @@ class Estimate:
 def _height_z(det: hazard.Detection, cam: Camera, h_px: float) -> tuple[float, float] | None:
     """(Z, σ) theo chiều cao lớp; None nếu lớp lạ hoặc hộp bị cắt trên/dưới."""
     H = CLASS_HEIGHT_M.get(det.kind)
-    if H is None or det.box[1] <= _EDGE or det.box[3] >= 1 - _EDGE or h_px <= 1.0:
+    if H is None or det.kind in NO_HEIGHT_KINDS or det.box[1] <= _EDGE or det.box[3] >= 1 - _EDGE or h_px <= 1.0:
         return None
     z = cam.f_px * H / h_px
     return z, CLASS_HEIGHT_REL_SIGMA.get(det.kind, _REL_SIGMA_DEFAULT) * z
@@ -153,7 +156,8 @@ def estimate(det: hazard.Detection, cam: Camera, pitch_rad: float = 0.0) -> Esti
         return Estimate(math.nan, math.nan, math.nan, "clipped", bearing, zw)
     else:  # không nguồn nào hợp lệ (vd. đáy trên đường chân trời, lớp lạ): dùng bề rộng, rộng chuẩn = 0,5·H
         w_px = max((x1 - x0) * cam.w, 1.0)
-        z = min(cam.f_px * 0.5 * CLASS_HEIGHT_M.get(det.kind, _UNKNOWN_H) / w_px, _Z_MAX)
+        w_m = CLASS_WIDTH_M.get(det.kind, _UNKNOWN_W) if det.kind in NO_HEIGHT_KINDS else 0.5 * CLASS_HEIGHT_M.get(det.kind, _UNKNOWN_H)
+        z = min(cam.f_px * w_m / w_px, _Z_MAX)
         sigma, source = z * _WIDTH_REL, "width"
     return Estimate(z, (cx_px - cam.w / 2) * z / cam.f_px, sigma, source, (cx_px - cam.w / 2) / cam.f_px)
 

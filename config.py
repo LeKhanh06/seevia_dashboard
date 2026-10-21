@@ -279,6 +279,7 @@ MONEY_MODE = get("MONEY_MODE", "choice")
 # 1 lần từ khung live. τ 0,995 -> 0,999: test nói sai 3,6 -> 2,1 % (đổi lại từ chối 39 -> 49 %, phần đó đọc lại bù).
 MONEY_MIN_PROB = float(get("MONEY_MIN_PROB", "0.999"))
 # 1 = có đọc lại; 0 = hành vi cũ (không chắc thì nói "chưa đọc rõ", không mở live).
+# MONEY_RETRY=0 CHỈ tắt đọc lại; muốn khôi phục hoàn toàn hành vi cũ phải đặt thêm MONEY_MIN_PROB=0.995.
 MONEY_RETRY = get("MONEY_RETRY", "1") == "1"
 MONEY_RETRY_PROB = float(get("MONEY_RETRY_PROB", "0.999"))
 # Lượt đọc lại: bỏ mọi khung trong SETTLE_S đầu (để người dùng chỉnh tay theo hướng dẫn), rồi lấy khung đầu tiên đủ nét;

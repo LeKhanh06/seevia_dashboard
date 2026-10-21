@@ -88,7 +88,13 @@ def test_top_labels_runner_up_unsure_label():
 def test_top_labels_without_alternatives_or_logprobs_is_top1_only():
     ch = _choice("không rõ", [("không", 0.0, []), (" rõ", 0.0, [])])
     assert read_money.top_labels(ch, "không rõ") == [("không rõ", 1.0)]
-    assert read_money.top_labels({"message": {"content": "không rõ"}}, "không rõ") == []
+    # thiếu logprobs: vẫn giữ nhãn top-1 để hint() không mất "không rõ" (xác suất không biết = None)
+    assert read_money.top_labels({"message": {"content": "không rõ"}}, "không rõ") == [("không rõ", None)]
+
+
+def test_unsure_without_logprobs_still_says_step_back():
+    top = read_money.top_labels({"message": {"content": "không rõ"}}, "không rõ")
+    assert read_money.hint(top, 500.0) == BACK
 
 
 # ── ngưỡng ───────────────────────────────────────────────────────────────────────────────────
@@ -270,6 +276,66 @@ def test_money_retry_drops_settle_frames_reads_first_sharp_one_and_ends(monkeypa
     assert box.texts[0] == json.loads(protocol.cam("vga", 5))
     assert box.types() == ["cam", "end"] and box.said == ["50 nghìn đồng"]
     assert len(seen) == 1  # đúng 1 lượt Gemma (chỉ đọc 1 lần)
+
+
+def test_money_retry_clocks_start_after_cam_is_sent(monkeypatch):
+    """Gửi `cam` mất 0,6 s: vẫn phải chờ trọn SETTLE (0,3 s) SAU cam và còn trọn TIMEOUT (1,0 s) sau cam."""
+    _fast(monkeypatch, settle=0.3, timeout=1.0)
+    box = _Box(monkeypatch)
+    cam_sent = asyncio.Event()
+
+    async def slow_send(s):
+        box.texts.append(json.loads(s))
+        if json.loads(s)["t"] == "cam":
+            await asyncio.sleep(0.6)
+            cam_sent.set()
+
+    async def send_bytes(b):
+        pass
+
+    box.ws = LiveSocket(slow_send, send_bytes)
+    used = []
+
+    async def fake_frame(jpeg, min_prob):
+        used.append(jpeg)
+        return "50 nghìn đồng", [("50 nghìn đồng", 1.0)]
+
+    monkeypatch.setattr(ocr_live, "read_money_frame", fake_frame)
+    early, late = _jpeg(True, 64, 48), _jpeg(True, 192, 144)
+
+    async def main():
+        task = asyncio.create_task(ocr_live.run(box.ws, box.session))
+        await cam_sent.wait()
+        await asyncio.sleep(0.05)
+        box.ws.feed_frame(early)   # 0,05 s sau cam: còn trong thời gian chỉnh tay -> bỏ
+        await asyncio.sleep(0.65)
+        box.ws.feed_frame(late)    # 0,7 s sau cam: quá hạn nếu đồng hồ tính từ trước cam (0,6 + 0,7 > 1,0)
+        await task
+
+    asyncio.run(main())
+    assert used == [late] and box.said == ["50 nghìn đồng"]
+
+
+def test_money_retry_settle_uses_receive_time_not_processing_time(monkeypatch):
+    """Khung NHẬN lúc 0,3 s sau cam (settle 0,6 s) nhưng vòng lặp chỉ xử lý lúc 1,0 s: vẫn phải bỏ."""
+    _fast(monkeypatch, settle=0.6, timeout=2.0)
+    box = _Box(monkeypatch)
+    orig_take, calls = ocr_live._Mailbox.take, []
+
+    async def late_take(self, timeout):
+        if not calls:
+            calls.append(1)
+            await asyncio.sleep(1.0)  # vòng lặp bận: khung nằm trong hộp thư lâu
+        return await orig_take(self, timeout)
+
+    monkeypatch.setattr(ocr_live._Mailbox, "take", late_take)
+
+    async def boom(jpeg, min_prob):
+        raise AssertionError("khung nhận trong thời gian chỉnh tay không được đọc")
+
+    monkeypatch.setattr(ocr_live, "read_money_frame", boom)
+    asyncio.run(_drive(box, [(0.3, _jpeg(True))]))
+    assert box.said == [read_money.RETRY_FAILED] and box.types() == ["cam", "end"]
 
 
 def test_money_retry_frame_used_is_the_first_sharp_after_settle(monkeypatch):

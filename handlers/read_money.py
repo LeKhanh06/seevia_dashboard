@@ -120,17 +120,17 @@ def _label_for_prefix(prefix: str, top1: str) -> str | None:
     return next((c for c in found if _x10(top1, c)), found[0])
 
 
-def top_labels(choice: dict, text: str) -> list[tuple[str, float]]:
+def top_labels(choice: dict, text: str) -> list[tuple[str, float | None]]:
     """[(nhãn đã chọn, xác suất), (nhãn thay thế mạnh nhất, xác suất tiền tố)] từ logprobs của lượt chọn nhãn.
 
     Nhãn thay thế = nhánh rẽ có xác suất lớn nhất: tại token thứ i, token khác `top_logprobs` ghép với phần đã chọn
     cho tiền tố của một nhãn khác trong CHOICES; xác suất = tích tới i-1 x xác suất token thay thế (cận dưới, phần đuôi
-    nhãn không tính). Không có logprobs -> []; không có nhánh nào hợp lệ -> chỉ top-1.
+    nhãn không tính). Thiếu logprobs (hoặc không tính được xác suất) -> chỉ top-1 với xác suất None, để `hint` vẫn thấy "không rõ"; không có nhánh nào hợp lệ -> chỉ top-1.
     """
     items = (choice.get("logprobs") or {}).get("content")
     p1 = prefix_prob(choice, len(text))
     if not items or p1 is None:
-        return []
+        return [(text, p1)]
     top, best = [(text, p1)], None
     pos, cum = 0, 0.0
     for it in items:
@@ -160,7 +160,7 @@ def hint(top: list[tuple[str, float]], sharpness: float | None) -> str:
     return COME_CLOSER
 
 
-async def choose_ranked(messages: list[dict]) -> tuple[str, float | None, list[tuple[str, float]]]:
+async def choose_ranked(messages: list[dict]) -> tuple[str, float | None, list[tuple[str, float | None]]]:
     """Như `choose` (cùng nhãn, cùng xác suất thô) kèm top-2 nhãn để chọn câu hướng dẫn."""
     text, choice = await choose_raw(messages, top_logprobs=_TOP_LOGPROBS)
     return text, prefix_prob(choice, len(text)), top_labels(choice, text)

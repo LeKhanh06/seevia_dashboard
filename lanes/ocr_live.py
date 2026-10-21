@@ -142,11 +142,14 @@ class _Mailbox:
 
     def __init__(self) -> None:
         self.frame: bytes | None = None
+        self.received_at = 0.0  # lúc `put` khung đang giữ
+        self.taken_at = 0.0     # lúc NHẬN của khung `take` vừa trả (khác lúc xử lý khi vòng lặp bận)
         self.event = asyncio.Event()
         self.closed = False
 
     def put(self, frame: bytes) -> None:
         self.frame = frame
+        self.received_at = time.monotonic()
         self.event.set()
 
     async def take(self, timeout: float) -> bytes | None:
@@ -156,6 +159,7 @@ class _Mailbox:
             return None
         self.event.clear()
         frame, self.frame = self.frame, None
+        self.taken_at = self.received_at
         return frame
 
 
@@ -200,17 +204,18 @@ async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> No
     """Đọc tiền lại MỘT lần sau câu hướng dẫn (final_router._money): bỏ khung trong MONEY_RETRY_SETTLE_S đầu cho người
     dùng chỉnh tay, lấy khung đầu tiên đủ nét (độ nét >= MONEY_BLUR_HINT); hết MONEY_RETRY_TIMEOUT_S thì khung nét nhất
     đã thấy; không có khung nào thì nói "vẫn chưa đọc chắc". Không bao giờ đọc lần thứ hai (người khiếm thị không kẹt vòng lặp)."""
+    await ws.send_text(protocol.cam("vga", 5))
+    # Đồng hồ tính từ SAU khi gửi `cam` (gửi chậm không được ăn vào thời gian chỉnh tay / hạn đọc).
     started = time.monotonic()
     settle_end, deadline = started + config.MONEY_RETRY_SETTLE_S, started + config.MONEY_RETRY_TIMEOUT_S
-    await ws.send_text(protocol.cam("vga", 5))
     best, best_score = None, -1.0
     while not box.closed and not session.closed.is_set():
         left = deadline - time.monotonic()
         if left <= 0:
             break
         frame = await box.take(min(0.5, left))
-        if frame is None or time.monotonic() < settle_end:
-            continue  # chưa có khung, hoặc khung chụp lúc người dùng còn đang chỉnh tay
+        if frame is None or box.taken_at < settle_end:
+            continue  # chưa có khung, hoặc khung NHẬN lúc người dùng còn đang chỉnh tay (không tính lúc xử lý)
         score = await asyncio.to_thread(read_money.blur_score, frame)
         if score is None:
             continue

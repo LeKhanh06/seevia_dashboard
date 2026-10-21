@@ -74,8 +74,8 @@ class _EarlyFinal:
 
 async def _early_final(ctx: TurnContext, transcriber: StreamingTranscriber, early: EarlyIntent,
                        ef: _EarlyFinal) -> None:
-    text = await asyncio.to_thread(transcriber.final)
-    key = transcriber.decoded_key
+    text = await transcriber.final_async()
+    key = transcriber.final_key
     ef.key, ef.text, ef.decision = None, text, None
     if not text.strip():
         return
@@ -103,7 +103,7 @@ async def _partial_loop(transcriber: StreamingTranscriber, early: EarlyIntent, s
         except asyncio.TimeoutError:
             pass
         if transcriber.has_new_audio():
-            text = await asyncio.to_thread(transcriber.partial)
+            text = await transcriber.partial_async()
         if text:
             early.on_partial(text)
         if (ef is not None and ctx is not None and transcriber.speech_ended
@@ -145,7 +145,7 @@ async def run(
 
     prewarmer = Prewarmer(device, turn_id)
     segmenter = vad.Segmenter() if vad.available() else None
-    transcriber = StreamingTranscriber(content_type, segmenter)
+    transcriber = StreamingTranscriber(content_type, segmenter, device_state=device_state)
     early = EarlyIntent(device_state, on_guess=prewarmer.on_guess)
     stop = asyncio.Event()
     ctx = TurnContext(device, turn_id, prewarmer, loop)
@@ -181,7 +181,7 @@ async def run(
         else:
             if ef is not None:
                 _discard_speculation(ctx)
-            text = await asyncio.to_thread(transcriber.final)
+            text = await transcriber.final_async()
             t_final = time.monotonic()
             _speculate(ctx, early, text)
             decision = await early.decide(text)
@@ -209,6 +209,7 @@ async def run(
         raise
     finally:
         early.cancel()
+        transcriber.cancel_prefetch()
 
     prewarmer.discard(keep=reply.live_token)
     reply.intent = reply.intent or decision.intent
@@ -233,6 +234,7 @@ async def run(
         "device": device, "turn": turn_id, "transport": transport, "intent": reply.intent,
         "lane": reply.lane, "source": decision.source, "confidence": decision.confidence,
         **{k: round(v, 4) for k, v in timings.items()}, "glasses": glasses,
+        **({"stt_dual": transcriber.dual_info()} if transcriber.dual_info() else {}),
     })
     confidence = decision.confidence if decision.backend and decision.confidence_known else None
     return TurnResult(reply, text, released, timings, decision.source, confidence)

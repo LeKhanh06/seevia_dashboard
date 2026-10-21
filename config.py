@@ -200,6 +200,35 @@ STT_HOTWORDS_FILE = get("STT_HOTWORDS_FILE", "")
 # Hotword theo người dùng (tên người thân từ care_links, `stt.set_user_hotwords`): tên đúng 90-92% -> 97-98%.
 STT_USER_HOTWORDS = get("STT_USER_HOTWORDS", "1") != "0"
 
+# STT hai nhánh song song (pipeline/stt_dual.py, docs/2026-10-22-stt-hai-nhanh.md): nhánh 2 nghe cùng audio, hai chuỗi
+# từ được căn chỉnh, chỗ mâu thuẫn thì Gemma chọn trong các câu ghép từ CHÍNH hai phương án đó (không tự viết câu mới).
+STT_DUAL = get("STT_DUAL", "0") == "1"
+STT_DUAL_MODEL_DIR = get("STT_DUAL_MODEL_DIR", "./models/stt_candidates/sherpa-onnx-zipformer-vi-int8-2025-04-20")
+STT_DUAL_DECODING = get("STT_DUAL_DECODING", "greedy_search")
+STT_DUAL_HOTWORDS = get("STT_DUAL_HOTWORDS", "0") == "1"
+STT_DUAL_NUM_THREADS = int(get("STT_DUAL_NUM_THREADS", "2"))
+# Nhánh 2 cũng giải trên partial (CPU gấp đôi lúc đang nói) để bản ghi cuối không phải chờ thêm nhánh 2.
+# Bản ghi cuối chỉ đợi nhánh 2 thêm tối đa ngần này ms sau khi nhánh 1 xong; trễ hơn thì dùng nhánh 1 (bỏ phiếu trắng).
+STT_DUAL_B2_WAIT_MS = float(get("STT_DUAL_B2_WAIT_MS", "40"))
+STT_DUAL_PARTIAL = get("STT_DUAL_PARTIAL", "1") != "0"
+# llm = Gemma chấm khi mâu thuẫn; conf = bỏ phiếu theo độ tin cậy, không LLM; none = chỉ nhánh 1.
+STT_ADJUDICATE = get("STT_ADJUDICATE", "llm")
+# Gemma thiên vị vị trí: hỏi cả thứ tự xuôi và đảo (hai lệnh gọi song song) rồi lấy trung bình xác suất.
+STT_ADJUDICATE_DEBIAS = get("STT_ADJUDICATE_DEBIAS", "1") != "0"
+# Chấm trước trên partial (xem StreamingTranscriber.partial_async): bản ghi cuối trùng partial cuối thì không chờ Gemma.
+STT_ADJUDICATE_PREFETCH = get("STT_ADJUDICATE_PREFETCH", "1") != "0"
+# Một nhánh rớt từ ĐẦU câu thì giữ phần đầu của nhánh còn đủ (khỏi để Gemma chọn bản đã mất "Tắt"/"Dừng").
+STT_ADJUDICATE_KEEP_HEAD = get("STT_ADJUDICATE_KEEP_HEAD", "1") != "0"
+STT_ADJUDICATE_KEEP_STOP = get("STT_ADJUDICATE_KEEP_STOP", "1") != "0"
+STT_ADJUDICATE_TIMEOUT_S = float(get("STT_ADJUDICATE_TIMEOUT_S", "0.5"))
+STT_ADJUDICATE_MIN_PROB = float(get("STT_ADJUDICATE_MIN_PROB", "0.0"))
+STT_ADJUDICATE_MAX_CONFLICTS = int(get("STT_ADJUDICATE_MAX_CONFLICTS", "3"))
+# all = chấm mọi lượt có mâu thuẫn; command = chỉ khi mâu thuẫn chạm từ trong cụm lệnh (đỡ gọi Gemma).
+STT_ADJUDICATE_SCOPE = get("STT_ADJUDICATE_SCOPE", "all")
+# Bỏ phiếu độ tin cậy (lùi khi Gemma lỗi): cộng `STT_VOTE_BIAS` cho nhánh 2; phía rỗng (rớt/chèn từ) có điểm `STT_VOTE_EMPTY`.
+STT_VOTE_BIAS = float(get("STT_VOTE_BIAS", "0.0"))
+STT_VOTE_EMPTY = float(get("STT_VOTE_EMPTY", "-0.5"))
+
 TTS_VOICE = get("TTS_VOICE", "Ngọc Linh")
 TTS_STYLE = get("TTS_STYLE", "tu_nhien")
 

@@ -57,7 +57,7 @@ def _cache_dir() -> str:
     return path
 
 
-def _bpe_vocab(model_dir: str) -> str | None:
+def _bpe_vocab(model_dir: str, cache_name: str = "bpe.vocab") -> str | None:
     """File `bpe.vocab` (piece<TAB>score) cho contextual biasing; xuất từ `bpe.model` nếu thiếu.
 
     Ghi vào thư mục cache (không đụng models/stt). Thiếu sentencepiece/bpe.model -> None, và STT rơi
@@ -71,7 +71,7 @@ def _bpe_vocab(model_dir: str) -> str | None:
         import sentencepiece as spm
 
         sp = spm.SentencePieceProcessor(model_file=model)
-        out = os.path.join(_cache_dir(), "bpe.vocab")
+        out = os.path.join(_cache_dir(), cache_name)
         with open(out, "w", encoding="utf-8") as fh:
             for i in range(sp.vocab_size()):
                 fh.write(f"{sp.id_to_piece(i)}\t{sp.get_score(i)}\n")

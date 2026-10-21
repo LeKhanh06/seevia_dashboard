@@ -246,6 +246,10 @@ def preload_models() -> None:
     guard.log_startup()
     stt._load_asr()
     stt.transcribe(_dummy_wav())
+    if config.STT_DUAL:
+        from pipeline import stt_dual
+
+        stt_dual.warm()  # nhánh 2 hỏng/thiếu model -> tự tắt STT_DUAL, vẫn chạy nhánh 1
 
     # Vị trí điện thoại: lấy ở nền, không bao giờ trên đường request. Một vòng
     # `location/get` là poll xuống điện thoại tới 12s — đặt nó trong request là

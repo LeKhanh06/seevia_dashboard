@@ -35,6 +35,13 @@ def no_prerendered_phrases():
 
 
 @pytest.fixture(autouse=True)
+def legacy_joins(monkeypatch, request):
+    """Test cũ giả TTS bằng vài byte (`\\x01\\x02`) và so từng byte audio: nối mượt (cắt lặng, vuốt hai đầu) sẽ đổi
+    chúng. Mặc định tắt; test của chính `_Joiner` đánh dấu `@pytest.mark.smooth_joins` để bật."""
+    monkeypatch.setattr(config, "SPEECH_SMOOTH_JOINS", request.node.get_closest_marker("smooth_joins") is not None)
+
+
+@pytest.fixture(autouse=True)
 def no_v2_network_warm(monkeypatch):
     """`with TestClient(app)` chạy startup: không để nó bắt tay tới Clef/Gemma thật."""
     monkeypatch.setattr(config, "V2_WARM", False)
@@ -101,3 +108,7 @@ def fake_turn(speech=("xin chào",), cues=(), error=None, reply=None):
 
     with patch("pipeline.turn.run", run):
         yield calls
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "smooth_joins: bật nối mượt giữa các câu (tts._Joiner); mặc định các test tắt nó")

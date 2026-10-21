@@ -94,6 +94,17 @@ SPEECH_NOTICE_GRACE_SECONDS = float(get("SPEECH_NOTICE_GRACE_SECONDS", "0.5"))
 # thêm 1,8 giây — trả giá bằng chừng đó để nghe kịp.
 SPEECH_SENTENCE_PAUSE_SECONDS = float(get("SPEECH_SENTENCE_PAUSE_SECONDS", "0.45"))
 
+# Nối mượt giữa các câu (xem `pipeline/tts.py::_Joiner`): quãng nghỉ theo LOẠI chỗ nối thay vì
+# luôn 0,45 s. Câu bị cắt giữa cụm ("... đang hiển | thị thông báo") mà nghỉ 0,45 s nghe như khựng.
+#   CLAUSE  sau dấu phẩy / chấm phẩy / hai chấm
+#   LINE    hết dòng không có dấu câu, dòng sau viết hoa (mục kế tiếp của biển, thực đơn)
+#   SOFT    câu cắt giữa cụm
+# Đặt SPEECH_SMOOTH_JOINS=0 để quay về đường cũ (luôn SENTENCE_PAUSE, không cắt lặng, không vuốt hai đầu).
+SPEECH_SMOOTH_JOINS = get("SPEECH_SMOOTH_JOINS", "1") != "0"
+SPEECH_CLAUSE_PAUSE_SECONDS = float(get("SPEECH_CLAUSE_PAUSE_SECONDS", "0.18"))
+SPEECH_LINE_PAUSE_SECONDS = float(get("SPEECH_LINE_PAUSE_SECONDS", "0.30"))
+SPEECH_SOFT_PAUSE_SECONDS = float(get("SPEECH_SOFT_PAUSE_SECONDS", "0.0"))
+
 # Dựng sẵn audio cho các câu cố định lúc khởi động (xem `pipeline/phrases.py`).
 # Đặt "0" để tắt khi chỉ cần server lên nhanh và không quan tâm độ trễ.
 TTS_PRERENDER = get("TTS_PRERENDER", "1") != "0"

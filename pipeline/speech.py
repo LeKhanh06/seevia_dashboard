@@ -46,7 +46,10 @@ class SyncIter:
         if self._aborted.is_set() or self._finished:
             raise StopIteration
         try:
-            return asyncio.run_coroutine_threadsafe(self._step(), self._loop).result()
+            chunk = asyncio.run_coroutine_threadsafe(self._step(), self._loop).result()
+            # Xuống dòng của model chỉ là gợi ý ngắt câu, không phải lệnh (xem `tts.SOFT_BREAK`).
+            # Dấu "\n" thật chỉ do handler đặt, nên không đi qua đường này.
+            return chunk.replace("\n", tts.SOFT_BREAK) if "\n" in chunk else chunk
         except StopAsyncIteration:
             self._finished = True
             raise StopIteration from None

@@ -63,10 +63,13 @@ def _auth_header() -> dict:
 
 class VisionCareAPIError(Exception):
     """Lỗi khi gọi VisionCare Host Service API."""
-    def __init__(self, message: str, status_code: int = 500, details: dict | None = None):
+    def __init__(self, message: str, status_code: int = 500, details: dict | None = None, connection: bool = False):
         super().__init__(message)
         self.status_code = status_code
         self.details = details or {}
+        # True = không nối được tới app server (mạng/hết giờ), chưa có phản hồi HTTP nào.
+        # Khác lỗi nghiệp vụ AB trả về: người dùng nghe "không kết nối được" thay vì câu lỗi của riêng action.
+        self.connection = connection
 
 
 def call_service_api(endpoint_path: str, payload: dict, bare: bool = False) -> dict:
@@ -99,7 +102,7 @@ def call_service_api(endpoint_path: str, payload: dict, bare: bool = False) -> d
         )
     except Exception as exc:  # noqa: BLE001 - gộp mọi lỗi mạng thành một loại
         logger.error("VisionCare API connection error: %s", exc)
-        raise VisionCareAPIError(f"Lỗi kết nối VisionCare API: {exc}") from exc
+        raise VisionCareAPIError(f"Lỗi kết nối VisionCare API: {exc}", connection=True) from exc
 
     if resp.status_code >= 400:
         logger.error("VisionCare API HTTPError [%d]: %s", resp.status_code, resp.text)
@@ -190,7 +193,7 @@ def messages_unread() -> list[dict]:
     try:
         resp = _client().get(url, params={"glasses_device_id": device_ctx.current.get()}, headers=_auth_header())
     except Exception as exc:  # noqa: BLE001
-        raise VisionCareAPIError(f"Lỗi kết nối VisionCare API: {exc}") from exc
+        raise VisionCareAPIError(f"Lỗi kết nối VisionCare API: {exc}", connection=True) from exc
     if resp.status_code >= 400:
         raise VisionCareAPIError(f"VisionCare API returned status {resp.status_code}", status_code=resp.status_code)
     return (resp.json().get("data") or {}).get("messages", [])
@@ -212,7 +215,7 @@ def get_request_status(request_id: str) -> dict:
         resp = _client().get(url, headers=_auth_header())
     except Exception as exc:  # noqa: BLE001
         logger.error("VisionCare status connection error: %s", exc)
-        raise VisionCareAPIError(f"Lỗi kết nối khi tra trạng thái: {exc}") from exc
+        raise VisionCareAPIError(f"Lỗi kết nối khi tra trạng thái: {exc}", connection=True) from exc
 
     if resp.status_code >= 400:
         logger.error("VisionCare status HTTPError [%d]: %s", resp.status_code, resp.text)

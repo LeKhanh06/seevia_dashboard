@@ -7,6 +7,7 @@ Với `/process` thì `ctx.single_shot = True`: không có WebSocket nào để 
 
 import asyncio
 import logging
+import re
 from collections.abc import AsyncIterator, Callable
 
 import config
@@ -105,7 +106,31 @@ NO_LIVE_MESSAGE = "Kính bản này chưa hỗ trợ cảnh báo liên tục."
 # "Đúng"/"Không" đứng một mình khi không có câu hỏi nào đang chờ: không chạy lệnh nào.
 NO_QUESTION_MESSAGE = "Mình chưa hỏi gì cả. Bạn cần mình giúp gì?"
 CANCELLED_MESSAGE = "Đã huỷ."
-STATIC_SPEECH: tuple[str, ...] = (NO_LIVE_MESSAGE, NO_QUESTION_MESSAGE, CANCELLED_MESSAGE, *read_money.STATIC_SPEECH)
+KEEP_MESSAGE = "Vẫn giữ nguyên."
+STATIC_SPEECH: tuple[str, ...] = (
+    NO_LIVE_MESSAGE, NO_QUESTION_MESSAGE, CANCELLED_MESSAGE, KEEP_MESSAGE, *phone.STOP_QUESTIONS.values(),
+    *read_money.STATIC_SPEECH,
+)
+
+# Cả câu chỉ là tên chức năng, không có động từ bật/tắt/dừng: STT hay làm rơi từ đầu câu ("Tắt cảnh báo" ->
+# "Cảnh báo"). `intent` bộ phân loại đoán (alert_on / nav_start / music_play) là việc ĐANG chạy -> không chạy lại
+# im lặng, hỏi xem có phải muốn dừng không. Khoá: (intent đoán, khoá trạng thái kính) -> intent dừng.
+_BARE_FEATURE = {
+    "alert_on": ("alerting", "alert_off",
+                 re.compile(r"cảnh báo(?: (?:vật|bất|vất|bậc|chướng) ?(?:cản|ngại(?: vật)?))?")),
+    "nav_start": ("navigating", "nav_stop", re.compile(r"(?:dẫn đường|chỉ đường)")),
+    "music_play": ("music_playing", "music_stop", re.compile(r"(?:nhạc|bài hát)")),
+}
+_BARE_NOISE = re.compile(r"[^\w\s]|\b(?:xin|làm ơn|hãy|đi|nhé|nha|ạ|giúp tôi|cho tôi|giùm tôi)\b")
+
+
+def _dropped_stop(ctx: TurnContext, d: Decision, text: str) -> str | None:
+    """Intent dừng nếu `text` là tên chức năng đang chạy mà thiếu động từ, còn không thì None."""
+    rule = _BARE_FEATURE.get(d.intent)
+    if rule is None or not ctx.device_state.get(rule[0]):
+        return None
+    words = " ".join(_BARE_NOISE.sub(" ", (text or "").lower()).split())
+    return rule[1] if rule[2].fullmatch(words) else None
 
 
 def _sync(ctx: TurnContext, agen: AsyncIterator[str]):
@@ -369,9 +394,13 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
         if phone.is_yes(text):
             ctx.cancel_speculation()
             d = Decision(intent, source="confirmed", backend="gemma", confidence=1.0)
+            if intent in phone.STOP_QUESTIONS:
+                return await (_lane_c if d.lane == "C" else _lane_d)(ctx, d, text)
             return await _lane_d(ctx, d, text, params)
         if phone.is_no(text):
             ctx.cancel_speculation()
+            if intent in phone.STOP_QUESTIONS:
+                return Reply(speech=[KEEP_MESSAGE], intent=intent, lane=Decision(intent).lane)
             return Reply(speech=["Đã huỷ."], intent=intent, lane="D")
         # Câu khác: bỏ lệnh chờ, xử lý như lượt mới.
 
@@ -425,6 +454,13 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
         d = Decision(intent, source=d.source)
         ctx.cancel_speculation(keep_params=True)
         return await _lane_d(ctx, d, text, params)
+
+    stop = _dropped_stop(ctx, d, text)
+    if stop is not None:
+        ctx.cancel_speculation()
+        phone.set_pending_confirm(ctx.device, stop, {})
+        logger.info("'%s' không có động từ mà việc đó đang chạy: hỏi lại %s", text, stop)
+        return Reply(speech=[phone.ask_confirm(stop, {})], intent=stop, lane=Decision(stop).lane)
 
     lane = d.lane
     ctx.cancel_speculation(keep_answer=lane == "A", keep_params=lane in ("C", "D"))

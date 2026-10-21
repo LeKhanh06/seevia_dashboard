@@ -34,8 +34,15 @@ _DEFAULT_PROGRESS = (
     "Điện thoại chưa báo về, nhưng chưa có gì bất thường.",
 )
 
+# Không nối được tới app server (mạng/hết giờ): chưa lệnh nào đi tới điện thoại. Nói đúng điều đó thay vì câu lỗi
+# riêng của action ("Không thể thay đổi âm lượng, vui lòng thử lại." nghe như điện thoại đã nhận mà làm hỏng).
+NO_PHONE_CONNECTION = "Không kết nối được với điện thoại."
+
+# Sau mốc SLO mà điện thoại chưa báo: nói một lần rồi vẫn chờ kết quả thật (xem `run_action`).
+_STILL_WORKING = "Điện thoại vẫn đang thực hiện, tôi sẽ cập nhật khi có kết quả."
+
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
-STATIC_SPEECH: tuple[str, ...] = _DEFAULT_PROGRESS
+STATIC_SPEECH: tuple[str, ...] = (*_DEFAULT_PROGRESS, NO_PHONE_CONNECTION, _STILL_WORKING)
 
 # Dấu báo "câu này đã trọn vẹn, đọc ngay đi" cho `tts._sentences()`.
 #
@@ -266,7 +273,7 @@ def run_action(
         logger.info("%s requested, request_id=%s", operation, request_id)
     except VisionCareAPIError as exc:
         logger.error("%s error: %s", operation, exc)
-        yield failure
+        yield NO_PHONE_CONNECTION if exc.connection else failure
         return
     except Exception:
         logger.exception("%s unexpected error", operation)
@@ -309,4 +316,12 @@ def run_action(
             time.sleep(config.VISIONCARE_RESULT_POLL_SECONDS)
 
     device_ctx.run_in_thread(reconcile_late, name=f"action-reconcile-{request_id[:8]}")
-    yield _utterance("Điện thoại vẫn đang thực hiện, tôi sẽ cập nhật khi có kết quả.")
+    yield _utterance(_STILL_WORKING)
+
+    # Vẫn chờ kết quả THẬT tới hết ngân sách: thành công, lỗi hay hết giờ đều phải được nói ra. Dừng ở câu trên
+    # thì người khiếm thị nghe "sẽ cập nhật" rồi im mãi, không biết bài đã phát hay lệnh đã hỏng.
+    left = max(0.0, budget - (time.monotonic() - started))
+    final = yield from wait_for(
+        lambda: action_callbacks.wait(request_id, left), progress, tts.speaking_seconds(_STILL_WORKING),
+    )
+    yield speak_result(operation, final)

@@ -1,9 +1,10 @@
 """Message API schemas: glasses-server endpoints and phone-app endpoints."""
 
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import MessageDirection
 from app.schemas.common import TrimmedNonEmptyStr
@@ -80,13 +81,23 @@ class MessageReadData(BaseModel):
 
 
 class MessageCreateRequest(BaseModel):
-    """Phone app: a relative texts the glasses of ``owner_user_id``."""
+    """Phone app: a relative texts the glasses of ``owner_user_id``, or the glasses owner
+    texts the phone of their relative ``relative_user_id`` (exactly one of the two)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    owner_user_id: TrimmedNonEmptyStr
+    owner_user_id: TrimmedNonEmptyStr | None = None
+    relative_user_id: TrimmedNonEmptyStr | None = None
     text: TrimmedNonEmptyStr = Field(max_length=MESSAGE_MAX_CHARS)
     request_id: UUID
+
+    @model_validator(mode="after")
+    def _exactly_one_peer(self) -> Self:
+        """Name the other side once: as the owner (I am a relative) or as the relative (I am the owner)."""
+        if (self.owner_user_id is None) == (self.relative_user_id is None):
+            msg = "Send exactly one of owner_user_id and relative_user_id"
+            raise ValueError(msg)
+        return self
 
 
 class MessageCreatedData(BaseModel):

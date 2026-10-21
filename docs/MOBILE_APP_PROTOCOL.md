@@ -470,9 +470,11 @@ server cúp (`media_timeout`). Token sai/đã dùng/hết hạn: server `accept`
 
 | Việc | Endpoint | Body | `data` |
 |---|---|---|---|
-| Gửi tới kính | `POST /api/v1/messages` | `{owner_user_id, text (1-1000), request_id (UUID)}` | `{message_id, created_at}` |
+| Gửi tới kính (người thân nhắn chủ kính) | `POST /api/v1/messages` | `{owner_user_id, text (1-1000), request_id (UUID)}` | `{message_id, created_at}` |
+| Gửi tới điện thoại người thân (chủ kính nhắn từ app) | `POST /api/v1/messages` | `{relative_user_id, text (1-1000), request_id (UUID)}` | `{message_id, created_at}` |
 | Lịch sử | `GET /api/v1/messages?with=<user_id>&before=<ISO>&limit=50` | | `{messages:[{id, direction, from_me, text, created_at, read_at}]}` mới → cũ |
 
+- Body có đúng MỘT trong `owner_user_id` (tôi là người thân) hoặc `relative_user_id` (tôi là chủ kính); đủ cả hai hoặc thiếu cả hai: `400 INVALID_REQUEST`. Tin của chủ kính đến điện thoại người thân bằng FCM `message_in`; chưa có API chủ kính GỌI người thân từ app.
 - `request_id` do app sinh cho mỗi tin; gửi lại cùng `request_id` + cùng người gửi là idempotent (không nhắn đôi); cùng id khác người gửi: `409 REQUEST_ID_CONFLICT`.
 - `read_at` (tin gửi tới kính): lúc kính ĐỌC cho người dùng nghe; app hiện "đã nghe". Kính đang bận (trong lượt/cuộc gọi) sẽ xếp hàng rồi đọc, không mất.
 - Tin từ kính tới người thân đến bằng FCM `message_in` (bên dưới); lịch sử có cả hai chiều (`direction`: `to_glasses|to_relative`, `from_me` theo người gọi API).

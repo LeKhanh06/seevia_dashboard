@@ -173,6 +173,16 @@ class MessageService:
             return self._same_sender(message, MessageDirection.TO_GLASSES, relative_user_id)
         return message
 
+    async def send_from_owner(
+        self, *, owner_user_id: str, relative_user_id: str, text: str, request_id: UUID
+    ) -> Message:
+        """Send the glasses owner's text to a relative's phone from the app; needs an ``active`` link."""
+        link = await self._links.get_active_pair(owner_user_id, relative_user_id)
+        if link is None:
+            raise MessageNotAllowedError(_NOT_ALLOWED_MSG)
+        message = await self.send_to_link(link, text, request_id=request_id)
+        return self._same_sender(message, MessageDirection.TO_RELATIVE, owner_user_id)
+
     async def history(
         self, *, user_id: str, with_user_id: str, before: datetime | None, limit: int
     ) -> list[Message]:

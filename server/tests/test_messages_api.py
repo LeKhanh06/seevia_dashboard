@@ -125,6 +125,47 @@ async def test_send_from_relative_callbacks_glasses(world: World) -> None:
     assert row.callback_state.value == "delivered"
 
 
+async def test_send_from_owner_app_pushes_relative(world: World) -> None:
+    """Chủ kính nhắn người thân từ app: to_relative, FCM message_in, idempotent, người lạ/hai tên -> lỗi."""
+    body = {"relative_user_id": world.relative_id, "text": "Con về rồi", "request_id": str(uuid.uuid4())}
+    sent = await world.client.post("/api/v1/messages", json=body, headers=world.owner)
+    again = await world.client.post("/api/v1/messages", json=body, headers=world.owner)
+    assert sent.status_code == again.status_code == 200, sent.text
+    assert again.json()["data"] == sent.json()["data"]
+    assert world.push.sent == [
+        (
+            "relative-push-token",
+            {
+                "type": "message_in",
+                "message_id": sent.json()["data"]["message_id"],
+                "from_display_name": "Chủ kính",
+                "text": "Con về rồi",
+            },
+        )
+    ]
+    (row,) = await world.rows(Message)
+    assert (row.direction.value, row.callback_state) == ("to_relative", None)
+    theirs = await world.client.get(
+        "/api/v1/messages", params={"with": world.owner_id}, headers=world.relative
+    )
+    assert [(m["text"], m["from_me"]) for m in theirs.json()["data"]["messages"]] == [("Con về rồi", False)]
+
+    # Người thân không dùng được đường của chủ kính; thiếu hoặc đủ cả hai tên đều bị từ chối.
+    wrong_way = await world.client.post(
+        "/api/v1/messages",
+        json={**body, "relative_user_id": world.owner_id, "request_id": str(uuid.uuid4())},
+        headers=world.relative,
+    )
+    assert (wrong_way.status_code, wrong_way.json()["error"]["code"]) == (403, "MESSAGE_NOT_ALLOWED")
+    for bad in (
+        {"text": "x", "request_id": str(uuid.uuid4())},
+        {**body, "owner_user_id": world.owner_id, "request_id": str(uuid.uuid4())},
+    ):
+        resp = await world.client.post("/api/v1/messages", json=bad, headers=world.owner)
+        assert resp.status_code == 400
+    assert len(await world.rows(Message)) == 1
+
+
 async def test_revoked_link_message_not_delivered(world: World) -> None:
     """Link bị thu hồi trước khi VH nhận: không callback, không nằm trong unread."""
     await world.client.post("/api/v1/messages", json=_app_body(world), headers=world.relative)

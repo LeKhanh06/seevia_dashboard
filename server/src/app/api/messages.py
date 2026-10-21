@@ -144,13 +144,22 @@ async def create_message(
     session: Session,
     wake: Wake,
 ) -> OkResponse[MessageCreatedData]:
-    """Text the glasses of ``owner_user_id`` as a relative (needs an active care link)."""
-    message = await service.send_from_relative(
-        relative_user_id=principal.public_user_id,
-        owner_user_id=body.owner_user_id,
-        text=body.text,
-        request_id=body.request_id,
-    )
+    """Text the glasses of ``owner_user_id`` as a relative, or the phone of ``relative_user_id``
+    as the glasses owner (either way needs an active care link)."""
+    if body.relative_user_id is not None:
+        message = await service.send_from_owner(
+            owner_user_id=principal.public_user_id,
+            relative_user_id=body.relative_user_id,
+            text=body.text,
+            request_id=body.request_id,
+        )
+    else:
+        message = await service.send_from_relative(
+            relative_user_id=principal.public_user_id,
+            owner_user_id=str(body.owner_user_id),
+            text=body.text,
+            request_id=body.request_id,
+        )
     data = MessageCreatedData(message_id=message.id, created_at=message.created_at)
     await _commit_and_notify(session, service, wake)
     return OkResponse(data=data)

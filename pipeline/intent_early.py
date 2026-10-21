@@ -35,7 +35,9 @@ _RULES: tuple[tuple[re.Pattern, str, str], ...] = tuple(
     (re.compile(rf"(?<!\w)(?:{pattern})(?!\w)"), intent, mode)
     for pattern, intent, mode in (
         (r"cấp cứu|khẩn cấp|cứu tôi|cứu với|sos", "emergency_call", ""),
-        (r"tắt(?: chức năng)? cảnh báo|dừng cảnh báo|ngừng cảnh báo|ngừng nhắc vật cản|đừng (?:báo|nhắc) (?:vật cản|chướng ngại)", "alert_off", ""),
+        # STT hay nghe "tắt" thành "tắc/tất/tát" (cùng âm không dấu thanh): vẫn là tắt, không phải bật.
+        (r"(?:tắt|tắc|tất|tát|ngắt|huỷ|hủy|dừng|ngừng|thôi)(?: chức năng)? cảnh báo|ngừng nhắc vật cản|"
+         r"đừng (?:báo|nhắc) (?:vật cản|chướng ngại)", "alert_off", ""),
         # STT hay nghe "vật cản" thành "bất cản/vất cản/bậc cản" và làm rơi chữ "bật": vẫn là bật chế độ, không phải
         # hỏi hazard (luật `vật cản` ở dưới dẫn sang hazard). Đứng sau alert_off nên "tắt cảnh báo bất cản" vẫn là tắt.
         (r"bật cảnh báo|mở cảnh báo|(?:bật |mở )?cảnh báo (?:vật|bất|vất|bậc) cản", "alert_on", ""),

@@ -265,8 +265,11 @@ def readback(intent: str, params: dict) -> str:
     if intent == "ride_confirm":
         return "Đang xác nhận chuyến xe." if params.get("confirm", True) else "Đang huỷ chuyến xe."
     if intent == "music_play":
-        song = params.get("song")
-        return f"Đang mở {song}." if song else "Đang mở nhạc."
+        # Chỉ đọc lại điều đã nghe được, KHÔNG nói "đang mở/đã mở": lúc này điện thoại chưa nhận lệnh nào, và nếu
+        # STT nghe sai tên bài ("bùi lê rù") thì người dùng cần nghe nguyên văn để kịp huỷ. Việc có phát được hay
+        # không do câu kết quả (hoặc câu lỗi) nói sau, khi điện thoại đã báo về thật.
+        song = re.sub(r"^(?:bài hát|bài|nhạc)\s+", "", (params.get("song") or "").strip(), flags=re.I)
+        return f"Mở nhạc {song}." if song else "Mở nhạc."
     if intent == "nav_start":
         return f"Đang gửi chỉ đường tới {params.get('destination', '')} về điện thoại."
     raise KeyError(intent)
@@ -288,7 +291,19 @@ def ask_confirm(intent: str, params: dict) -> str:
         return f"Mở {song} phải không?" if song else "Mở nhạc phải không?"
     if intent == "nav_start":
         return f"Chỉ đường tới {params.get('destination', '')} phải không?"
+    if intent in STOP_QUESTIONS:
+        return STOP_QUESTIONS[intent]
     raise KeyError(intent)
+
+
+# Lệnh DỪNG bị STT làm rơi động từ ("Tắt cảnh báo" -> "Cảnh báo", "Dừng dẫn đường" -> "Dẫn đường", "Tắt nhạc" ->
+# "Nhạc") khi việc đó đang chạy: không chạy lại việc đang chạy một cách im lặng mà hỏi xem có phải muốn dừng không.
+# intent -> câu hỏi (cũng là chữ để `pipeline/phrases.py` dựng sẵn audio).
+STOP_QUESTIONS = {
+    "alert_off": "Bạn muốn tắt cảnh báo phải không?",
+    "nav_stop": "Bạn muốn dừng dẫn đường phải không?",
+    "music_stop": "Bạn muốn tắt nhạc phải không?",
+}
 
 
 _CONFIRM: dict[str, tuple[str, dict, float]] = {}  # device -> (intent, params, lúc hỏi)

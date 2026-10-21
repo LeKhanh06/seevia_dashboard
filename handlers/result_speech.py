@@ -16,6 +16,7 @@ _ERROR_SPEECH = {
     "CONTACT_NOT_FOUND": "Không tìm thấy người này trong danh bạ.",
     "MULTIPLE_CONTACTS_FOUND": "Có nhiều người trùng tên trong danh bạ, vui lòng nói rõ hơn.",
     "CONTACT_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền đọc danh bạ.",
+    "SMS_SEND_FAILED": "Chưa gửi được tin nhắn, vui lòng thử lại.",
     "CALL_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền gọi điện.",
     "SMS_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền gửi tin nhắn.",
     "EMERGENCY_CONTACT_NOT_CONFIGURED": "Chưa cài số liên hệ khẩn cấp trên điện thoại.",
@@ -50,6 +51,7 @@ _ERROR_SPEECH = {
 # Câu nói khi action thất bại mà mã lỗi không có trong bảng trên.
 _GENERIC_FAILURE = {
     "contact_call": "Chưa gọi được, vui lòng bấm vào thông báo trên điện thoại.",
+    "contact_sms": "Chưa gửi được tin nhắn, vui lòng thử lại.",
     "emergency_call": "Chưa phát được cuộc gọi khẩn cấp, vui lòng bấm vào thông báo trên điện thoại.",
     "music_play": (
         "Đã mở ứng dụng nhạc nhưng chưa phát được. "
@@ -85,6 +87,7 @@ _MUSIC_STOPPED = "Đã dừng phát nhạc."
 _VOLUME_CHANGED = "Đã thay đổi âm lượng."
 _RIDE_CANCELLED = "Đã hủy chuyến xe."
 _DONE = "Đã thực hiện xong."
+_SMS_SENT = "Đã gửi."
 # Action thất bại mà cả mã lỗi lẫn tên action đều không có câu riêng.
 _UNSPECIFIED_FAILURE = "Chưa thực hiện được, vui lòng thử lại."
 
@@ -113,6 +116,7 @@ STATIC_SPEECH: tuple[str, ...] = (
     _RIDE_APP_OPENED,
     _RIDE_REQUESTED,
     _DONE,
+    _SMS_SENT,
     _UNSPECIFIED_FAILURE,
     *_ERROR_SPEECH.values(),
     *_GENERIC_FAILURE.values(),
@@ -122,6 +126,9 @@ STATIC_SPEECH: tuple[str, ...] = (
 def _success_speech(operation: str, result: dict) -> str:
     if operation == "contact_call":
         return f"Đang gọi cho {result.get('contact_name', 'người liên hệ')}."
+
+    if operation == "contact_sms":
+        return _SMS_SENT
 
     if operation == "emergency_call":
         sms = "đã gửi tin nhắn vị trí" if result.get("sms_sent") else "chưa gửi được tin nhắn vị trí"

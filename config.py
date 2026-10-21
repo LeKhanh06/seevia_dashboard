@@ -457,6 +457,9 @@ TEXT_DET_MODEL_PATH = get(
 TTS_DEVICE = get("TTS_DEVICE", "auto")
 # Spec §7.2: bỏ lượt Clef trên partial nếu còn lượt đang chạy. 0 = vẫn gọi (thử nghiệm độ trễ).
 EARLY_CLASSIFY_SKIP_INFLIGHT = get("EARLY_CLASSIFY_SKIP_INFLIGHT", "1") != "0"
+# Kênh gọi/nhắn người liên hệ: "internet" (mặc định; AB + cầu âm thanh qua mạng, cần phiên WS + token riêng)
+# hoặc "sim" (SMS + cuộc gọi thường qua danh bạ điện thoại chủ kính, không cần token riêng).
+CONTACT_CHANNEL = get("CONTACT_CHANNEL", "internet").strip().lower()
 # Bộ phân loại intent (`pipeline/intent_classifier.py`): "auto" = Gemma rồi Clef
 # dự phòng, "gemma", "clef". Số đo so sánh nằm trong module đó.
 INTENT_BACKEND = get("INTENT_BACKEND", "auto")

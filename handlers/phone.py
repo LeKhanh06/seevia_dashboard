@@ -30,6 +30,12 @@ MSG_NONE = "Không có tin nhắn mới."
 _MSG_SENT = "Đã gửi."
 _MSG_ASK_NAME = "Bạn muốn nhắn cho ai?"
 
+# Kênh SIM (CONTACT_CHANNEL=sim): lời báo cực ngắn.
+SIM_NO_READ = "Chế độ SIM chưa đọc được tin nhắn."
+_SIM_NOT_FOUND_GENERIC = "Không tìm thấy người này trong danh bạ."
+# STT hay nghe "em iu" thành "em yêu": quy về tên có sẵn trong danh bạ demo.
+_SIM_ALIASES = {"em yêu": "em iu"}
+
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio. Riêng
 # nhóm khẩn cấp thì dựng sẵn là bắt buộc chứ không phải tối ưu: đó là lúc không
 # được để người dùng chờ thêm một giây nào cho việc tổng hợp giọng.
@@ -47,6 +53,7 @@ STATIC_SPEECH: tuple[str, ...] = (
     MSG_NONE,
     _MSG_SENT,
     _MSG_ASK_NAME,
+    SIM_NO_READ,
 )
 
 
@@ -63,7 +70,7 @@ def handle_contact(image: bytes, command_text: str, params: dict | None = None) 
     yield from run_action(
         "contact_call",
         "api/v1/service/contact/call",
-        {"name": name},
+        {"name": _sim_name(name)},
         ack=f"Đang tìm số của {name}.",
         failure=f"Không thể thực hiện cuộc gọi cho {name}, vui lòng thử lại.",
         progress=(
@@ -71,6 +78,44 @@ def handle_contact(image: bytes, command_text: str, params: dict | None = None) 
             _CONNECTING,
         ),
     )
+
+
+def _sim_name(name: str) -> str:
+    """Kênh SIM: đổi biệt danh STT hay nghe nhầm ("em yêu") về tên trong danh bạ ("em iu"). Kênh khác giữ nguyên."""
+    if config.CONTACT_CHANNEL != "sim":
+        return name
+    return _SIM_ALIASES.get(" ".join(name.lower().split()), name)
+
+
+def handle_message_sms(image: bytes, command_text: str, params: dict | None = None) -> Iterator[str]:
+    """Nhắn SMS qua danh bạ điện thoại (kênh SIM). Chạy sau câu đọc lại "Nhắn cho {name}: {text}." + cửa sổ huỷ.
+
+    Lỗi (CONTACT_NOT_FOUND, MULTIPLE_CONTACTS_FOUND, SMS_PERMISSION_DENIED...) do `speak_result` nói theo mã."""
+    params = params or {}
+    name = _sim_name((params.get("contact_name") or "").strip())
+    text = (params.get("text") or "").strip()[:_SMS_MAX]
+    if not name:
+        yield _MSG_ASK_NAME
+        return
+    if not text:
+        from lanes import phone as lane  # nhập muộn: lanes.phone nhập module này
+
+        lane.set_pending_body(device_ctx.current.get(), name)
+        yield lane.body_question(name)
+        return
+    for piece in run_action(
+        "contact_sms",
+        "api/v1/service/contact/sms",
+        {"name": name, "text": text},
+        ack=f"Đang nhắn cho {name}.",
+        failure=f"Không gửi được tin nhắn cho {name}, vui lòng thử lại.",
+        progress=(f"Vẫn đang nhắn cho {name}.",),
+    ):
+        yield f"Không có {name} trong danh bạ." if piece == _SIM_NOT_FOUND_GENERIC else piece
+
+
+def handle_message_read_sim(image: bytes, command_text: str, params: dict | None = None) -> Iterator[str]:
+    yield SIM_NO_READ
 
 
 def handle_emergency(image: bytes, command_text: str, params: dict | None = None) -> Iterator[str]:
@@ -191,6 +236,7 @@ def handle_emergency_call(image: bytes, command_text: str, params: dict | None =
 
 # ── nhắn tin qua AB (Plan 2 C7) ──────────────────────────────────────────────────────────────
 
+_SMS_MAX = 320  # giới hạn của AB cho contact/sms
 _MSG_MAX = 1000  # giới hạn của AB (1–1000 ký tự); dài hơn thì cắt thay vì bị từ chối 400
 
 

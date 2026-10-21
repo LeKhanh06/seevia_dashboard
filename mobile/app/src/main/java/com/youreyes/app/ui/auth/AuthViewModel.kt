@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.youreyes.app.core.AppConfig
+import com.youreyes.app.core.UserErrors
 import com.youreyes.app.network.AuthLoginPayload
 import com.youreyes.app.network.AuthOtpVerifyPayload
 import com.youreyes.app.network.AuthRegisterPayload
@@ -78,13 +79,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             isLoading = false,
                             step = AuthStep.OTP,
-                            message = "✅ Đã đăng ký. Nhập mã OTP (server demo ghi mã vào log, chưa gửi SMS thật).",
+                            message = "Đã đăng ký. Nhập mã xác thực để hoàn tất.",
                             isError = false,
                         )
                     }
                 } else {
                     _uiState.update {
-                        it.copy(isLoading = false, isError = true, message = "❌ ${result.exceptionOrNull()?.message}")
+                        it.copy(isLoading = false, isError = true, message = UserErrors.describe(result.exceptionOrNull(), UserErrors.Action.REGISTER))
                     }
                 }
             } else {
@@ -92,7 +93,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     baseUrl(),
                     AuthLoginPayload(phoneNumber = state.phoneNumber.trim(), password = state.password),
                 )
-                applySessionResult(result)
+                applySessionResult(result, UserErrors.Action.LOGIN)
             }
         }
     }
@@ -107,11 +108,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 baseUrl(),
                 AuthOtpVerifyPayload(phoneNumber = state.phoneNumber.trim(), otpCode = state.otpCode.trim()),
             )
-            applySessionResult(result)
+            applySessionResult(result, UserErrors.Action.OTP)
         }
     }
 
-    private fun applySessionResult(result: Result<AuthSession>) {
+    private fun applySessionResult(result: Result<AuthSession>, action: UserErrors.Action) {
         if (result.isSuccess) {
             val session = result.getOrThrow()
             prefs.edit()
@@ -125,7 +126,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 it.copy(
                     isLoading = false,
                     isError = false,
-                    message = "✅ Đăng nhập thành công.",
+                    message = "Đăng nhập thành công.",
                     loggedInPhoneNumber = session.phoneNumber,
                     loggedInDisplayName = session.displayName ?: "",
                     password = "",
@@ -134,7 +135,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else {
             _uiState.update {
-                it.copy(isLoading = false, isError = true, message = "❌ ${result.exceptionOrNull()?.message}")
+                it.copy(isLoading = false, isError = true, message = UserErrors.describe(result.exceptionOrNull(), action))
             }
         }
     }

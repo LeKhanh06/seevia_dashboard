@@ -31,6 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -99,6 +101,25 @@ fun ChatRoute(
             while (true) {
                 delay(REFRESH_MS)
                 viewModel.refresh()
+            }
+        }
+    }
+
+    // A message that arrives while the screen is open is announced; the history that loads first is not.
+    val view = androidx.compose.ui.platform.LocalView.current
+    var lastSeenId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.items.lastOrNull()?.id, state.isLoading) {
+        val last = state.items.lastOrNull()
+        if (state.isLoading) return@LaunchedEffect
+        if (lastSeenId == null) {
+            lastSeenId = last?.id.orEmpty()
+            return@LaunchedEffect
+        }
+        if (last != null && last.id != lastSeenId) {
+            lastSeenId = last.id
+            if (!last.fromMe) {
+                val who = peerName.ifBlank { "Người thân" }
+                view.announceForAccessibility((if (last.isEmergency) "Tin khẩn cấp từ " else "Tin mới từ ") + who + ": " + last.text)
             }
         }
     }
@@ -283,7 +304,10 @@ private fun Composer(state: ChatScreenState, onDraft: (String) -> Unit, onSend: 
         OutlinedTextField(
             value = state.draft,
             onValueChange = onDraft,
-            label = { Text("Tin nhắn") },
+            label = { Text("Viết tin nhắn") },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+            ),
             supportingText = if (state.draft.length > ChatScreenState.MAX_LENGTH) {
                 { Text("Tối đa ${ChatScreenState.MAX_LENGTH} ký tự") }
             } else {

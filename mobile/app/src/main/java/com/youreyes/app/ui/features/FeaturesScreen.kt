@@ -28,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -132,7 +134,7 @@ fun FeaturesScreen(
         // Header Banner
         FeaturesBanner()
 
-        SectionLabel(text = "Tính Năng Cung Cấp Bởi Kính Thông Minh")
+        SectionLabel(text = "Những việc kính làm được")
 
         glassesFeatures.forEach { item ->
             RowCard(
@@ -155,14 +157,15 @@ private fun FeaturesBanner() {
                 elevation = 6.dp,
                 shape = RoundedCornerShape(22.dp),
                 spotColor = shadowColor,
-            ),
+            )
+            .semantics(mergeDescendants = true) { heading() },
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "Tính Năng Kính Your Eyes",
+                text = "Kính SeeVia làm được gì",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Black,
                     color = inkColor,
@@ -170,7 +173,7 @@ private fun FeaturesBanner() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Mọi tính năng được thực hiện hoàn toàn tự động rảnh tay trên Kính Thông Minh bằng công nghệ AI tiên tiến.",
+                text = "Bạn chỉ cần nói với kính. Kính tự làm, không cần chạm vào điện thoại.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = mutedColor,
                 ),

@@ -5,6 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.youreyes.app.ui.components.MinTouchTarget
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,42 +42,50 @@ data class GuideSection(val title: String, val body: String)
 /** One entry per real, working flow in the app — keep this list in sync as new screens/flows land. */
 val guideSections = listOf(
     GuideSection(
-        title = "Bắt đầu: Đăng ký / Đăng nhập",
-        body = "Vào Hồ sơ → Tài Khoản Đăng Nhập, nhập số điện thoại và mật khẩu để đăng ký. " +
-            "Server demo hiện gửi mã OTP qua log server (chưa nối SMS thật) — nhập đúng mã đó để xác thực.",
+        title = "Bắt đầu: đăng ký và đăng nhập",
+        body = "Vào Hồ sơ, chọn Tài khoản, nhập số điện thoại và mật khẩu để đăng ký. " +
+            "Bản thử nghiệm chưa gửi tin nhắn SMS thật, nên mã xác thực do người quản trị cung cấp.",
+    ),
+    GuideSection(
+        title = "Nói lệnh với điện thoại",
+        body = "Chạm nút Nói lệnh rồi nói: “gọi mẹ”, “nhắn mẹ tối nay con về muộn”, “đọc tin nhắn”, “kính thế nào”, " +
+            "“khẩn cấp”, “mở hồ sơ”. Nói “trợ giúp” để nghe đủ các lệnh, “dừng” để dừng. " +
+            "Gửi tin nhắn và gọi khẩn cấp luôn được hỏi lại bằng giọng nói: nói “có” để làm, “không” để huỷ. " +
+            "Với TalkBack, chạm hai lần vào nút Nói lệnh rồi nói.",
+    ),
+    GuideSection(
+        title = "Gọi và nhắn tin cho người thân",
+        body = "Vào Người thân để mời người thân bằng số điện thoại. Khi họ chấp nhận, bạn gọi được vào kính của họ " +
+            "và nhắn tin cho họ; kính sẽ đọc tin nhắn cho người đeo nghe.",
     ),
     GuideSection(
         title = "Liên kết kính",
-        body = "Nhập mã Serial in ở gọng kính vào màn hình Pairing Kính rồi bấm Xác Nhận Liên Kết. " +
-            "Có thể hủy liên kết bất cứ lúc nào bằng nút Hủy Liên Kết Kính Hiện Tại.",
+        body = "Vào màn hình Kính, nhập số máy in ở gọng kính rồi chọn Liên kết kính. " +
+            "Có thể hủy liên kết bất cứ lúc nào bằng nút Hủy liên kết kính hiện tại.",
     ),
     GuideSection(
-        title = "Ra lệnh bằng giọng nói qua kính",
-        body = "Đặt xe, phát nhạc, điều hướng, gọi liên hệ đều do kính tự động kích hoạt qua giọng nói — " +
-            "điện thoại chỉ thực thi lệnh nhận được, không cần chạm vào màn hình.",
+        title = "Điều khiển bằng giọng nói qua kính",
+        body = "Đặt xe, phát nhạc, điều hướng, gọi điện đều do kính tự kích hoạt khi bạn nói — " +
+            "điện thoại chỉ thực hiện lệnh nhận được, bạn không cần chạm vào màn hình.",
     ),
     GuideSection(
         title = "An toàn khẩn cấp (SOS)",
-        body = "Vào tab An toàn, nhập số điện thoại người thân, sau đó bấm nút SOS 3 lần liên tiếp " +
-            "trong vòng 2 giây để gọi khẩn cấp và gửi vị trí qua SMS.",
+        body = "Vào An toàn, nhập số điện thoại người thân. Chạm nút SOS 3 lần liên tiếp trong 2 giây để gọi khẩn cấp, " +
+            "hoặc chọn Khẩn cấp ở màn hình chính và xác nhận.",
     ),
     GuideSection(
         title = "Lịch sử hoạt động",
-        body = "Xem lại các lệnh kính đã gửi tới điện thoại (đặt xe, nhạc, điều hướng, khẩn cấp...) " +
-            "tại Trang chủ → Lịch Sử Hoạt Động Của Kính.",
+        body = "Xem lại các lệnh kính đã gửi tới điện thoại (đặt xe, nhạc, điều hướng, khẩn cấp) " +
+            "tại Trang chủ, mục Lịch sử hoạt động.",
     ),
     GuideSection(
-        title = "Album ảnh",
-        body = "Ảnh chụp từ kính được lưu lại và xem lại tại Trang chủ → Album Ảnh & Video.",
+        title = "Cỡ chữ và tương phản",
+        body = "Vào Hồ sơ, chọn Hiển thị để chọn cỡ chữ To và bật Tương phản cao. " +
+            "Thay đổi áp dụng ngay, không cần đăng nhập.",
     ),
     GuideSection(
-        title = "Cài đặt trợ năng",
-        body = "Vào Hồ sơ → Cài Đặt Trợ Năng để chỉnh cỡ chữ, giọng đọc, độ tương phản và rung. " +
-            "Cần đăng nhập để lưu lại — nếu chưa đăng nhập, mục này sẽ bị khoá.",
-    ),
-    GuideSection(
-        title = "Hỗ trợ & góp ý",
-        body = "Vào Hồ sơ → Hỗ Trợ & Góp Ý để gửi phản hồi hoặc yêu cầu hỗ trợ trực tiếp tới đội ngũ Your Eyes.",
+        title = "Hỗ trợ và góp ý",
+        body = "Vào Hồ sơ, chọn Hỗ trợ và góp ý để gửi phản hồi hoặc nhờ đội ngũ SeeVia hỗ trợ.",
     ),
 )
 
@@ -90,7 +103,14 @@ private fun GuideCard(section: GuideSection) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { expanded = !expanded },
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .clickable(
+                onClickLabel = if (expanded) "thu gọn" else "mở rộng",
+                role = Role.Button,
+            ) { expanded = !expanded }
+            .semantics(mergeDescendants = true) {
+                stateDescription = if (expanded) "đang mở" else "đang thu gọn"
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = BorderStroke(1.dp, borderColor),
@@ -103,10 +123,8 @@ private fun GuideCard(section: GuideSection) {
             ) {
                 Text(
                     text = section.title,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = inkColor,
-                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = inkColor,
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
@@ -118,10 +136,9 @@ private fun GuideCard(section: GuideSection) {
             if (expanded) {
                 Text(
                     text = section.body,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = mutedColor,
-                    ),
-                    modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = mutedColor,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }

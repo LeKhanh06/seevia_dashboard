@@ -8,6 +8,8 @@ import com.youreyes.app.calls.SessionApi
 import com.youreyes.app.calls.apiErrorVi
 import com.youreyes.app.core.Timestamps
 import com.youreyes.app.network.ApiResult
+import com.youreyes.app.voice.ReadMarkers
+import com.youreyes.app.voice.VoiceMessages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -112,7 +114,12 @@ class ChatViewModel(
     }
 
     private fun rebuild(error: String? = null) {
-        val items = ChatUiState.withPending(ChatUiState.merge(server, incoming), pending)
+        val merged = ChatUiState.merge(server, incoming)
+        // The person is looking at these: "đọc tin nhắn" by voice must not read them again.
+        merged.filter { !it.fromMe }.maxByOrNull { VoiceMessages.sortKey(it.createdAt) }?.let {
+            ReadMarkers.advance(getApplication(), peerUserId, it.createdAt)
+        }
+        val items = ChatUiState.withPending(merged, pending)
         _state.value = _state.value.copy(items = items, isLoading = false, error = error ?: _state.value.error)
     }
 }

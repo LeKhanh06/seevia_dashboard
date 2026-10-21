@@ -6,6 +6,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.youreyes.app.ui.components.InlineMessage
+import com.youreyes.app.ui.components.MinTouchTarget
+import com.youreyes.app.ui.components.SecondaryButton
+import com.youreyes.app.ui.theme.accentTextColor
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -93,49 +101,40 @@ fun GlassesLinkScreen(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
-    ScreenShell(modifier = modifier, title = "Kính Your Eyes", onBack = onBack) {
+    ScreenShell(modifier = modifier, title = "Kính SeeVia", onBack = onBack) {
         HeroCard()
 
         PairingStatusCard(pairedDeviceId = state.pairedDeviceId)
 
-        SectionLabel(text = "Nhập Mã Serial Kính")
+        SectionLabel(text = "Liên kết kính")
 
         PanelCard {
             OutlinedTextField(
                 value = state.glassesDeviceId,
                 onValueChange = onGlassesDeviceIdChange,
-                label = { Text("Số máy in trên gọng kính (VD: 01)") },
-                supportingText = { Text("Chỉ cần số. App tự thêm tiền tố \"glasses-\".") },
+                label = { Text("Số máy in trên gọng kính") },
+                supportingText = { Text("Chỉ cần nhập số, ví dụ 01.") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
 
             GradientButton(
-                text = if (state.isLoading) "Đang kết nối..." else "Xác Nhận Liên Kết Kính",
+                text = if (state.isLoading) "Đang kết nối…" else "Liên kết kính",
                 onClick = onLinkClick,
                 enabled = state.canSubmit && !state.isLoading,
             )
 
-            OutlinedButton(
+            SecondaryButton(
+                text = "Hủy liên kết kính hiện tại",
                 onClick = onUnlinkClick,
                 enabled = state.canUnlink,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Hủy Liên Kết Kính Hiện Tại")
-            }
+                danger = true,
+            )
 
-            if (state.message.isNotBlank()) {
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = if (state.message.startsWith("❌")) dangerColor else successColor,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
-            }
+            InlineMessage(text = state.message, isError = state.isFailureMessage)
         }
 
-        SectionLabel(text = "Tình Trạng Kính")
+        SectionLabel(text = "Tình trạng kính")
         GlassesStatusCard(
             status = state.status,
             error = state.statusError,
@@ -144,7 +143,7 @@ fun GlassesLinkScreen(
             onRefresh = onRefreshStatus,
         )
 
-        SectionLabel(text = "Cấp Mạng Wi-Fi Cho Kính")
+        SectionLabel(text = "Đổi Wi-Fi cho kính")
         WifiPanel(
             state = state,
             onWifiSsidChange = onWifiSsidChange,
@@ -153,13 +152,13 @@ fun GlassesLinkScreen(
             onSendWifi = onSendWifi,
         )
 
-        SectionLabel(text = "Cập Nhật Phần Mềm Kính")
+        SectionLabel(text = "Cập nhật phần mềm kính")
         FirmwarePanel(
             state = state,
             onUpdateFirmware = onUpdateFirmware,
         )
 
-        SectionLabel(text = "Hướng Dẫn")
+        SectionLabel(text = "Hướng dẫn")
 
         RowCard(
             title = "Tìm số máy trên kính",
@@ -169,7 +168,7 @@ fun GlassesLinkScreen(
         )
 
         RowCard(
-            title = "Kính mất mạng thì làm sao?",
+            title = "Kính mất Wi-Fi thì làm sao?",
             subtitle = "Kính tự phát ra một mạng Wi-Fi tên \"VisionCare-Setup\" (mật khẩu " +
                 "visioncare). Nối điện thoại vào mạng đó rồi khai báo mạng mới ở trên — " +
                 "app tự biết phải đi đường nào.",
@@ -184,14 +183,15 @@ private fun HeroCard() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 6.dp, shape = RoundedCornerShape(22.dp), spotColor = shadowColor),
+            .shadow(elevation = 6.dp, shape = RoundedCornerShape(22.dp), spotColor = shadowColor)
+            .semantics(mergeDescendants = true) {},
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "Liên Kết Kính Your Eyes",
+                text = "Liên kết kính SeeVia",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Black,
                     color = inkColor,
@@ -244,10 +244,7 @@ private fun GlassesStatusCard(
                 style = MaterialTheme.typography.bodyMedium.copy(color = mutedColor),
             )
 
-            error.isNotBlank() -> Text(
-                text = "❌ $error",
-                style = MaterialTheme.typography.bodySmall.copy(color = dangerColor),
-            )
+            error.isNotBlank() -> InlineMessage(text = error, isError = true)
 
             status == null -> Text(
                 text = "Nhập số máy rồi bấm \"Đọc lại\" để xem tình trạng kính.",
@@ -292,13 +289,11 @@ private fun GlassesStatusCard(
             }
         }
 
-        OutlinedButton(
+        SecondaryButton(
+            text = if (isRefreshing) "Đang đọc…" else "Đọc lại tình trạng",
             onClick = onRefresh,
             enabled = canRefresh,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (isRefreshing) "Đang đọc..." else "Đọc Lại Tình Trạng")
-        }
+        )
     }
 }
 
@@ -329,13 +324,11 @@ private fun WifiPanel(
             style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
         )
 
-        OutlinedButton(
+        SecondaryButton(
+            text = if (state.isScanning) "Đang hỏi kính…" else "Hỏi kính xem có mạng nào",
             onClick = onScanNetworks,
             enabled = !state.isScanning,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (state.isScanning) "Đang hỏi kính..." else "Hỏi Kính Xem Có Mạng Nào")
-        }
+        )
 
         // Chỉ bản quét CỦA KÍNH mới tính. Điện thoại thấy cả mạng 5 GHz mà
         // radio ESP32-S3 không thể vào, và chọn nhầm một trong số đó nhìn y hệt
@@ -344,7 +337,11 @@ private fun WifiPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onWifiSsidChange(network.ssid) }
+                    .defaultMinSize(minHeight = MinTouchTarget)
+                    .clickable(onClickLabel = "chọn mạng ${network.ssid}", role = Role.Button) { onWifiSsidChange(network.ssid) }
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "Mạng ${network.ssid}, sóng ${network.rssi} dBm" + if (network.secure) "" else ", không có mật khẩu"
+                    }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -370,8 +367,8 @@ private fun WifiPanel(
         OutlinedTextField(
             value = state.wifiSsid,
             onValueChange = onWifiSsidChange,
-            label = { Text("Tên mạng Wi-Fi (2.4 GHz)") },
-            supportingText = { Text("Kính không bắt được sóng 5 GHz.") },
+            label = { Text("Tên mạng Wi-Fi") },
+            supportingText = { Text("Kính chỉ bắt được Wi-Fi 2.4 GHz, không bắt được 5 GHz.") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -385,7 +382,7 @@ private fun WifiPanel(
         )
 
         GradientButton(
-            text = if (state.isLoading) "Đang gửi..." else "Gửi Cấu Hình Mạng Cho Kính",
+            text = if (state.isLoading) "Đang gửi…" else "Gửi mạng Wi-Fi cho kính",
             onClick = onSendWifi,
             enabled = state.canSendWifi,
         )
@@ -422,7 +419,7 @@ private fun FirmwarePanel(
         )
 
         GradientButton(
-            text = if (state.isUpdatingFirmware) "Đang gửi lệnh..." else "Cập Nhật Kính Ngay",
+            text = if (state.isUpdatingFirmware) "Đang gửi lệnh…" else "Cập nhật kính ngay",
             onClick = onUpdateFirmware,
             enabled = state.canUpdateFirmware,
         )
@@ -431,7 +428,7 @@ private fun FirmwarePanel(
 
 @Composable
 private fun InfoLine(label: String, value: String, highlight: Boolean = false) {
-    Column {
+    Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
@@ -439,7 +436,7 @@ private fun InfoLine(label: String, value: String, highlight: Boolean = false) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(
-                color = if (highlight) accentColor else inkColor,
+                color = if (highlight) accentTextColor else inkColor,
                 fontWeight = FontWeight.Bold,
             ),
         )
@@ -448,7 +445,10 @@ private fun InfoLine(label: String, value: String, highlight: Boolean = false) {
 
 @Composable
 private fun StatusRow(online: Boolean, label: String, detail: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+    ) {
         Box(
             modifier = Modifier
                 .size(10.dp)
@@ -482,7 +482,9 @@ private fun PairingStatusCard(pairedDeviceId: String) {
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .padding(14.dp)
+                .semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -494,7 +496,7 @@ private fun PairingStatusCard(pairedDeviceId: String) {
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = if (isPaired) "Đang liên kết" else "Chưa liên kết kính nào",
+                    text = if (isPaired) "Đã liên kết với kính" else "Chưa liên kết kính nào",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = inkColor,

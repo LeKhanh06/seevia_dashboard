@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.youreyes.app.BuildConfig
 import com.youreyes.app.core.AppConfig
+import com.youreyes.app.core.UserErrors
+import com.youreyes.app.core.UserFacingException
 import com.youreyes.app.network.GlassesLinkPayload
 import com.youreyes.app.network.DeviceApiClient
 import com.youreyes.app.network.GlassesBleProvisioner
@@ -85,7 +87,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
         if (!state.canSubmit) return
 
         val normalizedDeviceId = normalizedDeviceId(state.glassesDeviceId)
-        _uiState.update { it.copy(isLoading = true, message = "Đang pairing...") }
+        _uiState.update { it.copy(isLoading = true, message = "Đang liên kết kính…") }
         viewModelScope.launch(Dispatchers.IO) {
             val result = DeviceApiClient().linkGlassesDevice(
                 baseUrl = state.serverUrl.trimEnd('/'),
@@ -101,14 +103,13 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        message = "✅ Đã pairing kính thành công.",
+                        message = "Đã liên kết kính.",
                         pairedDeviceId = normalizedDeviceId,
                     )
                 }
                 refreshStatus()
             } else {
-                val err = result.exceptionOrNull()?.message ?: "Lỗi không rõ nguyên nhân"
-                _uiState.update { it.copy(isLoading = false, message = "❌ Lỗi: $err") }
+                _uiState.update { it.copy(isLoading = false, message = "Chưa liên kết được. " + UserErrors.describe(result.exceptionOrNull(), UserErrors.Action.GLASSES_LINK)) }
             }
         }
     }
@@ -135,7 +136,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                     it.copy(
                         isLoading = false,
                         message = if (unlinked) {
-                            "✅ Đã hủy liên kết kính."
+                            "Đã hủy liên kết kính."
                         } else {
                             "Không có kính nào đang liên kết với tài khoản này."
                         },
@@ -144,8 +145,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 }
             } else {
-                val err = result.exceptionOrNull()?.message ?: "Lỗi không rõ nguyên nhân"
-                _uiState.update { it.copy(isLoading = false, message = "❌ Lỗi: $err") }
+                _uiState.update { it.copy(isLoading = false, message = "Chưa hủy được liên kết. " + UserErrors.describe(result.exceptionOrNull())) }
             }
         }
     }
@@ -180,7 +180,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                     _uiState.update {
                         it.copy(
                             isRefreshing = false,
-                            statusError = error.message ?: "Không đọc được trạng thái kính",
+                            statusError = "Không đọc được tình trạng kính. " + UserErrors.describe(error),
                         )
                     }
                 },
@@ -216,7 +216,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                     _uiState.update {
                         it.copy(
                             isScanning = false,
-                            message = "❌ Không nối được tới kính ở $host: ${error.message}",
+                            message = "Không nối được tới kính. Hãy nối điện thoại vào Wi-Fi VisionCare-Setup (mật khẩu visioncare) rồi thử lại.",
                         )
                     }
                 },
@@ -286,7 +286,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                             // glasses go silent for ~20 s while they reboot onto
                             // the new network, and silence with no warning reads
                             // exactly like a device that has just died.
-                            message = "✅ Đã gửi. Kính sẽ khởi động lại và vào mạng " +
+                            message = "Đã gửi. Kính sẽ khởi động lại và vào mạng " +
                                 "\"${state.wifiSsid.trim()}\" sau khoảng 20 giây.",
                             // Never keep the password in memory longer than the
                             // request that needed it.
@@ -296,7 +296,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                 },
                 onFailure = { error ->
                     _uiState.update {
-                        it.copy(isLoading = false, message = "❌ ${error.message}")
+                        it.copy(isLoading = false, message = "Chưa đổi được Wi-Fi. " + UserErrors.describe(error, UserErrors.Action.WIFI))
                     }
                 },
             )
@@ -333,7 +333,7 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
             // có thể ĐÃ nhận và đang khởi động lại. Thử tiếp qua SoftAP lúc này
             // là gửi lần thứ hai vào một chiếc kính đang reboot — và câu báo sẽ
             // nói dối theo cả hai chiều. Nói đúng thứ ta biết.
-            is GlassesBleProvisioner.Result.Failed -> Result.failure(Exception(r.reason))
+            is GlassesBleProvisioner.Result.Failed -> Result.failure(UserFacingException(r.reason))
         }
     }
 
@@ -352,14 +352,14 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
                     _uiState.update {
                         it.copy(
                             isUpdatingFirmware = false,
-                            message = "✅ Kính đang tải bản $version. Đừng tắt kính " +
+                            message = "Kính đang tải bản $version. Đừng tắt kính " +
                                 "trong khoảng 1-2 phút tới.",
                         )
                     }
                 },
                 onFailure = { error ->
                     _uiState.update {
-                        it.copy(isUpdatingFirmware = false, message = "❌ ${error.message}")
+                        it.copy(isUpdatingFirmware = false, message = "Chưa cập nhật được kính. " + UserErrors.describe(error))
                     }
                 },
             )

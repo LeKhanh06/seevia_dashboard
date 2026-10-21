@@ -7,6 +7,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.input.KeyboardType
+import com.youreyes.app.core.AppConfig
+import com.youreyes.app.ui.components.ChoiceChip
+import com.youreyes.app.ui.components.InlineMessage
+import com.youreyes.app.ui.components.MinTouchTarget
+import com.youreyes.app.ui.components.PanelCard
+import com.youreyes.app.ui.components.ToggleRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -150,7 +161,16 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
 ) {
     ScreenShell(modifier = modifier) {
-        // User Header Card
+        // Who is signed in. One focus stop; the technical ids only show in developer mode.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val accountName = remember(preferencesState.isLoggedIn) {
+            AppConfig.prefs(context).getString(AppConfig.KEY_DISPLAY_NAME, "").orEmpty().trim()
+        }
+        val accountTitle = when {
+            accountName.isNotBlank() -> accountName
+            preferencesState.isLoggedIn -> "Đã đăng nhập"
+            else -> "Chưa đăng nhập"
+        }
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -158,7 +178,11 @@ fun ProfileScreen(
                     elevation = 6.dp,
                     shape = RoundedCornerShape(22.dp),
                     spotColor = shadowColor,
-                ),
+                )
+                .semantics(mergeDescendants = true) {
+                    heading()
+                    contentDescription = "Tài khoản SeeVia. $accountTitle"
+                },
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = surfaceColor),
             border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
@@ -177,7 +201,7 @@ fun ProfileScreen(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
-                        tint = accentColor,
+                        tint = accentTextColor,
                         modifier = Modifier.size(30.dp),
                     )
                 }
@@ -186,11 +210,14 @@ fun ProfileScreen(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Người dùng Your Eyes",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Black,
-                            color = inkColor,
-                        ),
+                        text = accountTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = inkColor,
+                    )
+                    Text(
+                        text = "Tài khoản SeeVia",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = mutedColor,
                     )
                     if (developerMode) {
                         Text(
@@ -216,8 +243,8 @@ fun ProfileScreen(
         )
 
         RowCard(
-            title = "Kính Your Eyes",
-            subtitle = "Liên kết hoặc hủy liên kết cặp kính đang dùng.",
+            title = "Kính SeeVia",
+            subtitle = "Liên kết kính, đổi Wi-Fi và cập nhật kính.",
             icon = Icons.Default.Visibility,
             onClick = onNavigateToGlasses,
         )
@@ -226,174 +253,89 @@ fun ProfileScreen(
         // user_id/device_id demo fields below, but a successful login here replaces
         // the user_id those fields show/send (see AuthViewModel's class doc).
         RowCard(
-            title = "Tài Khoản Đăng Nhập",
-            subtitle = "Đăng ký/đăng nhập tài khoản thật bằng số điện thoại — thay cho việc tự gõ user_id bên dưới.",
+            title = "Tài khoản",
+            subtitle = "Đăng nhập hoặc đăng ký bằng số điện thoại để gọi, nhắn tin và lưu cài đặt.",
             icon = Icons.Default.AccountCircle,
             iconTone = accentColor,
             onClick = onNavigateToAuth,
         )
 
         RowCard(
-            title = "Hỗ Trợ & Góp Ý",
-            subtitle = "Gửi phản hồi hoặc yêu cầu hỗ trợ tới đội ngũ Your Eyes (cần đăng nhập).",
+            title = "Hỗ trợ và góp ý",
+            subtitle = "Gửi phản hồi hoặc nhờ đội ngũ SeeVia hỗ trợ. Cần đăng nhập.",
             icon = Icons.Default.MailOutline,
             iconTone = accentTextColor,
             onClick = onNavigateToSupport,
         )
 
-        // Section: Config Emergency Contact (1 Single Contact)
-        SectionLabel(text = "Cấu Hình Số Khẩn Cấp (1 Người Thân)")
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = surfaceColor),
-            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Số điện thoại người thân nhận cuộc gọi khẩn cấp khi bấm nút SOS 3 lần:",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = mutedColor,
-                    ),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = state.emergencyContact,
-                    onValueChange = onEmergencyContactChange,
-                    label = { Text("Số ĐT người thân (ví dụ: 0901234567)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+        SectionLabel(text = "Số điện thoại khẩn cấp")
+        PanelCard {
+            Text(
+                text = "Người thân nhận cuộc gọi khi bạn bấm nút SOS hoặc nói “khẩn cấp”.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = mutedColor,
+            )
+            OutlinedTextField(
+                value = state.emergencyContact,
+                onValueChange = onEmergencyContactChange,
+                label = { Text("Số điện thoại người thân") },
+                supportingText = { Text("Ví dụ: 0901234567. Lưu ngay khi bạn gõ.") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
-        // Accessibility Settings — real GET/PUT /preferences (PreferencesViewModel),
-        // not local-only state; disabled until logged in since the API requires a
-        // real user session (see ProfileRoute / PreferencesViewModel.canEdit).
-        SectionLabel(text = "Cài Đặt Trợ Năng")
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = surfaceColor),
-            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                if (!preferencesState.isLoggedIn) {
-                    Text(
-                        text = "Đăng nhập ở mục \"Tài Khoản Đăng Nhập\" bên trên để lưu cài đặt trợ năng.",
-                        style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
-                    )
-                }
+        // Accessibility settings: real GET/PUT /preferences (PreferencesViewModel), not local-only
+        // state; disabled until logged in since the API requires a real user session.
+        SectionLabel(text = "Cài đặt trợ năng")
+        PanelCard {
+            if (!preferencesState.isLoggedIn) {
+                Text(
+                    text = "Đăng nhập ở mục “Tài khoản” để lưu các cài đặt này.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = mutedColor,
+                )
+            }
 
-                // Cỡ chữ
-                Column {
-                    Text(
-                        text = "Cỡ chữ hiển thị",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = inkColor,
-                        ),
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        PreferencesUiState.FONT_SIZE_OPTIONS.forEach { opt ->
-                            ChipButton(
-                                text = opt,
-                                isSelected = preferencesState.fontSizeOption == opt,
-                                onClick = { onFontSizeChange(opt) },
-                                enabled = preferencesState.canEdit,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-
-                // Giọng đọc
-                Column {
-                    Text(
-                        text = "Giọng đọc phản hồi Kính",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = inkColor,
-                        ),
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        PreferencesUiState.VOICE_OPTIONS.forEach { opt ->
-                            ChipButton(
-                                text = opt,
-                                isSelected = preferencesState.voiceOption == opt,
-                                onClick = { onVoiceChange(opt) },
-                                enabled = preferencesState.canEdit,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-
-                // Tương phản cao
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Độ tương phản cao",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = inkColor,
-                        ),
-                    )
-                    Switch(
-                        checked = preferencesState.highContrast,
-                        onCheckedChange = onHighContrastChange,
+            ChoiceGroup(title = "Cỡ chữ hiển thị") {
+                PreferencesUiState.FONT_SIZE_OPTIONS.forEach { opt ->
+                    ChoiceChip(
+                        text = opt,
+                        selected = preferencesState.fontSizeOption == opt,
+                        onClick = { onFontSizeChange(opt) },
                         enabled = preferencesState.canEdit,
-                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = successColor),
-                    )
-                }
-
-                // Phản hồi rung
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Phản hồi rung chạm (Haptics)",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = inkColor,
-                        ),
-                    )
-                    Switch(
-                        checked = preferencesState.hapticsEnabled,
-                        onCheckedChange = onHapticsChange,
-                        enabled = preferencesState.canEdit,
-                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = successColor),
-                    )
-                }
-
-                if (preferencesState.message.isNotBlank()) {
-                    Text(
-                        text = preferencesState.message,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (preferencesState.isError) dangerColor else successColor,
-                            fontWeight = FontWeight.Bold,
-                        ),
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
+
+            ChoiceGroup(title = "Giọng đọc phản hồi của kính") {
+                PreferencesUiState.VOICE_OPTIONS.forEach { opt ->
+                    ChoiceChip(
+                        text = opt,
+                        selected = preferencesState.voiceOption == opt,
+                        onClick = { onVoiceChange(opt) },
+                        enabled = preferencesState.canEdit,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            ToggleRow(
+                label = "Tương phản cao",
+                checked = preferencesState.highContrast,
+                onCheckedChange = onHighContrastChange,
+                enabled = preferencesState.canEdit,
+            )
+            ToggleRow(
+                label = "Rung khi chạm",
+                checked = preferencesState.hapticsEnabled,
+                onCheckedChange = onHapticsChange,
+                enabled = preferencesState.canEdit,
+            )
+
+            InlineMessage(text = preferencesState.message, isError = preferencesState.isError)
         }
 
         // Server URL & Registration Config
@@ -489,34 +431,20 @@ fun ProfileScreen(
     }
 }
 
+/** A titled row of [ChoiceChip]s; TalkBack reads the title as a group heading before the options. */
 @Composable
-private fun ChipButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                when {
-                    !enabled -> accentSoftColor.copy(alpha = 0.5f)
-                    isSelected -> accentColor
-                    else -> accentSoftColor
-                }
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
+private fun ChoiceGroup(title: String, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected && enabled) Color.White else accentTextColor.copy(alpha = if (enabled) 1f else 0.6f),
-            ),
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = inkColor,
+            modifier = Modifier.semantics { heading() },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
         )
     }
 }
@@ -556,6 +484,7 @@ private fun VersionRow(onRevealDeveloperMode: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            .defaultMinSize(minHeight = MinTouchTarget)
             .clickable(role = Role.Button) {
                 if (developerMode) {
                     DeveloperMode.setEnabled(false)
@@ -572,7 +501,7 @@ private fun VersionRow(onRevealDeveloperMode: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Your Eyes — phiên bản $versionName",
+            text = "SeeVia, phiên bản $versionName",
             style = MaterialTheme.typography.bodyMedium,
             color = mutedColor,
         )

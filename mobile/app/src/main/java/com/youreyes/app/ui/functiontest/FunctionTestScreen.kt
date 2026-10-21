@@ -15,6 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -53,7 +58,7 @@ fun FunctionTestScreen(
     onBack: (() -> Unit)? = null,
 ) {
     ScreenShell(modifier = modifier, title = "Kiểm thử action (nội bộ)", onBack = onBack) {
-        SectionLabel(text = "Kiểm Thử Handler Trên Máy")
+        SectionLabel(text = "Kiểm thử trên máy")
 
         rows.forEach { row ->
             FunctionTestCard(row = row, onParamsChange = onParamsChange, onRun = onRun)
@@ -86,6 +91,7 @@ private fun FunctionTestCard(
             Text(
                 text = "${row.label} (${row.action})",
                 style = MaterialTheme.typography.titleSmall.copy(color = inkColor),
+                modifier = Modifier.semantics { heading() },
             )
             OutlinedTextField(
                 value = row.paramsJson,
@@ -95,7 +101,7 @@ private fun FunctionTestCard(
                 modifier = Modifier.fillMaxWidth(),
             )
             GradientButton(
-                text = if (row.isRunning) "Đang thực thi..." else "Chạy Local Handler",
+                text = if (row.isRunning) "Đang chạy…" else "Chạy thử",
                 onClick = { onRun(row.action) },
                 enabled = !row.isRunning,
             )
@@ -104,6 +110,10 @@ private fun FunctionTestCard(
                     text = text,
                     color = if (row.isError) dangerColor else successColor,
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = (if (row.isError) "Lỗi. " else "Kết quả. ") + text
+                    },
                 )
             }
         }

@@ -4,6 +4,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.youreyes.app.ui.components.MinTouchTarget
+import com.youreyes.app.ui.theme.accentTextColor
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +47,7 @@ import com.youreyes.app.ui.theme.surfaceColor
 fun ActivityLogRoute(modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
     val viewModel: ActivityLogViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
-    ActivityLogScreen(state = state, onRefresh = viewModel::refresh, modifier = modifier)
+    ActivityLogScreen(state = state, onRefresh = viewModel::refresh, onBack = onBack, modifier = modifier)
 }
 
 @Composable
@@ -58,9 +63,9 @@ fun ActivityLogScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionLabel(text = "Các Lệnh Kính Đã Gửi Tới Điện Thoại")
-            IconButton(onClick = onRefresh) {
-                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Làm mới", tint = accentColor)
+            SectionLabel(text = "Lệnh kính đã gửi", modifier = Modifier.weight(1f))
+            IconButton(onClick = onRefresh, modifier = Modifier.size(MinTouchTarget)) {
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Làm mới danh sách", tint = accentTextColor)
             }
         }
 
@@ -86,7 +91,10 @@ private fun LoadingCard() {
                 .padding(20.dp),
             horizontalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator(color = accentColor)
+            CircularProgressIndicator(
+                color = accentTextColor,
+                modifier = Modifier.semantics { contentDescription = "Đang tải lịch sử" },
+            )
         }
     }
 }
@@ -99,7 +107,7 @@ private fun EmptyCard() {
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = BorderStroke(1.dp, borderColor),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(20.dp).semantics(mergeDescendants = true) {}) {
             Text(
                 text = "Chưa có hoạt động nào",
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -108,7 +116,7 @@ private fun EmptyCard() {
                 ),
             )
             Text(
-                text = "Các lệnh kính gửi tới điện thoại (đặt xe, phát nhạc, điều hướng, khẩn cấp, gọi liên hệ...) sẽ xuất hiện tại đây.",
+                text = "Khi kính gửi lệnh tới điện thoại (đặt xe, phát nhạc, điều hướng, khẩn cấp, gọi điện), lệnh sẽ hiện ở đây.",
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = mutedColor,
                 ),
@@ -129,7 +137,10 @@ private fun ActivityLogItemCard(row: ActivityLogRow) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), spotColor = shadowColor),
+            .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp), spotColor = shadowColor)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${row.actionLabel}. $statusText. ${row.receivedAtText}. ${row.summary}"
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = BorderStroke(1.dp, borderColor),
@@ -145,7 +156,7 @@ private fun ActivityLogItemCard(row: ActivityLogRow) {
             ) {
                 Text(
                     text = row.actionLabel,
-                    style = MaterialTheme.typography.bodyMedium.copy(
+                    style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = inkColor,
                     ),
@@ -153,7 +164,7 @@ private fun ActivityLogItemCard(row: ActivityLogRow) {
                 )
                 Text(
                     text = statusText,
-                    style = MaterialTheme.typography.labelSmall.copy(
+                    style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Black,
                         color = statusColor,
                     ),

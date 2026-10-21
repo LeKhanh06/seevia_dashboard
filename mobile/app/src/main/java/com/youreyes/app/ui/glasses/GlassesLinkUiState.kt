@@ -46,6 +46,10 @@ data class GlassesLinkUiState(
     val isPaired: Boolean
         get() = pairedDeviceId.isNotBlank()
 
+    /** The last [message] reports something that did not work (its wording starts with "Chưa" or "Không"). */
+    val isFailureMessage: Boolean
+        get() = message.startsWith("Chưa") || message.startsWith("Không nối") || message.startsWith("Không đọc")
+
     val canSubmit: Boolean
         get() = !isLoading &&
             serverUrl.isNotBlank() &&

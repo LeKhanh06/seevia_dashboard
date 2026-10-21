@@ -10,6 +10,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -67,7 +70,8 @@ fun ReadinessScreen(
     onBack: (() -> Unit)? = null,
 ) {
     ScreenShell(modifier = modifier, title = "Sẵn sàng nhận lệnh", onBack = onBack) {
-        ReadinessSummaryCard(state = state)
+        // The result is announced when it changes, e.g. after coming back from system settings.
+        ReadinessSummaryCard(state = state, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 
         val missing = state.missing
         if (missing.isNotEmpty()) {

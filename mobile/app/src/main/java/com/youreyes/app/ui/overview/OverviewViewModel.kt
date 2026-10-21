@@ -122,7 +122,11 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
     fun onUserIdChange(id: String)     = _uiState.update { it.copy(userId = id) }
     fun onDeviceIdChange(id: String)   = _uiState.update { it.copy(deviceId = id) }
     fun onBearerTokenChange(t: String) = _uiState.update { it.copy(bearerToken = t) }
-    fun onEmergencyContactChange(v: String) = _uiState.update { it.copy(emergencyContact = v) }
+    /** Saved at once: the SOS button and the voice command read it from preferences, not from this screen. */
+    fun onEmergencyContactChange(v: String) {
+        _uiState.update { it.copy(emergencyContact = v) }
+        prefs.edit().putString(AppConfig.KEY_EMERGENCY_CONTACT, v.trim()).apply()
+    }
 
     /** Fills user_id/device_id with fresh random-suffixed defaults; still editable afterward. */
     fun generateNewIds() {

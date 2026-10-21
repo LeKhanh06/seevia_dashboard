@@ -28,7 +28,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.youreyes.app.ui.components.ChoiceChip
 import com.youreyes.app.ui.components.GradientButton
+import androidx.compose.ui.semantics.semantics
+import com.youreyes.app.ui.components.InlineMessage
+import androidx.compose.ui.semantics.contentDescription
 import com.youreyes.app.ui.components.ScreenShell
 import com.youreyes.app.ui.components.SectionLabel
 import com.youreyes.app.ui.theme.accentColor
@@ -68,20 +72,21 @@ fun SupportScreen(
     ScreenShell(modifier = modifier, title = "Hỗ trợ và góp ý", onBack = onBack) {
         if (!state.isLoggedIn) {
             Text(
-                text = "Đăng nhập ở mục \"Tài Khoản Đăng Nhập\" trong Hồ sơ để gửi yêu cầu hỗ trợ.",
-                style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
+                text = "Cần đăng nhập để gửi yêu cầu. Vào Hồ sơ, chọn Tài khoản.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = mutedColor,
             )
         }
 
-        SectionLabel(text = "Loại Yêu Cầu")
+        SectionLabel(text = "Loại yêu cầu")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SupportUiState.CATEGORIES.forEach { (value, label) ->
-                CategoryChip(
+                ChoiceChip(
                     text = label,
-                    isSelected = state.category == value,
+                    selected = state.category == value,
                     enabled = state.isLoggedIn && !state.isLoading,
                     onClick = { onCategoryChange(value) },
                     modifier = Modifier.weight(1f),
@@ -109,57 +114,19 @@ fun SupportScreen(
                 )
                 Text(
                     text = "${state.messageText.length}/${SupportUiState.MAX_MESSAGE_LENGTH}",
-                    style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
-                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = mutedColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "Đã nhập ${state.messageText.length} trên ${SupportUiState.MAX_MESSAGE_LENGTH} ký tự" },
                 )
                 GradientButton(
-                    text = if (state.isLoading) "Đang gửi..." else "Gửi",
+                    text = if (state.isLoading) "Đang gửi…" else "Gửi",
                     onClick = onSubmit,
                     enabled = state.canSubmit,
                 )
-                if (state.statusMessage.isNotBlank()) {
-                    Text(
-                        text = state.statusMessage,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (state.isError) dangerColor else successColor,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                    )
-                }
+                InlineMessage(text = state.statusMessage, isError = state.isError)
             }
         }
-    }
-}
-
-@Composable
-private fun CategoryChip(
-    text: String,
-    isSelected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                when {
-                    !enabled -> accentSoftColor.copy(alpha = 0.5f)
-                    isSelected -> accentColor
-                    else -> accentSoftColor
-                }
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected && enabled) Color.White else accentTextColor.copy(alpha = if (enabled) 1f else 0.6f),
-            ),
-        )
     }
 }

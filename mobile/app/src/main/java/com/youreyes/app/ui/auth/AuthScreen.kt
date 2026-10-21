@@ -26,7 +26,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.youreyes.app.ui.components.ChoiceChip
 import com.youreyes.app.ui.components.GradientButton
+import androidx.compose.ui.semantics.semantics
+import com.youreyes.app.ui.components.InlineMessage
+import com.youreyes.app.ui.components.SecondaryButton
 import com.youreyes.app.ui.components.ScreenShell
 import com.youreyes.app.ui.components.SectionLabel
 import com.youreyes.app.ui.theme.accentColor
@@ -85,15 +89,7 @@ fun AuthScreen(
             )
         }
 
-        if (state.message.isNotBlank()) {
-            Text(
-                text = state.message,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = if (state.isError) dangerColor else successColor,
-                    fontWeight = FontWeight.Bold,
-                ),
-            )
-        }
+        InlineMessage(text = state.message, isError = state.isError)
     }
 }
 
@@ -109,17 +105,25 @@ private fun LoggedInCard(state: AuthUiState, onLogout: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = state.loggedInDisplayName.ifBlank { "Đã đăng nhập" },
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, color = inkColor),
-            )
-            Text(
-                text = "SĐT: ${state.loggedInPhoneNumber}",
-                style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
-            )
-            OutlinedButton(onClick = onLogout, enabled = !state.isLoading) {
-                Text(if (state.isLoading) "Đang đăng xuất..." else "Đăng Xuất")
+            Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                Text(
+                    text = state.loggedInDisplayName.ifBlank { "Đã đăng nhập" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = inkColor,
+                )
+                Text(
+                    text = "Số điện thoại: ${state.loggedInPhoneNumber}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = mutedColor,
+                )
             }
+            SecondaryButton(
+                text = if (state.isLoading) "Đang đăng xuất…" else "Đăng xuất",
+                onClick = onLogout,
+                enabled = !state.isLoading,
+                danger = true,
+                onClickLabel = "đăng xuất khỏi tài khoản",
+            )
         }
     }
 }
@@ -137,23 +141,25 @@ private fun OtpCard(state: AuthUiState, onOtpCodeChange: (String) -> Unit, onSub
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "Nhập mã OTP đã gửi tới ${state.phoneNumber}",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = inkColor),
+                text = "Nhập mã xác thực cho số ${state.phoneNumber}",
+                style = MaterialTheme.typography.titleMedium,
+                color = inkColor,
             )
             Text(
-                text = "Server demo chưa nối SMS thật — mã OTP được ghi vào log server.",
-                style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
+                text = "Bản thử nghiệm chưa gửi tin nhắn SMS thật. Hãy hỏi người quản trị để lấy mã.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = mutedColor,
             )
             OutlinedTextField(
                 value = state.otpCode,
                 onValueChange = onOtpCodeChange,
-                label = { Text("Mã OTP") },
+                label = { Text("Mã xác thực") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 modifier = Modifier.fillMaxWidth(),
             )
             GradientButton(
-                text = if (state.isLoading) "Đang xác thực..." else "Xác Nhận OTP",
+                text = if (state.isLoading) "Đang xác thực…" else "Xác nhận mã",
                 onClick = onSubmit,
                 enabled = state.canSubmitOtp,
             )
@@ -170,21 +176,21 @@ private fun CredentialsCard(
     onDisplayNameChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    SectionLabel(text = "Đăng Nhập / Đăng Ký")
+    SectionLabel(text = "Đăng nhập hoặc đăng ký")
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ModeChip(
+        ChoiceChip(
             text = "Đăng nhập",
-            isSelected = state.mode == AuthMode.LOGIN,
+            selected = state.mode == AuthMode.LOGIN,
             onClick = { onModeChange(AuthMode.LOGIN) },
             modifier = Modifier.weight(1f),
         )
-        ModeChip(
+        ChoiceChip(
             text = "Đăng ký",
-            isSelected = state.mode == AuthMode.REGISTER,
+            selected = state.mode == AuthMode.REGISTER,
             onClick = { onModeChange(AuthMode.REGISTER) },
             modifier = Modifier.weight(1f),
         )
@@ -213,7 +219,8 @@ private fun CredentialsCard(
             OutlinedTextField(
                 value = state.password,
                 onValueChange = onPasswordChange,
-                label = { Text("Mật khẩu (tối thiểu 6 ký tự)") },
+                label = { Text("Mật khẩu") },
+                supportingText = { Text("Ít nhất 6 ký tự") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -223,42 +230,21 @@ private fun CredentialsCard(
                 OutlinedTextField(
                     value = state.displayName,
                     onValueChange = onDisplayNameChange,
-                    label = { Text("Tên hiển thị (không bắt buộc)") },
+                    label = { Text("Tên hiển thị") },
+                    supportingText = { Text("Không bắt buộc. Người thân sẽ thấy tên này.") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
             GradientButton(
                 text = when {
-                    state.isLoading -> "Đang xử lý..."
-                    state.mode == AuthMode.REGISTER -> "Đăng Ký"
-                    else -> "Đăng Nhập"
+                    state.isLoading -> "Đang xử lý…"
+                    state.mode == AuthMode.REGISTER -> "Đăng ký"
+                    else -> "Đăng nhập"
                 },
                 onClick = onSubmit,
                 enabled = state.canSubmitCredentials,
             )
         }
-    }
-}
-
-@Composable
-private fun ModeChip(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier,
-        border = BorderStroke(1.dp, if (isSelected) accentColor else borderColor),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
-                color = if (isSelected) accentColor else mutedColor,
-            ),
-        )
     }
 }

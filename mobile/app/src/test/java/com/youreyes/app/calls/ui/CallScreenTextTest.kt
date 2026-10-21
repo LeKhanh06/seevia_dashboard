@@ -21,8 +21,8 @@ class CallScreenTextTest {
     @Test
     fun status_text_is_vietnamese_for_every_state() {
         val me = CallExtras(name = "Mẹ")
-        assertEquals("Cuộc gọi từ kính", callStatus(CallState.Ringing("c", "Mẹ", false), me))
-        assertEquals("Cuộc gọi khẩn cấp từ kính", callStatus(CallState.Ringing("c", "Mẹ", true), me.copy(emergency = true)))
+        assertEquals("Mẹ đang gọi bạn", callStatus(CallState.Ringing("c", "Mẹ", false), me))
+        assertEquals("Cuộc gọi khẩn cấp. Mẹ đang gọi bạn", callStatus(CallState.Ringing("c", "Mẹ", true), me.copy(emergency = true)))
         assertEquals("Đang gọi Mẹ…", callStatus(CallState.Outgoing(""), me))
         assertEquals("Đang kết nối…", callStatus(CallState.Connecting("c"), me))
         assertEquals("Đang nói chuyện", callStatus(CallState.Active("c", 0), me))

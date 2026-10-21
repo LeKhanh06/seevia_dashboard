@@ -60,6 +60,9 @@ import kotlinx.coroutines.delay
 /** Buttons of an active call are at least this big; the plan's floor is 64 dp. */
 private val CallButtonSize = 72.dp
 
+/** Nghe / Từ chối while ringing: the only two things to do, so the biggest buttons in the app. */
+private val RingButtonSize = 104.dp
+
 /** "mm:ss", or "h:mm:ss" past one hour. */
 fun formatCallDuration(millis: Long): String {
     val total = (millis / 1000).coerceAtLeast(0)
@@ -76,7 +79,7 @@ fun callTitle(extras: CallExtras): String = extras.name.ifBlank { "Người thâ
 fun callStatus(state: CallState, extras: CallExtras): String = when (state) {
     CallState.Idle -> ""
     is CallState.Ringing ->
-        if (extras.emergency) "Cuộc gọi khẩn cấp từ kính" else "Cuộc gọi từ kính"
+        if (extras.emergency) "Cuộc gọi khẩn cấp. ${callTitle(extras)} đang gọi bạn" else "${callTitle(extras)} đang gọi bạn"
     is CallState.Outgoing -> "Đang gọi ${callTitle(extras)}…"
     is CallState.Connecting -> "Đang kết nối…"
     is CallState.Active -> "Đang nói chuyện"
@@ -240,6 +243,7 @@ private fun RingingControls(onAnswer: () -> Unit, onReject: () -> Unit) {
             icon = Icons.Default.CallEnd,
             fill = colors.danger,
             onClick = onReject,
+            size = RingButtonSize,
         )
         RoundCallButton(
             label = "Nghe",
@@ -247,6 +251,7 @@ private fun RingingControls(onAnswer: () -> Unit, onReject: () -> Unit) {
             icon = Icons.Default.Call,
             fill = colors.success,
             onClick = onAnswer,
+            size = RingButtonSize,
         )
     }
 }
@@ -318,12 +323,12 @@ private fun RoundCallButton(
                 .then(if (colors.isHighContrast) Modifier.border(2.dp, colors.ink, CircleShape) else Modifier),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = colors.onAccent, modifier = Modifier.size(36.dp))
+            Icon(icon, contentDescription = null, tint = colors.onAccent, modifier = Modifier.size(if (size > CallButtonSize) 52.dp else 36.dp))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.titleMedium,
+            style = if (size > CallButtonSize) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
             color = colors.ink,
             textAlign = TextAlign.Center,
         )

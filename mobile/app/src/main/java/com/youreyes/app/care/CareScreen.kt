@@ -43,7 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +62,7 @@ import com.youreyes.app.ui.components.ScreenShell
 import com.youreyes.app.ui.components.SectionLabel
 import com.youreyes.app.ui.components.StatusPill
 import com.youreyes.app.ui.components.StatusTone
+import com.youreyes.app.ui.components.ToggleRow
 import com.youreyes.app.ui.theme.AppTheme
 
 /** Every call or message button is at least this tall (the plan's floor for call buttons). */
@@ -138,7 +141,7 @@ fun CareScreen(
                 CareCard {
                     PersonHeader(name = link.peerDisplayName.ifBlank { "Một người dùng SeeVia" }, phone = link.peerPhoneMasked)
                     Text(
-                        text = "mời bạn làm người thân. Khi chấp nhận, bạn gọi và nhắn tin được cho kính của họ.",
+                        text = "mời bạn làm người thân. Khi bạn chấp nhận, bạn gọi và nhắn tin được cho kính của họ.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppTheme.colors.inkSecondary,
                     )
@@ -202,7 +205,12 @@ fun CareScreen(
             )
         }
         if (state.isLoading) {
-            Text(text = "Đang tải…", style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.inkSecondary)
+            Text(
+                text = "Đang tải danh sách…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppTheme.colors.inkSecondary,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
         } else {
             ActionButton(
                 text = "Tải lại danh sách",
@@ -293,25 +301,12 @@ private fun InviteFormCard(state: CareScreenState, onForm: ((InviteForm) -> Invi
             supportingText = { Text("Để kính nhận ra khi bạn nói “gọi cho má”. Tối đa ${InviteForm.MAX_ALIASES} tên.") },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = ActionHeight)
-                .toggleable(
-                    value = form.emergency,
-                    role = Role.Switch,
-                    onValueChange = { v -> onForm { it.copy(emergency = v) } },
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Gọi người này khi khẩn cấp",
-                style = MaterialTheme.typography.bodyLarge,
-                color = AppTheme.colors.ink,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(checked = form.emergency, onCheckedChange = null)
-        }
+        ToggleRow(
+            label = "Gọi người này khi khẩn cấp",
+            checked = form.emergency,
+            onCheckedChange = { v -> onForm { it.copy(emergency = v) } },
+            modifier = Modifier.defaultMinSize(minHeight = ActionHeight),
+        )
         OutlinedTextField(
             value = form.priorityText,
             onValueChange = { v -> onForm { it.copy(priorityText = v.filter { c -> c.isDigit() }.take(3)) } },
@@ -337,7 +332,10 @@ private fun InviteFormCard(state: CareScreenState, onForm: ((InviteForm) -> Invi
 
 @Composable
 private fun PersonHeader(name: String, phone: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+    ) {
         Text(text = name, style = MaterialTheme.typography.titleLarge, color = AppTheme.colors.ink)
         if (phone.isNotEmpty()) {
             Text(

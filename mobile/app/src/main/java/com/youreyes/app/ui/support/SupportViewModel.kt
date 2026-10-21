@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.youreyes.app.core.AppConfig
+import com.youreyes.app.core.UserErrors
 import com.youreyes.app.network.DeviceApiClient
 import com.youreyes.app.ui.auth.AuthViewModel
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +53,7 @@ class SupportViewModel(application: Application) : AndroidViewModel(application)
                     it.copy(
                         isLoading = false,
                         isError = false,
-                        statusMessage = "✅ Đã gửi. Cảm ơn bạn đã phản hồi!",
+                        statusMessage = "Đã gửi. Cảm ơn bạn đã phản hồi!",
                         messageText = "",
                     )
                 }
@@ -61,7 +62,7 @@ class SupportViewModel(application: Application) : AndroidViewModel(application)
                     it.copy(
                         isLoading = false,
                         isError = true,
-                        statusMessage = "❌ Gửi thất bại: ${result.exceptionOrNull()?.message}",
+                        statusMessage = "Chưa gửi được. " + UserErrors.describe(result.exceptionOrNull()),
                     )
                 }
             }

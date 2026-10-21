@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.youreyes.app.core.AppConfig
+import com.youreyes.app.core.UserErrors
 import com.youreyes.app.network.PreferencesPayload
 import com.youreyes.app.network.DeviceApiClient
 import com.youreyes.app.ui.theme.DisplaySettings
@@ -78,7 +79,7 @@ class PreferencesViewModel(application: Application) : AndroidViewModel(applicat
                     it.copy(
                         isLoading = false,
                         isError = true,
-                        message = "❌ Không tải được cài đặt: ${result.exceptionOrNull()?.message}",
+                        message = "Không tải được cài đặt. " + UserErrors.describe(result.exceptionOrNull()),
                     )
                 }
             }
@@ -145,7 +146,7 @@ class PreferencesViewModel(application: Application) : AndroidViewModel(applicat
         )
         if (result.isFailure) {
             _uiState.update {
-                it.copy(isError = true, message = "❌ Lưu cài đặt thất bại: ${result.exceptionOrNull()?.message}")
+                it.copy(isError = true, message = "Chưa lưu được cài đặt. " + UserErrors.describe(result.exceptionOrNull()))
             }
         }
     }

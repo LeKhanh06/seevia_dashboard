@@ -7,6 +7,7 @@ vào runtime.
 Mức: 0 Safe (không gửi) · 1 Danger · 2 High Danger · 3 Critical.
 """
 
+import json
 import logging
 import os
 import time
@@ -37,6 +38,16 @@ _CLASSES = {
     56: ("chair", "static"),
     58: ("plant", "static"),
 }
+
+
+def _load_classes(path: str) -> dict[int, tuple[str, str]]:
+    """Bảng lớp của model fine-tune: file JSON {id: [kind, nhóm]} (evaluations/train/classes_vh.json)."""
+    with open(path, encoding="utf-8") as f:
+        return {int(i): (kind, group) for i, (kind, group) in json.load(f).items()}
+
+
+if config.HAZARD_CLASSES_JSON:  # trống = COCO ở trên; có giá trị = bảng của model fine-tune
+    _CLASSES = _load_classes(config.HAZARD_CLASSES_JSON)
 
 
 @dataclass

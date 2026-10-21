@@ -212,8 +212,8 @@ class _Clock:
         return self.t
 
 
-def _tracker():
-    return hazard_predict.PredictTracker(hazard_predict.PredictParams(), CAM)
+def _tracker(**kw):
+    return hazard_predict.PredictTracker(hazard_predict.PredictParams(**kw), CAM)
 
 
 def test_area_default_unchanged(monkeypatch):
@@ -538,3 +538,24 @@ def test_unknown_hazard_logic_warns_once_and_runs_area(monkeypatch, caplog):
         hazard.make_anti()
     assert isinstance(a, hazard.HazardTracker) and isinstance(b, hazard.HazardTracker)
     assert sum("HAZARD_LOGIC" in r.message for r in caplog.records) == 1
+
+
+def test_confident_velocity_shrinks_by_sigma():
+    from live.hazard_predict import _confident
+    assert _confident(-2.0, 0.25, 2.0) == pytest.approx(-1.0)        # |v| − 2·0,5
+    assert _confident(0.3, 0.25, 2.0) == 0.0                         # chưa chắc: co về 0, không đổi dấu
+    assert _confident(1.5, 0.0, 2.0) == 1.5 and _confident(-0.4, 9.0, 0.0) == -0.4
+
+
+def test_v_conf_new_track_waits_but_fast_approach_still_warns():
+    from live import hazard_predict
+    # track mới (σ_v = 3 m/s): vận tốc đo nhiễu ở 2 khung đầu không được đẩy mức 2. σ_v của Kalman dừng ở ~0,6–0,9 m/s
+    # (do q, không do sai số thật) nên K lớn làm muộn mọi ca tiến lại chậm: K = 2 báo người đứng yên ở 1,95 m
+    tr = _tracker(v_conf_k=0.5)
+    hs = [tr.assess([_person(0.0, 4.2 - 0.3 * k)], k * DT) for k in range(2)]
+    assert all(h.level < 2 for h in hs)
+    # người đứng yên giữa lối, người dùng đi 1,2 m/s: vẫn báo sớm >= 1,5 s
+    run = _walk(_tracker(v_conf_k=0.5), [(0.0, 12.0, 0.0)], 1.2)
+    first = next(pos[0][1] for pos, h in run if h.level >= 2)
+    assert first >= 2 + 1.5 * 1.2
+    assert hazard_predict.PredictParams().v_conf_k == 0.0

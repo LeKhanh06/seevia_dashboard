@@ -402,6 +402,12 @@ HAZARD_NEW_NEAR_M = float(get("HAZARD_NEW_NEAR_M", "3.0"))
 HAZARD_COAST_FRAMES = int(get("HAZARD_COAST_FRAMES", "3"))
 # Hệ số nới hành lang theo độ bất định ngang của dự đoán (0 = không nới).
 HAZARD_SIGMA_K = float(get("HAZARD_SIGMA_K", "0.0"))
+# Chỉ tin phần vận tốc đã chắc: v_dùng = sign(v)·max(|v| − K·σ_v, 0) khi tính TTE (track mới σ_v lớn -> chưa coi là sắp
+# cắt hành lang; vật lao nhanh |v| >> σ_v vẫn báo sớm). 0 = dùng thẳng vận tốc ước lượng.
+HAZARD_V_CONF_K = float(get("HAZARD_V_CONF_K", "0.0"))
+# Track sống trong hệ ĐẦU (đã bù quay đầu) nhưng người dùng đi theo hướng THÂN: cộng dồn góc quay đầu (rò, hằng số thời gian
+# TAU giây để khi rẽ thật hệ thân bắt kịp) rồi xét hành lang ở hệ thân, X_thân = X − Z·θ. 0 = tắt (xét theo hướng đầu).
+HAZARD_YAW_TAU_S = float(get("HAZARD_YAW_TAU_S", "0.0"))
 # AntiAnnoy khi predict: mức 3 cần L3_VOTE/3 khung (urgent vượt phiếu nếu BYPASS), hạ mức phải giữ DOWN_HOLD khung.
 HAZARD_L3_VOTE = int(get("HAZARD_L3_VOTE", "2"))
 HAZARD_NEW_BYPASS_VOTE = get("HAZARD_NEW_BYPASS_VOTE", "1")

@@ -25,8 +25,9 @@ _COMMON = (
 )
 
 _NORMAL = _COMMON + (
-    "Đọc toàn bộ chữ trong ảnh rồi dịch sang tiếng Việt tự nhiên, ngắn gọn, dễ "
-    "nghe qua tai nghe."
+    "Đọc toàn bộ chữ trong ảnh, mỗi chữ đúng một lần. Chữ tiếng Việt thì đọc nguyên văn, "
+    "không diễn đạt lại. Chỉ chữ nước ngoài mới dịch sang tiếng Việt tự nhiên, nói bản dịch "
+    "thay cho bản gốc; không thêm nhãn \"Dịch:\", không đọc lại nội dung lần hai."
 )
 
 _SPECIALIZED = _COMMON + (

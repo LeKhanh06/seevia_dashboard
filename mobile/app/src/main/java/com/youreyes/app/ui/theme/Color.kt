@@ -16,9 +16,9 @@ import androidx.compose.ui.graphics.Color
  *     old YourEyesWarning #F59E2E on white = 2.1:1
  *     old YourEyesDanger  #EE5D5D on white = 3.0:1
  *
- * The brand hue is unchanged. What changed is which shade of it may carry text:
- * the bright cyan is now a fill-and-large-icon colour only, and a darkened
- * sibling carries any cyan lettering.
+ * Brand: navy #041466 (SeeVia, from ui/logo), set 2026-10-21 in place of the old
+ * cyan. Token names such as YourEyesCyan were kept so no screen had to change;
+ * read them as "accent".
  */
 
 // ---------------------------------------------------------------------------
@@ -26,27 +26,27 @@ import androidx.compose.ui.graphics.Color
 // Never draw text under 24sp in these on a white surface.
 // ---------------------------------------------------------------------------
 
-val YourEyesCyan = Color(0xFF12BFE7)
-val YourEyesTeal = Color(0xFF22D3BD)
-val YourEyesMint = Color(0xFF80F0D0)
-val YourEyesMintSoft = Color(0xFFE9FFFA)
-val YourEyesSkySoft = Color(0xFFE9F8FF)
+val YourEyesCyan = Color(0xFF041466)
+val YourEyesTeal = Color(0xFF2B45B8)
+val YourEyesMint = Color(0xFFB9C4F2)
+val YourEyesMintSoft = Color(0xFFE8ECFA)
+val YourEyesSkySoft = Color(0xFFEEF1FB)
 
-/** Text-safe sibling of [YourEyesCyan]. 5.8:1 on white. Use for cyan lettering and small icons. */
-val YourEyesCyanText = Color(0xFF0B6E86)
+/** Text-safe accent. Navy #041466 is 17:1 on white. (Token names kept from the old cyan palette; the values are the SeeVia navy brand, 2026-10-21.) */
+val YourEyesCyanText = Color(0xFF041466)
 
-/** Text-safe sibling of [YourEyesTeal]. 5.1:1 on white. */
-val YourEyesTealText = Color(0xFF0A6F63)
+/** Secondary blue for lettering. 9:1 on white. */
+val YourEyesTealText = Color(0xFF1F3AA8)
 
 // ---------------------------------------------------------------------------
 // Text on light surfaces
 // ---------------------------------------------------------------------------
 
 /** Primary text. 16.5:1 on white — AAA. */
-val YourEyesInk = Color(0xFF0E1F33)
+val YourEyesInk = Color(0xFF0B1230)
 
 /** Headings and brand lettering. 13.2:1 on white — AAA. */
-val YourEyesNavy = Color(0xFF14325B)
+val YourEyesNavy = Color(0xFF041466)
 
 /**
  * Secondary text: subtitles, captions, helper lines. 7.6:1 on white — AAA.
@@ -55,10 +55,10 @@ val YourEyesNavy = Color(0xFF14325B)
  * the app. Do not lighten it back for visual balance: if a block feels heavy,
  * cut words or change its size role, never its contrast.
  */
-val YourEyesMuted = Color(0xFF3D5670)
+val YourEyesMuted = Color(0xFF3B4668)
 
 /** Genuinely inactive text — a disabled control's label. 4.6:1 on white. */
-val YourEyesDisabled = Color(0xFF5E7186)
+val YourEyesDisabled = Color(0xFF5B6585)
 
 // ---------------------------------------------------------------------------
 // Surfaces and structure
@@ -67,15 +67,15 @@ val YourEyesDisabled = Color(0xFF5E7186)
 val YourEyesSurface = Color(0xFFFFFFFF)
 
 /** Slightly recessed surface for grouping inside a white card. */
-val YourEyesSurfaceSunken = Color(0xFFF2F7FA)
+val YourEyesSurfaceSunken = Color(0xFFF1F3FA)
 
 /** Hairline between rows inside one card. Structural only, never carries meaning. */
-val YourEyesLine = Color(0xFFC9E3E6)
+val YourEyesLine = Color(0xFFD3D9EE)
 
 /** Card border. Darkened from #DDF4F1 so a card edge stays findable at low acuity. */
-val YourEyesBorder = Color(0xFFB9D9DE)
+val YourEyesBorder = Color(0xFFB4BDDC)
 
-val YourEyesShadow = Color(0xFF5AA8B2)
+val YourEyesShadow = Color(0xFF3F4F94)
 
 // ---------------------------------------------------------------------------
 // Status — each has a text-weight value and a soft fill for its container
@@ -94,24 +94,23 @@ val YourEyesDanger = Color(0xFFC0271F)
 val YourEyesDangerSoft = Color(0xFFFCE8E6)
 
 /** 5.6:1 on white. */
-val YourEyesBlue = Color(0xFF14688F)
-val YourEyesBlueSoft = Color(0xFFE6F2F8)
+val YourEyesBlue = Color(0xFF1F3AA8)
+val YourEyesBlueSoft = Color(0xFFE8ECFA)
 
 // ---------------------------------------------------------------------------
 // Background and button gradients
 // ---------------------------------------------------------------------------
 
-val YourEyesGradientStart = Color(0xFFECFFFC)
-val YourEyesGradientMiddle = Color(0xFFF8FFFF)
-val YourEyesGradientEnd = Color(0xFFE9FAFF)
+val YourEyesGradientStart = Color(0xFFF1F3FC)
+val YourEyesGradientMiddle = Color(0xFFF9FAFE)
+val YourEyesGradientEnd = Color(0xFFECEFFA)
 
 /**
- * Primary button gradient, darkened from #14BCE3 → #52E5B4. White lettering on
- * the old mint end sat at 1.7:1 and was effectively unreadable outdoors; this
- * pair holds white at 4.6:1 at its lightest point.
+ * Primary button gradient, SeeVia navy #041466 to #1B34A0. White lettering holds
+ * at least 9:1 at its lightest point.
  */
-val YourEyesButtonGradientStart = Color(0xFF0A7E9B)
-val YourEyesButtonGradientEnd = Color(0xFF12876F)
+val YourEyesButtonGradientStart = Color(0xFF041466)
+val YourEyesButtonGradientEnd = Color(0xFF1B34A0)
 
 // ---------------------------------------------------------------------------
 // High-contrast mode

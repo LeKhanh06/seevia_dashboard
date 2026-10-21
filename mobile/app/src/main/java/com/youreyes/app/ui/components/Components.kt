@@ -4,6 +4,8 @@ import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Warning
@@ -31,6 +34,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +59,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,7 +115,8 @@ fun ScreenShell(
                 ScreenHeader(title = title.orEmpty(), onBack = onBack)
             }
             content()
-            Spacer(modifier = Modifier.height(16.dp))
+            // Room under the last item for the floating "Nói lệnh" button.
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }
@@ -468,7 +475,8 @@ fun InlineMessage(
     modifier: Modifier = Modifier,
     isError: Boolean = false,
 ) {
-    if (text.isBlank()) return
+    val shown = spokenText(text)
+    if (shown.isBlank()) return
     val colors = AppTheme.colors
 
     Row(
@@ -478,7 +486,9 @@ fun InlineMessage(
             .background(if (isError) colors.dangerSoft else colors.successSoft)
             .padding(16.dp)
             .semantics(mergeDescendants = true) {
-                liveRegion = LiveRegionMode.Polite
+                // An error interrupts; a confirmation waits its turn.
+                liveRegion = if (isError) LiveRegionMode.Assertive else LiveRegionMode.Polite
+                contentDescription = (if (isError) "Lỗi. " else "") + shown
             },
         verticalAlignment = Alignment.Top,
     ) {
@@ -490,11 +500,26 @@ fun InlineMessage(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = text,
+            text = shown,
             style = MaterialTheme.typography.bodyMedium,
             color = if (isError) colors.danger else colors.success,
         )
     }
+}
+
+/**
+ * Removes the leading status symbols (a check mark, a cross, a warning sign) that older
+ * ViewModel messages carry. TalkBack reads them aloud ("dấu X đỏ") and the screen already
+ * says success or failure through its colour, icon and wording.
+ */
+fun spokenText(text: String): String {
+    var start = 0
+    while (start < text.length) {
+        val ch = text[start]
+        if (ch.isLetterOrDigit() || ch == '"' || ch == '“' || ch == '(') break
+        start++
+    }
+    return text.substring(start).trim()
 }
 
 /**
@@ -694,5 +719,167 @@ fun SosButton(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+    }
+}
+
+
+/**
+ * One option out of a few (cỡ chữ, loại yêu cầu, đăng nhập/đăng ký). TalkBack hears
+ * "<text>, đang chọn, nút radio"; the selection is also drawn as a tick and a thick
+ * border, never as colour alone. At least [MinTouchTarget] tall.
+ */
+@Composable
+fun ChoiceChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val colors = AppTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = modifier
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .clip(shape)
+            .background(if (selected) colors.accentSoft else colors.surface)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (!enabled) colors.border else if (selected) colors.accentText else colors.border,
+                shape = shape,
+            )
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = if (enabled) colors.accentText else colors.inkDisabled,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (enabled) colors.ink else colors.inkDisabled,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * A label with a switch. The whole row is the control and one focus stop, so TalkBack says
+ * "<label>, đang bật, công tắc" rather than a nameless "công tắc" next to loose text.
+ */
+@Composable
+fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    detail: String? = null,
+) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+            .semantics { stateDescription = if (checked) "đang bật" else "đang tắt" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) colors.ink else colors.inkDisabled,
+            )
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.inkSecondary,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = colors.onAccent,
+                checkedTrackColor = colors.accentText,
+                uncheckedTrackColor = colors.surfaceSunken,
+                uncheckedBorderColor = colors.inkSecondary,
+            ),
+        )
+    }
+}
+
+/**
+ * The quieter button next to a [GradientButton]: outlined, 64dp tall, full width.
+ * Replaces Material's OutlinedButton, which is 40dp tall.
+ */
+@Composable
+fun SecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+    onClickLabel: String? = null,
+) {
+    val colors = AppTheme.colors
+    val ink = when {
+        !enabled -> colors.inkDisabled
+        danger -> colors.danger
+        else -> colors.accentText
+    }
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 64.dp)
+            .clip(shape)
+            .background(colors.surface)
+            .border(2.dp, if (enabled) ink else colors.border, shape)
+            .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (icon != null) {
+            Icon(imageVector = icon, contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        Text(text = text, style = MaterialTheme.typography.labelLarge, color = ink, textAlign = TextAlign.Center)
+    }
+}
+
+/** A white card that groups one idea; the shared look of the form panels. */
+@Composable
+fun PanelCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = AppTheme.colors
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+        border = androidx.compose.foundation.BorderStroke(if (colors.isHighContrast) 2.dp else 1.dp, colors.border),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
     }
 }

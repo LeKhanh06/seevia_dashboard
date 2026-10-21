@@ -27,4 +27,23 @@ data class OverviewUiState(
 
     val isReady: Boolean
         get() = serverConfigured && deviceRegistered
+
+    /**
+     * The phone has never reached the server, and the build already carries everything a
+     * registration needs. Without this the person has to find the developer form and tap
+     * "register" before the server can push anything to the phone.
+     */
+    val shouldAutoRegister: Boolean
+        get() = !isRegistered &&
+            !isLoading &&
+            serverUrl.isNotBlank() &&
+            bearerToken.isNotBlank() &&
+            userId.isNotBlank() &&
+            deviceId.isNotBlank()
+
+    companion object {
+        /** A demo build can name its glasses; a person-made pairing is never overwritten. */
+        fun shouldAutoLinkGlasses(configuredId: String, pairedId: String): Boolean =
+            configuredId.isNotBlank() && pairedId.isBlank()
+    }
 }

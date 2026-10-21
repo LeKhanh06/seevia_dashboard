@@ -53,6 +53,7 @@ import com.youreyes.app.ui.guide.UserGuideScreen
 import com.youreyes.app.ui.meeting.MeetingRoute
 import com.youreyes.app.ui.overview.OverviewRoute
 import com.youreyes.app.ui.profile.ProfileRoute
+import com.youreyes.app.ui.readiness.ReadinessRoute
 import com.youreyes.app.ui.safety.SafetyScreen
 import com.youreyes.app.ui.support.SupportRoute
 import com.youreyes.app.ui.theme.AppTheme
@@ -94,6 +95,7 @@ object Routes {
     const val DISPLAY = "display"
     const val DEV_TEST = "dev-test"
     const val CARE = "care"
+    const val READINESS = "readiness"
     const val CHAT = "chat/{peerUserId}?name={name}"
 
     /** Conversation with the glasses owner [peerUserId]; [name] only titles the screen. */
@@ -166,6 +168,7 @@ private fun NavGraphBuilder.appDestinations(
             onNavigateToTranslation = { navController.navigate(Routes.TRANSLATION) },
             onNavigateToMeeting = { navController.navigate(Routes.MEETING) },
             onNavigateToCare = { navController.navigate(Routes.CARE) },
+            onNavigateToReadiness = { navController.navigate(Routes.READINESS) },
         )
     }
     composable(Routes.FEATURES) { FeaturesScreen(modifier = modifier) }
@@ -192,6 +195,13 @@ private fun NavGraphBuilder.appDestinations(
     // blind user it is there.
     val back: () -> Unit = { navController.popBackStack() }
 
+    composable(Routes.READINESS) {
+        ReadinessRoute(
+            modifier = modifier,
+            onBack = back,
+            onOpenEmergencyContact = { navController.navigate(Routes.SAFETY) },
+        )
+    }
     composable(Routes.GLASSES) { GlassesLinkRoute(modifier = modifier, onBack = back) }
     composable(Routes.ACTIVITY_LOG) { ActivityLogRoute(modifier = modifier, onBack = back) }
     composable(Routes.AUTH) { AuthRoute(modifier = modifier, onBack = back) }

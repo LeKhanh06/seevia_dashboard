@@ -192,13 +192,15 @@ fun ProfileScreen(
                             color = inkColor,
                         ),
                     )
-                    Text(
-                        text = "ID: ${state.userId} | Serial: ${state.deviceId}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = mutedColor,
-                        ),
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
+                    if (developerMode) {
+                        Text(
+                            text = "ID: ${state.userId} | Serial: ${state.deviceId}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = mutedColor,
+                            ),
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 }
             }
         }

@@ -56,12 +56,15 @@ import com.youreyes.app.ui.components.MiniStat
 import com.youreyes.app.ui.components.RowCard
 import com.youreyes.app.ui.components.ScreenShell
 import com.youreyes.app.ui.components.SectionLabel
-import com.youreyes.app.ui.components.StatusPill
 import com.youreyes.app.ui.theme.accentColor
 import com.youreyes.app.ui.theme.accentTextColor
 import com.youreyes.app.ui.theme.borderColor
 import com.youreyes.app.ui.theme.inkColor
 import com.youreyes.app.ui.theme.mutedColor
+import com.youreyes.app.ui.readiness.ReadinessSummaryCard
+import com.youreyes.app.ui.readiness.ReadinessUiState
+import com.youreyes.app.ui.readiness.ReadinessViewModel
+import com.youreyes.app.ui.readiness.RefreshOnResume
 import com.youreyes.app.ui.theme.shadowColor
 import com.youreyes.app.ui.theme.successColor
 import com.youreyes.app.ui.theme.surfaceColor
@@ -77,6 +80,7 @@ fun OverviewRoute(
     onNavigateToTranslation: () -> Unit = {},
     onNavigateToMeeting: () -> Unit = {},
     onNavigateToCare: () -> Unit = {},
+    onNavigateToReadiness: () -> Unit = {},
 ) {
     val viewModel: OverviewViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
@@ -84,8 +88,14 @@ fun OverviewRoute(
     // first created (see OverviewViewModel.refreshUserId doc).
     LaunchedEffect(Unit) { viewModel.refreshUserId() }
 
+    val readinessViewModel: ReadinessViewModel = viewModel()
+    val readiness by readinessViewModel.uiState.collectAsState()
+    RefreshOnResume(readinessViewModel::refresh)
+
     OverviewScreen(
         state = state,
+        readiness = readiness,
+        onNavigateToReadiness = onNavigateToReadiness,
         onNavigateToFeatures = onNavigateToFeatures,
         onNavigateToProfile = onNavigateToProfile,
         onNavigateToActivityLog = onNavigateToActivityLog,
@@ -101,6 +111,8 @@ fun OverviewRoute(
 @Composable
 fun OverviewScreen(
     state: OverviewUiState,
+    readiness: ReadinessUiState = ReadinessUiState(),
+    onNavigateToReadiness: () -> Unit = {},
     onNavigateToFeatures: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToActivityLog: () -> Unit = {},
@@ -135,11 +147,12 @@ fun OverviewScreen(
 
         // Glasses Status Card
         DeviceStatusCard(
-            deviceId = state.deviceId,
-            userId = state.userId,
             isRegistered = state.isRegistered,
             onConfigureClick = onNavigateToProfile,
         )
+
+        // Whether the glasses' commands will actually work: permissions and phone settings.
+        ReadinessSummaryCard(state = readiness, onClick = onNavigateToReadiness)
 
         SectionLabel(text = "Trợ lý AI Kính Thông Minh")
 
@@ -311,8 +324,6 @@ private fun FeatureChip(
 
 @Composable
 private fun DeviceStatusCard(
-    deviceId: String,
-    userId: String,
     isRegistered: Boolean,
     onConfigureClick: () -> Unit,
 ) {
@@ -359,28 +370,13 @@ private fun DeviceStatusCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // "Serial" is the word on the invoice, not the word a wearer uses.
-            StatusPill(text = "Mã kính: $deviceId")
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "ID Tài khoản: $userId",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = mutedColor,
-                    ),
-                )
-                Text(
-                    text = "Phiên bản: v2.1.4",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = mutedColor,
-                    ),
-                )
-            }
+            // The account and glasses ids are plumbing: a wearer has no use for them.
+            Text(
+                text = "Phiên bản: v2.1.4",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = mutedColor,
+                ),
+            )
         }
     }
 }

@@ -10,6 +10,8 @@ import com.youreyes.app.BuildConfig
 import com.youreyes.app.core.AppConfig
 import com.youreyes.app.network.DeviceRegisterPayload
 import com.youreyes.app.network.DeviceApiClient
+import com.youreyes.app.network.GlassesLinkPayload
+import com.youreyes.app.ui.glasses.GlassesLinkViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +26,12 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
 
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState: StateFlow<OverviewUiState> = _uiState.asStateFlow()
+
+    init {
+        // The demo build carries the server and token, so the person is never asked to
+        // register. A failed attempt (offline) is simply retried on the next launch.
+        if (_uiState.value.shouldAutoRegister) register()
+    }
 
     private fun loadInitialState(): OverviewUiState {
         // Provisioned by the backend for this demo build; the user never has to type
@@ -113,6 +121,8 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
                         .putString(AppConfig.KEY_EMERGENCY_CONTACT, state.emergencyContact.trim())
                         .apply()
 
+                    linkDemoGlassesIfConfigured(state.serverUrl.trimEnd('/'), state.bearerToken, state.userId.trim())
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -133,6 +143,21 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+    }
+
+    /**
+     * Pairs the glasses a demo build names, so the server can route requests to this phone
+     * without anyone typing a serial. Runs on the registration coroutine (already off the
+     * main thread); a failure is logged and leaves the manual pairing screen as the way out.
+     */
+    private fun linkDemoGlassesIfConfigured(baseUrl: String, bearerToken: String, userId: String) {
+        val pairedId = prefs.getString(AppConfig.KEY_PAIRED_GLASSES_ID, "") ?: ""
+        if (!OverviewUiState.shouldAutoLinkGlasses(BuildConfig.DEMO_GLASSES_DEVICE_ID, pairedId)) return
+
+        val glassesId = GlassesLinkViewModel.normalizedDeviceId(BuildConfig.DEMO_GLASSES_DEVICE_ID)
+        DeviceApiClient().linkGlassesDevice(baseUrl, bearerToken, GlassesLinkPayload(userId = userId, deviceId = glassesId))
+            .onSuccess { prefs.edit().putString(AppConfig.KEY_PAIRED_GLASSES_ID, glassesId).apply() }
+            .onFailure { Log.w(TAG, "Demo glasses link failed: ${it.message}") }
     }
 
     companion object {

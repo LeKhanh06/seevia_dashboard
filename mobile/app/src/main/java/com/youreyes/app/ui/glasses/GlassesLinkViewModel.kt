@@ -366,31 +366,31 @@ class GlassesLinkViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /**
-     * Turn whatever the user typed into the `device_id` the glasses actually send.
-     *
-     * The serial laser-etched on the frame is a bare number ("01"), but the
-     * glasses identify themselves as `glasses-01` on every request — that prefix
-     * is fixed in `src/net/device_identity.h`. Making the user type the prefix
-     * would be making them memorize an implementation detail; leaving it off
-     * would key every server call to a device that does not exist.
-     */
-    private fun normalizedDeviceId(raw: String): String {
-        // Lowercased on purpose, even though the text field uppercases as the
-        // user types: the firmware builds this string itself as
-        // `"glasses-" + serial` and never uppercases it. Sending "GLASSES-01"
-        // would key the request to a device the server has never seen, and the
-        // failure would look like "the glasses are offline".
-        val trimmed = raw.trim().trimStart('#').lowercase()
-        if (trimmed.isEmpty()) return trimmed
-        return if (trimmed.startsWith(DEVICE_ID_PREFIX)) trimmed else DEVICE_ID_PREFIX + trimmed
-    }
-
     companion object {
         /** Server Kính's public address (Cloudflare tunnel), see `app_config.h`. */
         const val DEFAULT_GLASSES_SERVER_URL = "https://api.visioncare-host.uk"
 
         /** Fixed by the firmware: `device_id` is `"glasses-" + serial`. */
         private const val DEVICE_ID_PREFIX = "glasses-"
+
+        /**
+         * Turn whatever the user typed into the `device_id` the glasses actually send.
+         *
+         * The serial laser-etched on the frame is a bare number ("01"), but the
+         * glasses identify themselves as `glasses-01` on every request — that prefix
+         * is fixed in `src/net/device_identity.h`. Making the user type the prefix
+         * would be making them memorize an implementation detail; leaving it off
+         * would key every server call to a device that does not exist.
+         */
+        fun normalizedDeviceId(raw: String): String {
+            // Lowercased on purpose, even though the text field uppercases as the
+            // user types: the firmware builds this string itself as
+            // `"glasses-" + serial` and never uppercases it. Sending "GLASSES-01"
+            // would key the request to a device the server has never seen, and the
+            // failure would look like "the glasses are offline".
+            val trimmed = raw.trim().trimStart('#').lowercase()
+            if (trimmed.isEmpty()) return trimmed
+            return if (trimmed.startsWith(DEVICE_ID_PREFIX)) trimmed else DEVICE_ID_PREFIX + trimmed
+        }
     }
 }

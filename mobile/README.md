@@ -27,6 +27,7 @@ telephony/ theo dõi cuộc gọi đến       ui/       màn hình Compose
 | `youreyes.deviceApiToken` | trống | Token Device API thô (server lưu hash) |
 | `youreyes.glassesServerUrl` | `https://api.visioncare-host.uk` | Server kính (Wi-Fi, firmware) |
 | `youreyes.glassesServerToken` | trống | Token server kính |
+| `youreyes.demoGlassesDeviceId` | trống | Serial kính demo (`01` hoặc `glasses-01`); có giá trị thì app tự ghép kính sau khi tự đăng ký |
 | `youreyes.spotifyClientId` | client id demo | Spotify App Remote (không phải secret) |
 
 Cần `app/google-services.json` của dự án Firebase. Bản debug cho phép HTTP thường

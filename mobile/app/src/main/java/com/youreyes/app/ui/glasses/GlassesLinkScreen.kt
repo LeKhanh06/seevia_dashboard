@@ -94,7 +94,7 @@ fun GlassesLinkScreen(
     onBack: (() -> Unit)? = null,
 ) {
     ScreenShell(modifier = modifier, title = "Kính Your Eyes", onBack = onBack) {
-        HeroCard(userId = state.userId)
+        HeroCard()
 
         PairingStatusCard(pairedDeviceId = state.pairedDeviceId)
 
@@ -180,7 +180,7 @@ fun GlassesLinkScreen(
 }
 
 @Composable
-private fun HeroCard(userId: String) {
+private fun HeroCard() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -199,8 +199,7 @@ private fun HeroCard(userId: String) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Nhập số máy in ở gọng kính để liên kết kính với tài khoản của bạn " +
-                    "(Tài khoản: ${userId.ifBlank { "chưa đăng ký" }}).",
+                text = "Nhập số máy in ở gọng kính để liên kết kính với tài khoản của bạn.",
                 style = MaterialTheme.typography.bodyMedium.copy(color = mutedColor),
             )
         }
@@ -501,12 +500,6 @@ private fun PairingStatusCard(pairedDeviceId: String) {
                         color = inkColor,
                     ),
                 )
-                if (isPaired) {
-                    Text(
-                        text = "Mã kính: $pairedDeviceId",
-                        style = MaterialTheme.typography.bodySmall.copy(color = mutedColor),
-                    )
-                }
             }
         }
     }

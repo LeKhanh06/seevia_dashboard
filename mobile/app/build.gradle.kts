@@ -39,6 +39,8 @@ android {
             "\"${config("glassesServerUrl", "https://api.visioncare-host.uk")}\"",
         )
         buildConfigField("String", "GLASSES_SERVER_TOKEN", "\"${config("glassesServerToken")}\"")
+        // Serial of the demo glasses (`01` or `glasses-01`). Blank: the person pairs them by hand.
+        buildConfigField("String", "DEMO_GLASSES_DEVICE_ID", "\"${config("demoGlassesDeviceId")}\"")
         // A Spotify client id is public (it ships in every integrating app); the secret stays server-side.
         buildConfigField(
             "String", "SPOTIFY_CLIENT_ID",

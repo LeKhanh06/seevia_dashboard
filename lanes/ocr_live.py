@@ -115,6 +115,12 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
         _remember(device, text)
 
 
+async def read_money_frame(jpeg: bytes, min_prob: float) -> tuple[str, list[tuple[str, float]] | None]:
+    """Đọc tiền đúng MỘT khung (cỡ ảnh như `read_image`): (câu nói, top-2 nhãn; None khi lỗi mạng/model)."""
+    image = await asyncio.to_thread(resize_jpeg, jpeg, config.LLM_OCR_IMAGE_MAX_SIDE, 90)
+    return await read_money.read_ranked(image, min_prob)
+
+
 def spoken(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
     """`read_image` với câu đầu cắt ngắn (<= 8 từ) để TTS đọc ngay, như làn chat.
 
@@ -190,6 +196,45 @@ async def speak_ws(ws: WebSocket, text) -> None:
                 await ws.send_bytes(protocol.audio(chunk))
 
 
+async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> None:
+    """Đọc tiền lại MỘT lần sau câu hướng dẫn (final_router._money): bỏ khung trong MONEY_RETRY_SETTLE_S đầu cho người
+    dùng chỉnh tay, lấy khung đầu tiên đủ nét (độ nét >= MONEY_BLUR_HINT); hết MONEY_RETRY_TIMEOUT_S thì khung nét nhất
+    đã thấy; không có khung nào thì nói "vẫn chưa đọc chắc". Không bao giờ đọc lần thứ hai (người khiếm thị không kẹt vòng lặp)."""
+    started = time.monotonic()
+    settle_end, deadline = started + config.MONEY_RETRY_SETTLE_S, started + config.MONEY_RETRY_TIMEOUT_S
+    await ws.send_text(protocol.cam("vga", 5))
+    best, best_score = None, -1.0
+    while not box.closed and not session.closed.is_set():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        frame = await box.take(min(0.5, left))
+        if frame is None or time.monotonic() < settle_end:
+            continue  # chưa có khung, hoặc khung chụp lúc người dùng còn đang chỉnh tay
+        score = await asyncio.to_thread(read_money.blur_score, frame)
+        if score is None:
+            continue
+        if score > best_score:
+            best, best_score = frame, score
+        if score >= config.MONEY_BLUR_HINT:
+            break
+    if box.closed or session.closed.is_set():
+        return
+    sentence = read_money.RETRY_FAILED
+    if best is not None:
+        logger.info("đọc tiền đọc lại: dùng khung nét %.0f (ngưỡng %.0f) sau %.1fs", best_score,
+                    config.MONEY_BLUR_HINT, time.monotonic() - started)
+        said, _ = await read_money_frame(best, config.MONEY_RETRY_PROB)
+        if said in read_money.LABELS:
+            sentence = said
+    else:
+        logger.info("đọc tiền đọc lại: không có khung nào trong %.1fs", config.MONEY_RETRY_TIMEOUT_S)
+    if box.closed or session.closed.is_set():
+        return
+    await speak_ws(ws, [sentence])
+    await ws.send_text(protocol.end())
+
+
 async def run(ws: WebSocket, session: LiveSession) -> None:
     mode = session.params.get("mode", "read")
     box = _Mailbox()
@@ -201,6 +246,9 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     best_vga: bytes | None = None
     debug = getattr(ws, "debug", None)  # chỉ có trên LiveSocket của phiên bật debug (demo)
     try:
+        if mode == "money_retry":
+            await _money_retry(ws, box, session)
+            return
         await ws.send_text(protocol.cam("vga", 5))
         capture_sent = False
         capture_deadline = 0.0

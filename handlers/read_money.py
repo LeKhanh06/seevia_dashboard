@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import math
 from collections.abc import AsyncIterator, Iterator
 
 import config
 from models import llm, vlm
 from models.llm.client import prefix_prob
+from pipeline import image_quality
+from pipeline.image_buffer import resize_jpeg
 
 logger = logging.getLogger("blind_assist")
 
@@ -76,6 +79,103 @@ async def choose(messages: list[dict]) -> tuple[str, float | None]:
     1 khung nói sai gấp đôi (3,6 -> 7,3 %) vì nhãn sai cũng "chắc" lên, 3 khung không lợi — giữ xác suất thô."""
     text, choice = await choose_raw(messages)
     return text, prefix_prob(choice, len(text))
+
+
+# ── Đọc tiền v2 (2026-10-21): top-2 nhãn + câu hướng dẫn khi không chắc ───────────────────────
+# Spec: docs/superpowers/specs/2026-10-21-doc-tien-3-khung-design.md §3. Không tốn thêm lượt gọi model: top-2 lấy từ
+# logprobs của chính lượt chọn nhãn, độ nét lấy từ ảnh đã có.
+HOLD_STILL = "Giữ yên tay."
+STEP_BACK = "Lùi ra xa một chút, để cả tờ tiền nằm giữa."
+COME_CLOSER = "Đưa tờ tiền lại gần hơn một chút."
+RETRY_FAILED = "Tôi vẫn chưa đọc chắc được tờ này."
+STATIC_SPEECH = (HOLD_STILL, STEP_BACK, COME_CLOSER, RETRY_FAILED)
+
+# Độ nét tính trên ảnh thu về cạnh dài này: đúng cỡ ảnh dev (vnd_kaggle 192x144) mà ngưỡng MONEY_BLUR_HINT được chọn.
+# Laplacian phụ thuộc cỡ ảnh nên khung UXGA/VGA của kính phải thu nhỏ trước khi so với ngưỡng.
+BLUR_REF_SIDE = 192
+_TOP_LOGPROBS = 5  # nhánh x10 thường chỉ đứng hạng 3 ở token chữ số cuối (đo thật 2026-10-21), 2 là không đủ
+
+
+def blur_score(jpeg: bytes) -> float | None:
+    """Độ nét Laplacian bằng hàm production `image_quality.measure` trên ảnh cạnh dài `BLUR_REF_SIDE`; None nếu không giải mã được."""
+    try:
+        measured = image_quality.measure(resize_jpeg(jpeg, BLUR_REF_SIDE, 90))
+    except Exception:  # noqa: BLE001 - JPEG hỏng/cắt dở: coi như không đo được
+        return None
+    return None if measured is None else measured[0]
+
+
+def _x10(a: str, b: str) -> bool:
+    """Hai nhãn mệnh giá lệch đúng x10 (50 nghìn <-> 500 nghìn, 200 đồng <-> 2 nghìn): số 0 bị cắt mép."""
+    va, vb = LABELS.get(a), LABELS.get(b)
+    return va is not None and vb is not None and max(va, vb) == 10 * min(va, vb)
+
+
+def _label_for_prefix(prefix: str, top1: str) -> str | None:
+    """Nhãn khác `top1` bắt đầu bằng `prefix` (nhánh model suýt chọn). Nhiều nhãn cùng tiền tố ("500" khớp "500 đồng" và
+    "500 nghìn đồng") thì ưu tiên nhãn lệch x10 với top-1, rồi tới thứ tự trong CHOICES."""
+    found = [c for c in CHOICES if c != top1 and c.startswith(prefix)]
+    if not found:
+        return None
+    return next((c for c in found if _x10(top1, c)), found[0])
+
+
+def top_labels(choice: dict, text: str) -> list[tuple[str, float]]:
+    """[(nhãn đã chọn, xác suất), (nhãn thay thế mạnh nhất, xác suất tiền tố)] từ logprobs của lượt chọn nhãn.
+
+    Nhãn thay thế = nhánh rẽ có xác suất lớn nhất: tại token thứ i, token khác `top_logprobs` ghép với phần đã chọn
+    cho tiền tố của một nhãn khác trong CHOICES; xác suất = tích tới i-1 x xác suất token thay thế (cận dưới, phần đuôi
+    nhãn không tính). Không có logprobs -> []; không có nhánh nào hợp lệ -> chỉ top-1.
+    """
+    items = (choice.get("logprobs") or {}).get("content")
+    p1 = prefix_prob(choice, len(text))
+    if not items or p1 is None:
+        return []
+    top, best = [(text, p1)], None
+    pos, cum = 0, 0.0
+    for it in items:
+        if pos >= len(text) or it.get("logprob") is None:
+            break
+        for alt in it.get("top_logprobs") or []:
+            token, lp = alt.get("token", ""), alt.get("logprob")
+            if token == it.get("token") or lp is None:
+                continue
+            label = _label_for_prefix(text[:pos] + token, text)
+            if label is not None and (best is None or cum + lp > best[1]):
+                best = (label, cum + lp)
+        cum += it["logprob"]
+        pos += len(it.get("token", ""))
+    if best is not None:
+        top.append((best[0], math.exp(best[1])))
+    return top
+
+
+def hint(top: list[tuple[str, float]], sharpness: float | None) -> str:
+    """Câu nói khi không đọc chắc, đi từ trên xuống: mờ -> "Giữ yên tay."; "không rõ" hoặc hai nhãn đầu lệch x10
+    (cắt mép) -> lùi ra xa; còn lại -> lại gần. Không đo được độ nét (None) thì bỏ qua luật mờ."""
+    if sharpness is not None and sharpness < config.MONEY_BLUR_HINT:
+        return HOLD_STILL
+    if top and (top[0][0] == UNSURE_LABEL or (len(top) > 1 and _x10(top[0][0], top[1][0]))):
+        return STEP_BACK
+    return COME_CLOSER
+
+
+async def choose_ranked(messages: list[dict]) -> tuple[str, float | None, list[tuple[str, float]]]:
+    """Như `choose` (cùng nhãn, cùng xác suất thô) kèm top-2 nhãn để chọn câu hướng dẫn."""
+    text, choice = await choose_raw(messages, top_logprobs=_TOP_LOGPROBS)
+    return text, prefix_prob(choice, len(text)), top_labels(choice, text)
+
+
+async def read_ranked(image: bytes, min_prob: float) -> tuple[str, list[tuple[str, float]] | None]:
+    """Đọc MỘT khung: (câu nói như `combine`, top-2). Lỗi mạng/model -> (UNSURE, None): không có gì để hướng dẫn, và
+    đọc lại cũng sẽ hỏng y vậy."""
+    try:
+        label, prob, top = await choose_ranked(choice_messages(image))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("đọc tiền: lỗi %r", exc)
+        return UNSURE, None
+    logger.info("đọc tiền: %s p=%s top=%s", label, prob, top)
+    return combine([(label, prob)], min_prob), top
 
 
 def say(label: str, prob: float | None, min_prob: float) -> str:

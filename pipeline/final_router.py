@@ -14,7 +14,7 @@ import config
 from handlers import phone as phone_handlers
 from handlers import read_money
 from lanes import general, ocr_live, phone
-from live import call_bridge
+from live import call_bridge, text_align
 from live.session import sessions
 from models import search
 from pipeline import device_ctx, image_quality, pending_action, speech
@@ -211,13 +211,51 @@ async def _lane_b(ctx: TurnContext, d: Decision, text: str) -> Reply:
                      intent="ocr", lane="B")
     if config.OCR_ACCEPT_BUFFER:
         task = ctx.prewarmer.assess_buffer()
-        problem, boxes = await task if task is not None else ("look_around", [])
-        logger.info("làn B: ảnh buffer %s (%d hộp chữ)", problem or "ĐẠT -> đọc ngay", len(boxes))
-        if problem is None:
+        plan = await task if task is not None else text_align.ReadPlan("align")
+        logger.info("làn B: ảnh lượt %dpx, %d hộp chữ, dòng %.0fpx -> %s%s", plan.width, len(plan.boxes), plan.line_px,
+                    plan.kind, f" {plan.size}" if plan.size else "")
+        blurry = bool(plan.blur) and plan.blur < config.OCR_BLUR_RATIO and plan.kind in ("read", "capture")
+        if plan.kind == "read" and not blurry:
             return Reply(speech=_sync(ctx, ocr_live.spoken(entry.jpeg, mode, ctx.device)),
                          intent="ocr", lane="B")
+        if plan.kind == "try":
+            reply = await _try_read(ctx, entry.jpeg, mode)
+            if reply is not None:
+                return reply
+        if plan.kind == "capture" or blurry:
+            # Chữ nhỏ HOẶC ảnh mờ rõ rệt: xin ĐÚNG MỘT ảnh cỡ nhỏ nhất đủ (không stream khung, không căn khung). Không
+            # cue mở đầu: `ocr_live.run` báo "Giữ yên." (clip trong flash) rồi chụp; mờ thì chờ tay yên trước khi chụp.
+            session = ctx.prewarmer.session("ocr", {
+                "mode": mode, "fallback_jpeg": entry.jpeg, "capture_size": plan.size or "svga",
+                "capture_settle_s": config.OCR_BLUR_SETTLE_S if blurry else 0.0})
+            if blurry:
+                logger.info("làn B: ảnh lượt mờ (tỉ lệ %.1f < %.1f) -> chụp lại một lần", plan.blur, config.OCR_BLUR_RATIO)
+            return Reply(live="ocr", live_token=session.token, intent="ocr", lane="B")
     session = ctx.prewarmer.session("ocr", {"mode": mode, "fallback_jpeg": entry.jpeg})
     return Reply(cues=["ocr_start"], live="ocr", live_token=session.token, intent="ocr", lane="B")
+
+
+async def _try_read(ctx: TurnContext, jpeg: bytes, mode: str) -> Reply | None:
+    """Bộ dò chữ không thấy hộp nào trên ảnh lượt nhưng nó bỏ sót ~6 % ảnh có chữ rõ (đo 2026-10-22): đọc thử luôn.
+    Mảnh đầu là "không có chữ" (hoặc lỗi) -> None để vào căn khung; ngược lại giữ mảnh đầu và nói tiếp như đọc thẳng."""
+    agen = ocr_live.spoken(jpeg, mode, ctx.device)
+    try:
+        first = await agen.__anext__()
+    except StopAsyncIteration:
+        return None
+    except Exception as exc:  # noqa: BLE001 - lỗi mạng/model: để căn khung live thử lại
+        logger.warning("làn B: đọc thử lỗi %r -> căn khung", exc)
+        return None
+    if first.strip() == ocr_live.NO_TEXT:
+        await agen.aclose()
+        return None
+
+    async def whole() -> AsyncIterator[str]:
+        yield first
+        async for piece in agen:
+            yield piece
+
+    return Reply(speech=_sync(ctx, whole()), intent="ocr", lane="B")
 
 
 async def _money(ctx: TurnContext, jpeg: bytes) -> Reply:

@@ -23,8 +23,9 @@ _PROMPT = (
     # sau mất chỗ bám — "bên trái có cột lớn" chẳng nói lên gì nếu người nghe
     # không biết mình đang trong quán cà phê hay ngoài vỉa hè.
     "1. Loại không gian, vài từ: phòng khách, phòng học, quán cà phê, hành "
-    "lang, vỉa hè, trong nhà, ngoài trời. Không chắc thì nói ước chừng, nhưng "
-    "không được bỏ.\n"
+    "lang, vỉa hè, trong nhà, ngoài trời. Không chắc thì nói \"có vẻ là ...\". "
+    "Ảnh chỉ thấy cận cảnh một vật, không thấy không gian xung quanh thì nói "
+    "vật đó, KHÔNG đoán căn phòng.\n"
     # Phần dài nhất và là lý do chức năng này tồn tại.
     "2. Bố cục — phần chính, chiếm phần lớn câu trả lời: đồ đạc lớn kê phía "
     "nào, lối đi trống ở đâu, có mấy người và họ đứng hay ngồi phía nào. Nói "
@@ -32,8 +33,12 @@ _PROMPT = (
     "3. Biển báo hoặc bảng hiệu NGẮN giúp nhận ra chỗ này — tên quán, số phòng, "
     "biển chỉ dẫn. Đọc nguyên văn, tối đa một câu.\n"
     "\n"
-    "Độ dài: 2-3 câu, TỔNG CỘNG 25 đến 40 từ. Dưới 20 từ nghĩa là bạn đã bỏ "
-    "mất phần 2.\n"
+    "Độ dài: 2-3 câu, tối đa 40 từ. Thấy ít thứ thì nói ít, KHÔNG bịa thêm cho "
+    "đủ dài.\n"
+    "\n"
+    "Chỉ kể thứ NHÌN THẤY RÕ. Không đoán thứ bị che hoặc nằm ngoài khung ảnh. "
+    "Đếm người không chắc thì nói \"vài người\". Chữ trên biển hiệu không đọc "
+    "rõ từng chữ thì bỏ qua, không đoán tên.\n"
     "\n"
     "KHÔNG được:\n"
     # Đo thật: "Đây là một không gian trong nhà" tốn 6 từ cho thứ "trong nhà"

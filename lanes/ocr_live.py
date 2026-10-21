@@ -19,7 +19,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 import config
 from handlers import read_money
-from lanes import general
+from lanes import general, repeat_guard
 from live import protocol, text_align
 from live.session import LiveSession, sessions
 from models import llm
@@ -33,7 +33,8 @@ _SUMMARIZE = prompts._COMMON + (
     "Tóm tắt nội dung chính của văn bản trong ảnh bằng tiếng Việt, 2 đến 4 câu "
     "ngắn, dễ nghe. Giữ đúng mọi con số, tên riêng, ngày tháng quan trọng."
 )
-_NO_TEXT = "Không thấy chữ nào đọc được."
+NO_TEXT = "Không thấy chữ nào đọc được."
+_NO_TEXT = NO_TEXT
 # Nói SAU câu trả lời khi có chữ số model đọc kém chắc (xác suất token < OCR_DIGIT_HEDGE_PROB).
 # Đo dev 2026-10-21 (SROIE + ViTextVQA, 424 câu có số): AUROC 0,82; τ 0,9 bắt ~1/3 số đọc sai, gắn
 # cảnh báo cho ~5 % câu — vẫn đọc số (không mất câu đúng), chỉ báo người mù nên kiểm lại.
@@ -94,18 +95,23 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
 
     hedge = config.OCR_DIGIT_HEDGE_PROB > 0
     stream = llm.stream_chat([message], max_tokens=1024, temperature=0.0, on_logprobs=seen if hedge else None)
-    head, released, reply = "", False, []
+    head, released, reply, so_far = "", False, [], ""
     peek = len(prompts.NO_TEXT_SENTINEL) + 4
-    async for piece in stream:
-        if released:
-            reply.append(piece)
-            yield piece
-            continue
-        head += piece
-        if len(head.strip()) > peek:
-            released = True
-            reply.append(head)
-            yield head
+    async with contextlib.aclosing(stream):
+        async for piece in stream:
+            so_far += piece
+            if repeat_guard.cut_point(so_far) is not None:
+                logger.warning("đọc chữ: Gemma lặp vòng (%d ký tự) -> dừng", len(so_far))
+                break
+            if released:
+                reply.append(piece)
+                yield piece
+                continue
+            head += piece
+            if len(head.strip()) > peek:
+                released = True
+                reply.append(head)
+                yield head
     if not released:
         if head.strip().strip(".").strip() == prompts.NO_TEXT_SENTINEL or not head.strip():
             yield _NO_TEXT
@@ -248,6 +254,52 @@ async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> No
     await ws.send_text(protocol.end())
 
 
+_SIZE_W = {"svga": 800, **dict(text_align.CAPTURE_SIZES)}
+
+
+def capture_size_for(boxes, gray_w: int, gray_h: int, native_w: int) -> str:
+    """Cỡ `capture` nhỏ nhất cho dòng chữ vừa thấy ở khung live rộng `native_w` (ít byte nhất mà đủ nét)."""
+    plan = text_align.plan_read(boxes, gray_w, gray_h, native_w)
+    if plan.kind == "capture":
+        return plan.size
+    return "svga" if plan.kind == "read" else text_align.CAPTURE_SIZES[-1][0]
+
+
+async def _wait_frame(box: _Mailbox, session: LiveSession, min_width: int, timeout: float) -> bytes | None:
+    """Khung ĐẦU TIÊN rộng >= `min_width` trong `timeout` giây; None nếu hết giờ / phiên đóng."""
+    deadline = time.monotonic() + timeout
+    while not box.closed and not session.closed.is_set():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return None
+        frame = await box.take(min(0.5, left))
+        if frame is not None and _width(frame) >= min_width:
+            return frame
+    return None
+
+
+async def _capture_once(ws: WebSocket, box: _Mailbox, session: LiveSession, size: str, settle_s: float = 0.0) -> bytes | None:
+    """Đường nhanh khi đã biết chữ nhỏ (final_router._lane_b): xin ĐÚNG MỘT ảnh cỡ `size`, nhắn "Giữ yên." trong lúc
+    chờ (clip trong flash). Ảnh tới mà bộ dò không còn thấy chữ (người dùng đã dời tay) thì bỏ, trả None để đọc ảnh lượt.
+    Kính 4G đẩy UXGA ~14 s: `OCR_CAPTURE_WAIT_S` chặn trên."""
+    if settle_s > 0:  # ảnh lượt mờ: nhắn giữ yên TRƯỚC, chờ tay yên rồi mới chụp
+        await ws.send_text(protocol.cue("hold_still"))
+        await asyncio.sleep(settle_s)
+        await ws.send_text(protocol.capture(size))
+    else:
+        await ws.send_text(protocol.capture(size))
+        await ws.send_text(protocol.cue("hold_still"))
+    frame = await _wait_frame(box, session, int(_SIZE_W.get(size, 1600) * 0.9), config.OCR_CAPTURE_WAIT_S)
+    if frame is None:
+        logger.info("OCR capture %s: không có ảnh trong %.0fs, dùng ảnh lượt", size, config.OCR_CAPTURE_WAIT_S)
+        return None
+    plan = await asyncio.to_thread(text_align.plan_jpeg, frame)
+    if not plan.boxes:
+        logger.info("OCR capture %s: ảnh mới không thấy chữ, dùng ảnh lượt", size)
+        return None
+    return frame
+
+
 async def run(ws: WebSocket, session: LiveSession) -> None:
     mode = session.params.get("mode", "read")
     box = _Mailbox()
@@ -262,22 +314,42 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
         if mode == "money_retry":
             await _money_retry(ws, box, session)
             return
+        one_shot = session.params.get("capture_size")
+        if one_shot:
+            hi_res = await _capture_once(ws, box, session, one_shot, float(session.params.get("capture_settle_s") or 0))
+            image = hi_res or session.params.get("fallback_jpeg")
+            if box.closed or session.closed.is_set():
+                return
+            if image is not None:
+                loop = asyncio.get_running_loop()
+                await speak_ws(ws, speech.sync_iter(spoken(image, mode, session.device), loop))
+            if box.closed or session.closed.is_set():
+                return
+            await ws.send_text(protocol.end())  # không báo "Thoát đọc chữ": đường nhanh không có câu mở chế độ
+            return
         await ws.send_text(protocol.cam("vga", 5))
         capture_sent = False
         capture_deadline = 0.0
         hi_res: bytes | None = None
+        seen_text = False       # đã có khung nào thấy chữ chưa (hết trần mà chưa thấy thì xin UXGA cũng vô ích)
+        min_width = 1000        # khung rộng từ đây coi là ảnh `capture`; đặt lại theo cỡ thật khi xin chụp
+        last_size = text_align.CAPTURE_SIZES[-1][0]
         while not box.closed and not session.closed.is_set():
             now = time.monotonic()
             if not capture_sent and now >= deadline:
-                logger.info("OCR live: hết trần %.0fs, chụp luôn", config.OCR_ALIGN_TIMEOUT_S)
-                capture_sent, capture_deadline = True, now + 3.0
-                await ws.send_text(protocol.capture("uxga"))
+                logger.info("OCR live: hết trần %.0fs%s", config.OCR_ALIGN_TIMEOUT_S,
+                            ", chụp luôn" if seen_text else ", chưa thấy chữ -> đọc ảnh lượt")
+                if not seen_text:
+                    break
+                capture_sent, capture_deadline = True, now + 3.0 + config.OCR_CAPTURE_WAIT_S
+                min_width = int(_SIZE_W[last_size] * 0.9)
+                await ws.send_text(protocol.capture(last_size))
             if capture_sent and now >= capture_deadline:
                 break
             frame = await box.take(0.5)
             if frame is None:
                 continue
-            if _width(frame) >= 1000:
+            if _width(frame) >= min_width:
                 hi_res = frame
                 break
             if capture_sent:
@@ -286,8 +358,11 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
             decoded = await asyncio.to_thread(text_align.decode_gray, frame)
             if decoded is None:
                 continue
-            gray, _ = decoded
+            gray, native_w = decoded
             boxes = await asyncio.to_thread(det.detect, gray)
+            if boxes:
+                seen_text = True
+                last_size = capture_size_for(boxes, gray.shape[1], gray.shape[0], native_w)
             action = aligner.step_gray(gray, boxes)
             if debug is not None:
                 debug({"t": "ocr", "w": gray.shape[1], "h": gray.shape[0],
@@ -300,9 +375,10 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
             if action.kind == "cue":
                 await ws.send_text(protocol.cue(action.cue))
             else:
-                logger.info("OCR live: khung đạt sau %.1fs, chụp UXGA", time.monotonic() - started)
-                capture_sent, capture_deadline = True, time.monotonic() + 3.0
-                await ws.send_text(protocol.capture("uxga"))
+                logger.info("OCR live: khung đạt sau %.1fs, chụp %s", time.monotonic() - started, last_size)
+                capture_sent, capture_deadline = True, time.monotonic() + 3.0 + config.OCR_CAPTURE_WAIT_S
+                min_width = int(_SIZE_W[last_size] * 0.9)
+                await ws.send_text(protocol.capture(last_size))
 
         image = pick_image(hi_res, session.params.get("fallback_jpeg"), best_vga)
         if box.closed or session.closed.is_set():

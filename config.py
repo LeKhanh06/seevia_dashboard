@@ -271,6 +271,15 @@ LLM_MAX_TOKENS = int(get("LLM_MAX_TOKENS", "400"))
 LLM_IMAGE_MAX_SIDE = int(get("LLM_IMAGE_MAX_SIDE", "896"))
 # OCR cần giữ chi tiết chữ nhỏ nên ảnh chụp high-res gửi lớn hơn.
 LLM_OCR_IMAGE_MAX_SIDE = int(get("LLM_OCR_IMAGE_MAX_SIDE", "1600"))
+# Đọc tiền làn B: "choice" = Gemma chọn nhãn mệnh giá + xác suất, dưới MONEY_MIN_PROB thì từ chối
+# (handlers/read_money.read_choice); "prompt" = prompt tự do cũ. Ngưỡng chọn trên dev 2026-10-21:
+# sai <= 3 % mà đúng cao nhất; test: nói sai 11,2 % -> 3,3 %, trễ p90 234 -> 215 ms.
+MONEY_MODE = get("MONEY_MODE", "choice")
+MONEY_MIN_PROB = float(get("MONEY_MIN_PROB", "0.995"))
+# Khi có >= 2 khung (kính chụp liên tiếp): ngưỡng cho khung "chắc" trong read_money.combine.
+MONEY_MULTI_MIN_PROB = float(get("MONEY_MULTI_MIN_PROB", "0.98"))
+# Làn B đọc chữ: chữ số nào có xác suất token dưới ngưỡng thì nói thêm câu cảnh báo "chưa chắc" (0 = tắt).
+OCR_DIGIT_HEDGE_PROB = float(get("OCR_DIGIT_HEDGE_PROB", "0.9"))
 
 # Clef (Cloudflare Workers AI) — phân loại intent cuối và trên partial.
 CLOUDFLARE_API_TOKEN = get("CLOUDFLARE_API_TOKEN", "")

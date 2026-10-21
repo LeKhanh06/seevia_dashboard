@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import io
 import logging
+import math
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -33,6 +34,10 @@ _SUMMARIZE = prompts._COMMON + (
     "ngắn, dễ nghe. Giữ đúng mọi con số, tên riêng, ngày tháng quan trọng."
 )
 _NO_TEXT = "Không thấy chữ nào đọc được."
+# Nói SAU câu trả lời khi có chữ số model đọc kém chắc (xác suất token < OCR_DIGIT_HEDGE_PROB).
+# Đo dev 2026-10-21 (SROIE + ViTextVQA, 424 câu có số): AUROC 0,82; τ 0,9 bắt ~1/3 số đọc sai, gắn
+# cảnh báo cho ~5 % câu — vẫn đọc số (không mất câu đúng), chỉ báo người mù nên kiểm lại.
+DIGIT_HEDGE = "Có con số tôi đọc chưa chắc, bạn đưa lại gần để tôi đọc lại."
 
 # device -> (text, lúc lưu); "đọc lại" dùng trong 5 phút.
 _LAST_TEXT: dict[str, tuple[str, float]] = {}
@@ -71,7 +76,19 @@ def pick_image(hi_res: bytes | None, fallback_jpeg: bytes | None, best_vga: byte
 async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
     """Ảnh high-res -> từng mảnh text đọc lên. Lưu `last_text` khi xong."""
     image = await asyncio.to_thread(resize_jpeg, jpeg, config.LLM_OCR_IMAGE_MAX_SIDE, 90)
-    stream = llm.stream_chat([llm.user_message(_prompt(mode), image)], max_tokens=1024, temperature=0.0)
+    if mode == "money" and config.MONEY_MODE == "choice":
+        async for piece in read_money.read_choice([image]):
+            yield piece
+        return
+    message = llm.user_message(_prompt(mode), image)
+    digit_probs: list[float] = []
+
+    def seen(items: list[dict]) -> None:
+        digit_probs.extend(math.exp(it["logprob"]) for it in items
+                           if it.get("logprob") is not None and any(c.isdigit() for c in it.get("token", "")))
+
+    hedge = config.OCR_DIGIT_HEDGE_PROB > 0
+    stream = llm.stream_chat([message], max_tokens=1024, temperature=0.0, on_logprobs=seen if hedge else None)
     head, released, reply = "", False, []
     peek = len(prompts.NO_TEXT_SENTINEL) + 4
     async for piece in stream:
@@ -91,6 +108,9 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
         reply.append(head)
         yield head
     text = "".join(reply).strip()
+    if hedge and digit_probs and min(digit_probs) < config.OCR_DIGIT_HEDGE_PROB:
+        logger.info("đọc chữ: chữ số kém chắc (p min %.3f) -> cảnh báo", min(digit_probs))
+        yield " " + DIGIT_HEDGE
     if text and mode != "money":
         _remember(device, text)
 

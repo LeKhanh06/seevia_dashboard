@@ -41,7 +41,7 @@ from live.call_bridge import calls
 from live.observers import ANY_DEVICE, observers
 from live.session import sessions
 from live.ws_adapter import LiveSocket
-from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action
+from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action, speech
 from pipeline import turn as turn_v2
 from pipeline.image_buffer import image_buffer
 from pipeline.reply import Reply
@@ -62,6 +62,12 @@ _DEBUG_QUEUE_MAX = 64
 _DEBUG_LATEST = ("det", "ocr")  # khung tốc độ cao: chậm thì bỏ khung cũ, giữ mới nhất
 
 ReplyAudio = Callable[..., Awaitable[tuple[dict, object]]]
+
+# Báo đổi chế độ cho người chỉ nghe (cực ngắn; dựng sẵn qua `STATIC_SPEECH`, không có cue vì cue nằm trong flash kính).
+# Kính chỉ có MỘT phiên live: OCR live thay nav live thì cảnh báo vật cản tắt, phải nói ra; dựng lại thì nói lại.
+NAV_PAUSED = "Tạm tắt cảnh báo."
+NAV_RESUMED = "Bật lại cảnh báo."
+STATIC_SPEECH: tuple[str, ...] = (NAV_PAUSED, NAV_RESUMED)
 
 # device -> phiên đang mở (phiên mới thay phiên cũ)
 _registry: dict[str, "DeviceSession"] = {}
@@ -119,6 +125,7 @@ class DeviceSession:
         self._unread_task: asyncio.Task | None = None
         self._nav_suspended = False  # OCR live đã thay nav live: dựng lại nav khi OCR xong
         self._resume_task: asyncio.Task | None = None
+        self._status_tasks: set[asyncio.Task] = set()  # lời báo đổi chế độ (NAV_PAUSED/NAV_RESUMED), nói ở task riêng
         self.debug = False  # hello.debug: trang demo muốn nhận khung trace/say/det/ocr/mode
         # Hàng đợi khung debug CÓ CHẶN (dùng chung _send_lock với hazard nên không được dồn): say/mode xếp hàng
         # tối đa _DEBUG_QUEUE_MAX khung, det/ocr chỉ giữ khung MỚI NHẤT mỗi loại; một task bơm gửi từng khung một.
@@ -353,10 +360,33 @@ class DeviceSession:
             else:  # cúp, báo AB, đóng đầu app
                 await call.hangup("glasses_disconnect", by="glasses")
         observers.text(self.device, self._glasses_frame(False))
-        for task in [*self._debug_tasks, self._debug_pump, self._unread_task]:
+        for task in [*self._debug_tasks, *self._status_tasks, self._debug_pump, self._unread_task]:
             if task is not None:
                 task.cancel()
         await self._cancel_work(reason)
+
+    # ---------- báo đổi chế độ ----------
+    def _announce(self, text: str) -> None:
+        """Nói một câu báo ngắn qua kênh audio của phiên, ở task riêng: đường chính không chờ nó.
+
+        Giữ `_audio_lock` trọn câu như mọi câu khác (FIFO) nên không xen vào audio đang nói; lỗi gửi chỉ ghi log.
+        """
+        task = asyncio.get_running_loop().create_task(self._say_status(text))
+        self._status_tasks.add(task)
+        task.add_done_callback(self._status_tasks.discard)
+
+    async def _say_status(self, text: str) -> None:
+        try:
+            async with self._audio_lock:
+                async with contextlib.aclosing(speech.adpcm_stream([text])) as chunks:
+                    async for chunk in chunks:
+                        await self.send_bytes(protocol.audio(chunk))
+        except Exception:  # noqa: BLE001 — lời báo hỏng không được làm hỏng phiên
+            logger.warning("v2 session %s: không nói được lời báo %r", self.session_id, text, exc_info=True)
+
+    def drop_suspended_nav(self) -> None:
+        """Người dùng nói "tắt cảnh báo" lúc nav đang bị OCR/cuộc gọi tạm dừng: đừng tự bật lại khi OCR xong."""
+        self._nav_suspended = False
 
     # ---------- huỷ ----------
     async def _cancel_work(self, reason: str, keep_nav: bool = False, keep_results: bool = False) -> None:
@@ -734,6 +764,7 @@ class DeviceSession:
             # OCR live thay nav live (kính chỉ có một phiên live): nav phải được dựng lại khi OCR xong,
             # nếu không cảnh báo vật cản tắt âm thầm giữa đường trong khi người dùng tin là còn bật.
             self._nav_suspended = True
+            self._announce(NAV_PAUSED)  # tạo task TRƯỚC `_launch_live`: tới khoá audio trước câu đọc chữ
         self._launch_live(live)
 
     def _launch_live(self, live) -> None:
@@ -768,6 +799,7 @@ class DeviceSession:
         if live is None:
             return
         logger.info("v2 session %s: OCR live xong, dựng lại nav live (cảnh báo vật cản)", self.session_id)
+        self._announce(NAV_RESUMED)
         self._launch_live(live)
 
 

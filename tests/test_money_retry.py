@@ -219,7 +219,7 @@ class _Box:
     """Socket giả: ghi lại khung văn bản và câu nói; khung ảnh đẩy vào qua feed_frame."""
 
     def __init__(self, monkeypatch):
-        self.texts, self.said = [], []
+        self.texts, self.said, self.exits = [], [], []
 
         async def send_text(s):
             self.texts.append(json.loads(s))
@@ -228,7 +228,9 @@ class _Box:
             pass
 
         async def speak(ws, text):
-            self.said.append("".join(text))
+            line = "".join(text)
+            # Lời báo thoát chế độ ("Thoát đọc tiền.") kiểm riêng ở tests/test_che_do_vao_ra.py: ở đây chỉ câu nội dung.
+            (self.exits if line == ocr_live.EXIT_MONEY else self.said).append(line)
 
         monkeypatch.setattr(ocr_live, "speak_ws", speak)
         self.ws = LiveSocket(send_text, send_bytes)

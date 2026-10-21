@@ -38,6 +38,11 @@ _NO_TEXT = "Không thấy chữ nào đọc được."
 # Đo dev 2026-10-21 (SROIE + ViTextVQA, 424 câu có số): AUROC 0,82; τ 0,9 bắt ~1/3 số đọc sai, gắn
 # cảnh báo cho ~5 % câu — vẫn đọc số (không mất câu đúng), chỉ báo người mù nên kiểm lại.
 DIGIT_HEDGE = "Có con số tôi đọc chưa chắc, bạn đưa lại gần để tôi đọc lại."
+# Báo thoát chế độ cho người chỉ nghe (2-3 từ; dựng sẵn qua STATIC_SPEECH). Nói SAU nội dung chính, chỉ khi OCR live
+# tự kết thúc: huỷ bằng lượt mới, kính ngắt kết nối hay phiên bị thay thì im (đã có việc khác đang nói).
+EXIT_READ = "Thoát đọc chữ."
+EXIT_MONEY = "Thoát đọc tiền."
+STATIC_SPEECH: tuple[str, ...] = (EXIT_READ, EXIT_MONEY)
 
 # device -> (text, lúc lưu); "đọc lại" dùng trong 5 phút.
 _LAST_TEXT: dict[str, tuple[str, float]] = {}
@@ -237,6 +242,9 @@ async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> No
     if box.closed or session.closed.is_set():
         return
     await speak_ws(ws, [sentence])
+    if box.closed or session.closed.is_set():
+        return
+    await speak_ws(ws, [EXIT_MONEY])
     await ws.send_text(protocol.end())
 
 
@@ -297,10 +305,16 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
                 await ws.send_text(protocol.capture("uxga"))
 
         image = pick_image(hi_res, session.params.get("fallback_jpeg"), best_vga)
-        if image is None or box.closed or session.closed.is_set():
+        if box.closed or session.closed.is_set():
+            return
+        if image is None:  # hết trần mà không có ảnh nào: đừng im lặng như bị treo
+            await speak_ws(ws, [EXIT_READ])
             return
         loop = asyncio.get_running_loop()
         await speak_ws(ws, speech.sync_iter(spoken(image, mode, session.device), loop))
+        if box.closed or session.closed.is_set():
+            return
+        await speak_ws(ws, [EXIT_READ])
         await ws.send_text(protocol.end())
     except (WebSocketDisconnect, RuntimeError) as exc:
         logger.info("OCR live: kính ngắt kết nối (%r), huỷ", exc)

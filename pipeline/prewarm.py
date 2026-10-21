@@ -49,7 +49,7 @@ class Prewarmer:
             entry = image_buffer.get(self.device, self.turn_id)
             if entry is None:
                 return None
-            self.ocr_assessment = self._spawn(asyncio.to_thread(text_align.assess_jpeg, entry.jpeg))
+            self.ocr_assessment = self._spawn(asyncio.to_thread(text_align.plan_jpeg, entry.jpeg))
         return self.ocr_assessment
 
     async def _warm_llm_vision(self, intent: str) -> None:

@@ -5,6 +5,7 @@ Thứ tự message cố định để prefix cache của vLLM ăn được: syst
 `max_tokens=1`, nên lượt thật chỉ còn phải prefill phần câu lệnh.
 """
 
+import contextlib
 import logging
 import re
 import time
@@ -12,6 +13,7 @@ from collections.abc import AsyncIterator
 
 import config
 from handlers import ask_image, chat, describe_hazard, describe_space, find_object, read_money
+from lanes import repeat_guard
 from models import llm
 
 logger = logging.getLogger("blind_assist")
@@ -115,12 +117,24 @@ async def short_first_sentence(chunks: AsyncIterator[str], max_words: int | None
         yield buffer.strip() + "\n"
 
 
+async def _stop_on_loop(chunks: AsyncIterator[str]) -> AsyncIterator[str]:
+    """Dừng stream khi Gemma sinh vòng lặp (lanes/repeat_guard.py); đóng stream ngay để khỏi trả tiền token thừa."""
+    seen = ""
+    async with contextlib.aclosing(chunks):
+        async for chunk in chunks:
+            seen += chunk
+            if repeat_guard.cut_point(seen) is not None:
+                logger.warning("làn A: Gemma lặp vòng (%d ký tự) -> dừng", len(seen))
+                return
+            yield chunk
+
+
 async def answer(intent: str, text: str, image: bytes | None = None,
                  search: list[dict] | None = None, search_failed: bool = False) -> AsyncIterator[str]:
     started = time.monotonic()
     reply: list[str] = []
     stream = llm.stream_chat(messages(intent, text, image, search, search_failed))
-    async for piece in short_first_sentence(stream):
+    async for piece in short_first_sentence(_stop_on_loop(stream)):
         reply.append(piece)
         yield piece
     full = "".join(reply).strip()

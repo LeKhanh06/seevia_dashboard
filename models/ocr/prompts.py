@@ -16,7 +16,12 @@ _COMMON = (
     f"Nếu trong ảnh không có chữ nào đọc được (mờ, thiếu sáng, không có chữ), "
     f"chỉ trả về đúng một từ: {NO_TEXT_SENTINEL}\n"
     "Ngược lại, chỉ trả về nội dung cần đọc, không thêm lời giải thích, không "
-    "mô tả bố cục hay màu sắc.\n\n"
+    "mô tả bố cục hay màu sắc.\n"
+    # Người khiếm thị không kiểm lại được điều nghe: một con số bịa còn hại hơn một chỗ bỏ sót.
+    "Chỉ đọc chữ NHÌN THẤY RÕ. Không đoán, không bịa, không tự điền cho đủ. "
+    "Chữ bị mờ, quá nhỏ, bị che hoặc bị cắt dở ở mép ảnh thì bỏ qua đoạn đó; riêng số "
+    "(giá, số điện thoại, ngày, mã) không đọc chắc thì nói \"không đọc rõ số\" thay vì đoán. "
+    "Mỗi dòng chữ chỉ đọc một lần, không lặp lại.\n\n"
 )
 
 _NORMAL = _COMMON + (

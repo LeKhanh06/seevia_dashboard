@@ -167,15 +167,93 @@ def assess(boxes: list[Box], frame_w: int, frame_h: int, scale_to_capture: float
     return None
 
 
-def assess_jpeg(jpeg: bytes) -> tuple[str | None, list[Box]]:
-    """Một ảnh (vd. ảnh buffer UXGA) -> (vấn đề, hộp). Dùng cho đường đọc ngay."""
+# Cỡ ảnh `capture` mà kính chụp được (OV2640), nhỏ -> lớn: (tên, chiều rộng px). Thêm byte mạng tăng theo diện tích
+# (docs/FIRMWARE_ENDPOINTS.md: SVGA ~30 KB, XGA ~50, SXGA ~80, UXGA ~127 KB mức nén 10).
+CAPTURE_SIZES: tuple[tuple[str, int], ...] = (("xga", 1024), ("sxga", 1280), ("uxga", 1600))
+
+
+@dataclass(frozen=True)
+class ReadPlan:
+    """Cách đọc chữ cho MỘT lượt, quyết ngay khi biết intent (ảnh lượt đã tới trước):
+
+    - `read`: ảnh lượt đủ nét cho dòng chữ -> đọc thẳng, không tốn mạng;
+    - `capture`: có chữ nhưng nhỏ -> xin ĐÚNG MỘT ảnh cỡ `size` (nhỏ nhất đủ), không stream;
+    - `try`: bộ dò không thấy hộp chữ (nhưng nó bỏ sót ~6 % ảnh có chữ rõ) -> thử đọc luôn, Gemma nói "không có chữ"
+      thì mới `align`;
+    - `align`: chữ quá nhỏ cả ở UXGA, hoặc ảnh không giải mã được -> căn khung live để hướng dẫn người dùng.
+    `line_px` = chiều cao hộp dòng (trung vị) tính bằng pixel THẬT của ảnh lượt; `box` = vùng chữ (x0,y0,x1,y1) trên
+    ảnh lượt, để cắt trước khi gửi Gemma."""
+
+    kind: str
+    size: str = ""
+    line_px: float = 0.0
+    width: int = 0
+    boxes: tuple[Box, ...] = ()
+    box: Box | None = None
+    blur: float = 0.0  # `blur_ratio` của vùng chữ; 0 = không đo được. Dưới OCR_BLUR_RATIO là mờ rõ rệt -> chụp lại một lần.
+
+
+def line_height(boxes: list[Box], gray_w: int, native_w: int) -> float:
+    """Chiều cao dòng điển hình (pixel thật của ảnh gốc). Trung vị hộp, bỏ hộp quá dẹt/bé (nhiễu của bộ dò)."""
+    heights = sorted(b[3] - b[1] for b in boxes if (b[2] - b[0]) >= 1.5 * (b[3] - b[1]) and (b[3] - b[1]) >= 3)
+    if not heights:
+        return 0.0
+    return heights[len(heights) // 2] * native_w / gray_w
+
+
+def text_region(boxes: list[Box], gray_w: int, gray_h: int, margin: float = 0.04) -> Box:
+    """Hợp mọi hộp chữ + lề (tỉ lệ cạnh ngắn), trong toạ độ ảnh xám đã thu nhỏ."""
+    m = int(margin * gray_w)
+    return (max(0, min(b[0] for b in boxes) - m), max(0, min(b[1] for b in boxes) - m),
+            min(gray_w, max(b[2] for b in boxes) + m), min(gray_h, max(b[3] for b in boxes) + m))
+
+
+def blur_ratio(gray: np.ndarray, boxes: list[Box]) -> float:
+    """Độ mờ của vùng chữ, KHÔNG phụ thuộc độ tương phản: phương sai Laplacian trước / sau khi làm mờ nhẹ (sigma 1,5).
+    Ảnh nét mất rất nhiều năng lượng cao tần khi bị làm mờ (VinText SVGA: trung vị 38, phân vị 5 % = 14); ảnh đã mờ
+    thì gần như không đổi (rung tay sigma 2 px: 3,3; sigma 3: 3,1). 0 khi vùng chữ quá nhỏ để đo."""
+    if not boxes:
+        return 0.0
+    h, w = gray.shape
+    x0, y0, x1, y1 = text_region(boxes, w, h, 0.0)
+    roi = gray[y0:y1, x0:x1]
+    if roi.shape[0] < 16 or roi.shape[1] < 16:
+        return 0.0
+    after = float(cv2.Laplacian(cv2.GaussianBlur(roi, (0, 0), 1.5), cv2.CV_64F).var())
+    return float(cv2.Laplacian(roi, cv2.CV_64F).var()) / max(after, 1e-6)
+
+
+def plan_read(boxes: list[Box], gray_w: int, gray_h: int, native_w: int, gray: np.ndarray | None = None) -> ReadPlan:
+    """Quyết định cách đọc từ hộp chữ dò được trên ảnh lượt (thuần luật, không model)."""
+    if not boxes:
+        return ReadPlan("try", width=native_w)
+    line = line_height(boxes, gray_w, native_w)
+    k = native_w / gray_w
+    box = text_region(boxes, gray_w, gray_h)
+    box = (int(box[0] * k), int(box[1] * k), int(box[2] * k), int(box[3] * k))
+    common = dict(line_px=line, width=native_w, boxes=tuple(boxes), box=box,
+                  blur=blur_ratio(gray, boxes) if gray is not None else 0.0)
+    if line >= config.OCR_READ_LINE_PX:
+        return ReadPlan("read", **common)
+    for name, w in CAPTURE_SIZES:
+        if w > native_w and line * w / native_w >= config.OCR_TARGET_LINE_PX:
+            return ReadPlan("capture", size=name, **common)
+    # Cả UXGA cũng không đủ: chữ thật sự nhỏ. Còn đọc được đại khái thì xin UXGA, nhỏ hơn nữa thì bảo người dùng lại gần.
+    if native_w < CAPTURE_SIZES[-1][1] and line * CAPTURE_SIZES[-1][1] / native_w >= config.OCR_HOPELESS_LINE_PX:
+        return ReadPlan("capture", size=CAPTURE_SIZES[-1][0], **common)
+    if line >= config.OCR_HOPELESS_LINE_PX:
+        return ReadPlan("read", **common)
+    return ReadPlan("align", **common)
+
+
+def plan_jpeg(jpeg: bytes) -> ReadPlan:
+    """Ảnh lượt -> kế hoạch đọc. Giải mã hỏng -> căn khung (để người dùng chụp lại)."""
     decoded = decode_gray(jpeg)
     if decoded is None:
-        return "look_around", []
-    gray, width = decoded
-    boxes = detector().detect(gray)
+        return ReadPlan("align")
+    gray, native_w = decoded
     h, w = gray.shape
-    return assess(boxes, w, h, config.OCR_CAPTURE_WIDTH / w), boxes
+    return plan_read(detector().detect(gray), w, h, native_w, gray)
 
 
 @dataclass

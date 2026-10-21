@@ -260,13 +260,34 @@ def test_ocr_reads_buffer_directly_when_frame_is_good(world):
     assert ocr_live.last_text("aa:bb")
 
 
-def test_ocr_opens_live_alignment_when_frame_is_bad(world):
+def test_ocr_opens_live_alignment_when_frame_is_bad(world, monkeypatch):
     rec, labels, _ = world
     rec.text = "ĐỌC GIÚP TÔI TRANG SÁCH NÀY"
     labels["đọc giúp tôi trang sách này"] = clef.ClefResult("ocr", 0.9, "read")
+
+    async def no_text(jpeg, mode, device):  # bộ dò không thấy hộp -> đọc thử -> Gemma cũng nói không có chữ
+        yield ocr_live.NO_TEXT + "\n"
+
+    monkeypatch.setattr(ocr_live, "spoken", no_text)
     _post_image("t10", _jpeg(1600, 1200))  # trắng trơn, không chữ
     r = _turn("t10")
     assert r.headers["x-cue"] == "ocr_start" and r.headers["x-live"] == "ocr"
+
+
+def test_ocr_detector_miss_still_reads_when_gemma_sees_text(world, monkeypatch):
+    """Bộ dò bỏ sót ~6 % ảnh có chữ rõ: đọc thử, Gemma đọc được thì nói luôn, không vào căn khung 12 s."""
+    rec, labels, _ = world
+    rec.text = "ĐỌC GIÚP TÔI TRANG SÁCH NÀY"
+    labels["đọc giúp tôi trang sách này"] = clef.ClefResult("ocr", 0.9, "read")
+
+    async def reads(jpeg, mode, device):
+        yield "Chương một.\n"
+        yield "Nội dung sách."
+
+    monkeypatch.setattr(ocr_live, "spoken", reads)
+    _post_image("t10b", _jpeg(1600, 1200))
+    r = _turn("t10b")
+    assert "x-live" not in r.headers and "x-cue" not in r.headers and len(r.content) > 1000
 
 
 def test_live_rejects_unknown_token(world):
@@ -301,8 +322,9 @@ def test_ocr_live_aligns_captures_and_reads(world, monkeypatch):
         assert json.loads(ws.receive_text())["t"] == "cam"
         ws.send_bytes(good)
         ws.send_bytes(good)
-        assert json.loads(ws.receive_text()) == {"t": "capture", "size": "uxga"}
-        ws.send_bytes(bytes([1]) + _jpeg(1600, 1200, text_lines=True))
+        # Dòng chữ ở khung VGA đã lớn: xin cỡ nhỏ nhất đủ (SVGA ~30 KB), không phải UXGA ~127 KB.
+        assert json.loads(ws.receive_text()) == {"t": "capture", "size": "svga"}
+        ws.send_bytes(bytes([1]) + _jpeg(800, 600, text_lines=True))
         audio = ws.receive_bytes()
         assert audio[0] == 0x02 and len(audio) > 1
         while True:

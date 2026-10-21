@@ -384,15 +384,29 @@ FIRST_SENTENCE_MAX_WORDS = int(get("FIRST_SENTENCE_MAX_WORDS", "8"))
 
 # WebSocket realtime (§5.3).
 LIVE_TOKEN_TTL_S = float(get("LIVE_TOKEN_TTL_S", "10"))
-OCR_ALIGN_TIMEOUT_S = float(get("OCR_ALIGN_TIMEOUT_S", "20"))
+OCR_ALIGN_TIMEOUT_S = float(get("OCR_ALIGN_TIMEOUT_S", "12"))
 OCR_CUE_MIN_GAP_S = float(get("OCR_CUE_MIN_GAP_S", "1.5"))
 OCR_LOOK_AROUND_GAP_S = float(get("OCR_LOOK_AROUND_GAP_S", "3"))
 OCR_GOOD_FRAMES = int(get("OCR_GOOD_FRAMES", "3"))
 # Chiều cao dòng tối thiểu tính trên ảnh UXGA (spec OCR: ~28 px/dòng).
-OCR_MIN_LINE_PX = float(get("OCR_MIN_LINE_PX", "28"))
+OCR_MIN_LINE_PX = float(get("OCR_MIN_LINE_PX", "20"))
 OCR_CAPTURE_WIDTH = int(get("OCR_CAPTURE_WIDTH", "1600"))
-# Ảnh buffer UXGA đã đạt chuẩn căn khung thì đọc luôn, khỏi mở WebSocket.
+# Ảnh lượt đã đủ nét cho dòng chữ thì đọc luôn, khỏi mở WebSocket (live/text_align.plan_read).
 OCR_ACCEPT_BUFFER = get("OCR_ACCEPT_BUFFER", "1") != "0"
+# Chiều cao hộp dòng (bộ dò PP-OCR, pixel thật của ảnh) từ đó ảnh lượt SVGA đọc ngang UXGA; thấp hơn thì xin `capture`
+# cỡ nhỏ nhất đủ. Chọn theo evaluations bench (docs/2026-10-22-toi-uu-anh-ocr.md).
+OCR_READ_LINE_PX = float(get("OCR_READ_LINE_PX", "14"))
+# Cỡ `capture` được chọn nhỏ nhất sao cho dòng chữ đạt chiều cao này.
+OCR_TARGET_LINE_PX = float(get("OCR_TARGET_LINE_PX", "18"))
+# Dưới ngưỡng này (đã tính cả UXGA) chữ nhỏ tới mức không đọc nổi: vào căn khung để bảo người dùng lại gần.
+OCR_HOPELESS_LINE_PX = float(get("OCR_HOPELESS_LINE_PX", "12"))
+# `text_align.blur_ratio` của vùng chữ dưới ngưỡng này = mờ rõ rệt (rung tay >= sigma 2 px: F1 đọc chữ 0,69 -> 0,51): chụp lại
+# MỘT lần sau câu "Giữ yên." Đặt thấp để không chụp lại oan ảnh kính (nhiễu OV2640); 0 = tắt.
+OCR_BLUR_RATIO = float(get("OCR_BLUR_RATIO", "3.5"))
+# Chờ bấy nhiêu giây sau "Giữ yên." rồi mới chụp lại (cho tay kịp yên).
+OCR_BLUR_SETTLE_S = float(get("OCR_BLUR_SETTLE_S", "1.0"))
+# Chờ ảnh `capture` tới tối đa bao lâu (kính 4G: UXGA ~14 s) trước khi dùng ảnh lượt.
+OCR_CAPTURE_WAIT_S = float(get("OCR_CAPTURE_WAIT_S", "12"))
 LAST_TEXT_TTL_S = float(get("LAST_TEXT_TTL_S", "300"))
 # "auto" = PP-OCR det (ONNX, `TEXT_DET_MODEL_PATH`) nếu có file, không thì bộ dò hình thái OpenCV.
 TEXT_DETECTOR = get("TEXT_DETECTOR", "auto")

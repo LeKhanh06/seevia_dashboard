@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator, Callable
 
 import config
 from handlers import phone as phone_handlers
+from handlers import read_money
 from lanes import general, ocr_live, phone
 from live import call_bridge
 from live.session import sessions
@@ -99,7 +100,7 @@ FILLER_SEARCHING = "Để tôi tra cứu."
 # Chỉ gặp ở `/process` (firmware cũ, không có WS): bật cảnh báo vật cản liên tục
 # cần kênh realtime nên nói thẳng là chưa làm được, thay vì nói "đã bật" rồi im.
 NO_LIVE_MESSAGE = "Kính bản này chưa hỗ trợ cảnh báo liên tục."
-STATIC_SPEECH: tuple[str, ...] = (NO_LIVE_MESSAGE,)
+STATIC_SPEECH: tuple[str, ...] = (NO_LIVE_MESSAGE, *read_money.STATIC_SPEECH)
 
 
 def _sync(ctx: TurnContext, agen: AsyncIterator[str]):
@@ -168,6 +169,8 @@ async def _lane_b(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if entry is None:
         return Reply(cues=["no_image"], intent=d.intent, lane="B")
     if d.intent == "money":
+        if config.MONEY_RETRY and config.MONEY_MODE == "choice":
+            return await _money(ctx, entry.jpeg)
         # Tờ tiền ít chữ, bộ dò chữ không căn khung tốt -> đọc luôn ảnh buffer UXGA.
         return Reply(speech=_sync(ctx, ocr_live.spoken(entry.jpeg, "money", ctx.device)),
                      intent="money", lane="B")
@@ -185,6 +188,22 @@ async def _lane_b(ctx: TurnContext, d: Decision, text: str) -> Reply:
                          intent="ocr", lane="B")
     session = ctx.prewarmer.session("ocr", {"mode": mode, "fallback_jpeg": entry.jpeg})
     return Reply(cues=["ocr_start"], live="ocr", live_token=session.token, intent="ocr", lane="B")
+
+
+async def _money(ctx: TurnContext, jpeg: bytes) -> Reply:
+    """Đọc tiền v2: đọc chặt 1 khung (ảnh buffer UXGA, τ MONEY_MIN_PROB). Chắc -> nói mệnh giá, trễ như cũ. Không chắc ->
+    nói MỘT câu hướng dẫn (read_money.hint) và, có WS, mở phiên live `money_retry` đọc lại đúng một lần từ khung mới
+    (lanes/ocr_live._money_retry). Phiên mang mode "ocr" để nav live được tạm nhường chỗ rồi dựng lại như mọi OCR live.
+    "Không có tiền" và lỗi mạng giữ câu cũ, không đọc lại."""
+    sentence, top = await ocr_live.read_money_frame(jpeg, config.MONEY_MIN_PROB)
+    if sentence != read_money.UNSURE or top is None:
+        return Reply(speech=[sentence], intent="money", lane="B")
+    line = read_money.hint(top, await asyncio.to_thread(read_money.blur_score, jpeg))
+    logger.info("làn B tiền: chưa chắc (top=%s) -> %r%s", top, line, "" if not ctx.single_shot else " (không WS, không đọc lại)")
+    if ctx.single_shot:  # /process: không có WS để lấy khung mới; người dùng tự bấm lại
+        return Reply(speech=[line], intent="money", lane="B")
+    session = ctx.prewarmer.session("ocr", {"mode": "money_retry"})
+    return Reply(speech=[line], live="ocr", live_token=session.token, intent="money", lane="B")
 
 
 async def _params(ctx: TurnContext, intent: str, text: str) -> dict:

@@ -165,6 +165,16 @@ server reply(live:"ocr", cues:["ocr_start"]) ; reply_end ; {"t":"cam","size":"vg
 kính   0x04 <JPEG>...   server {"t":"cue","id":"look_left"} ... {"t":"capture","size":"uxga"}   kính 0x04 <UXGA>
 server 0x02... (đọc nội dung) ; {"t":"end"}
 
+-- đọc tiền (đọc chắc, ~49 %): y như chat, không live --
+kính   {"t":"turn_start",...} ; 0x01 <JPEG UXGA buffer> ; 0x03 <ADPCM>... ; {"t":"turn_end",...}
+server {"t":"reply","turn":"t50","cues":[],"live":null,"audio":{...}} ; 0x02... ("50 nghìn đồng.") ; {"t":"reply_end","turn":"t50"}
+
+-- đọc tiền — đọc lại (không chắc, ~50 %): một câu hướng dẫn rồi đọc lại đúng MỘT lần --
+server reply(live:"ocr", cues:[]) ; 0x02... ("Lùi ra xa một chút, để cả tờ tiền nằm giữa." | "Giữ yên tay." | "Đưa tờ tiền lại gần hơn một chút.") ; reply_end ; {"t":"cam","size":"vga","fps":5,"quality":12}
+kính   0x04 <VGA>...   (server bỏ khung trong MONEY_RETRY_SETTLE_S = 1,0 s đầu; lấy khung đầu tiên sau đó đủ nét, hết 3,0 s thì khung nét nhất; không có khung nào thì nói "vẫn chưa đọc chắc")
+server 0x02... ("50 nghìn đồng." | "Tôi vẫn chưa đọc chắc được tờ này.") ; {"t":"end"}
+(lượt mới/`turn_start`/socket đóng: huỷ như OCR live. Đang chỉ đường: live này tạm thay nav, xong server dựng lại nav. Không có WS (`/process`): chỉ nói câu hướng dẫn, không live.)
+
 -- nav --
 server reply(live:"nav", cues:["nav_alert_on"]) ; reply_end ; {"t":"cam","size":"qvga","fps":8,"quality":15}
 kính   0x04 <JPEG>...   server {"t":"hazard","level":2,"dir":"left","kind":"car"}

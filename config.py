@@ -275,7 +275,20 @@ LLM_OCR_IMAGE_MAX_SIDE = int(get("LLM_OCR_IMAGE_MAX_SIDE", "1600"))
 # (handlers/read_money.read_choice); "prompt" = prompt tự do cũ. Ngưỡng chọn trên dev 2026-10-21:
 # sai <= 3 % mà đúng cao nhất; test: nói sai 11,2 % -> 3,3 %, trễ p90 234 -> 215 ms.
 MONEY_MODE = get("MONEY_MODE", "choice")
-MONEY_MIN_PROB = float(get("MONEY_MIN_PROB", "0.995"))
+# Đọc tiền v2 (2026-10-21, spec doc-tien-3-khung): đọc chặt 1 khung, không chắc thì nói hướng dẫn rồi đọc lại
+# 1 lần từ khung live. τ 0,995 -> 0,999: test nói sai 3,6 -> 2,1 % (đổi lại từ chối 39 -> 49 %, phần đó đọc lại bù).
+MONEY_MIN_PROB = float(get("MONEY_MIN_PROB", "0.999"))
+# 1 = có đọc lại; 0 = hành vi cũ (không chắc thì nói "chưa đọc rõ", không mở live).
+MONEY_RETRY = get("MONEY_RETRY", "1") == "1"
+MONEY_RETRY_PROB = float(get("MONEY_RETRY_PROB", "0.999"))
+# Lượt đọc lại: bỏ mọi khung trong SETTLE_S đầu (để người dùng chỉnh tay theo hướng dẫn), rồi lấy khung đầu tiên đủ nét;
+# hết TIMEOUT_S (tính từ lúc gửi `cam`) thì lấy khung nét nhất đã thấy.
+MONEY_RETRY_SETTLE_S = float(get("MONEY_RETRY_SETTLE_S", "1.0"))
+MONEY_RETRY_TIMEOUT_S = float(get("MONEY_RETRY_TIMEOUT_S", "3.0"))
+# Độ nét (Laplacian, read_money.blur_score: ảnh thu về cạnh dài 192 px) dưới ngưỡng này thì nói "Giữ yên tay." và
+# chờ khung nét khi đọc lại. Chọn trên dev: phân vị 25 % độ nét của 81 ảnh dev đọc đúng ở τ 0,999
+# (evaluations/bench/money_blur.py). Cần chỉnh lại trên ảnh thật của kính (xem MONEY_OCR_CAI_TIEN.md, "Đọc tiền v2").
+MONEY_BLUR_HINT = float(get("MONEY_BLUR_HINT", "341.4"))
 # Khi có >= 2 khung (kính chụp liên tiếp): ngưỡng cho khung "chắc" trong read_money.combine.
 MONEY_MULTI_MIN_PROB = float(get("MONEY_MULTI_MIN_PROB", "0.98"))
 # Làn B đọc chữ: chữ số nào có xác suất token dưới ngưỡng thì nói thêm câu cảnh báo "chưa chắc" (0 = tắt).

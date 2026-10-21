@@ -56,7 +56,7 @@ fun CommunityScreen(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Text(
-                    text = "Cộng Đồng Your Eyes",
+                    text = "Cộng đồng SeeVia",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Black,
                         color = inkColor,

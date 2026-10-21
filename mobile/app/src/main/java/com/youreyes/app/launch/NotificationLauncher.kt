@@ -18,10 +18,10 @@ private fun ensureChannel(context: Context) {
     if (manager.getNotificationChannel(CHANNEL_ID) != null) return
     val channel = NotificationChannel(
         CHANNEL_ID,
-        "Lệnh từ server",
+        "Lệnh từ kính",
         NotificationManager.IMPORTANCE_HIGH,
     ).apply {
-        description = "Thông báo mở màn hình thật cho lệnh nhận từ backend"
+        description = "Mở màn hình cần thiết khi kính gửi lệnh tới điện thoại"
         setBypassDnd(true)
         lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
     }

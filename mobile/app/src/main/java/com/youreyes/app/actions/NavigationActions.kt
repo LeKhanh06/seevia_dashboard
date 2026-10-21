@@ -85,7 +85,7 @@ private fun ensureNavigationChannel(context: Context) {
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
     if (manager.getNotificationChannel(COMMAND_CHANNEL_ID) == null) {
         manager.createNotificationChannel(
-            NotificationChannel(COMMAND_CHANNEL_ID, "Lệnh từ server", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel(COMMAND_CHANNEL_ID, "Lệnh từ kính", NotificationManager.IMPORTANCE_HIGH),
         )
     }
 }

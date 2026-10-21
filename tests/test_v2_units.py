@@ -443,6 +443,12 @@ def test_rule_params_need_no_llm():
     assert asyncio.run(phone.extract("music_volume", "tăng âm lượng")) == {"direction": "up"}
 
 
+def test_emergency_extracts_no_number_from_speech():
+    """Cấp cứu chỉ gọi người thân đã cài: 115/114/113 hay số bất kỳ trong câu nói không thành tham số."""
+    for said in ("gọi 115 giúp tôi", "cấp cứu số 114", "khẩn cấp 0912345678"):
+        assert asyncio.run(phone.extract("emergency_call", said)) == {}
+
+
 def test_fallback_slot_strips_politeness():
     assert phone.fallback_slot("contact_name", "gọi cho mẹ giúp tôi nhé") == "mẹ"
     assert phone.fallback_slot("destination", "dẫn tôi tới chợ Bến Thành") == "chợ Bến Thành"

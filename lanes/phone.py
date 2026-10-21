@@ -152,9 +152,8 @@ async def extract(intent: str, text: str) -> dict:
             params["direction"] = "up"
         elif re.search(r"giảm|nhỏ lại|nhỏ đi|bé lại|vặn nhỏ", lowered):
             params["direction"] = "down"
-    elif intent == "emergency_call":
-        if number := re.search(r"\b(11[345]|\d{3,11})\b", lowered):
-            params["emergency_number"] = number.group(1)
+    # Khẩn cấp (`emergency_call`) KHÔNG có tham số: chỉ gọi người thân đã cài, không bao giờ trích/quay số từ câu nói
+    # (115/114/113 hay số bất kỳ). Đừng thêm lại.
 
     slot = SLOT.get(intent)
     if slot is None:

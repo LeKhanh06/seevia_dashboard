@@ -18,6 +18,7 @@ import time
 import unicodedata
 from collections.abc import Iterator
 
+import config
 from pipeline import device_ctx
 from handlers import music, navigation, phone, ride
 from models import llm
@@ -40,6 +41,20 @@ HANDLERS = {
     "music_stop": music.handle_stop,
     "music_volume": music.handle_volume,
 }
+
+# Kênh SIM (CONTACT_CHANNEL=sim): gọi/nhắn đi qua danh bạ + SIM điện thoại thay vì AB; đọc tin chưa hỗ trợ.
+SIM_HANDLERS = {
+    "contact_call": phone.handle_contact,
+    "message_send": phone.handle_message_sms,
+    "message_read": phone.handle_message_read_sim,
+}
+
+
+def handler_for(intent: str):
+    if config.CONTACT_CHANNEL == "sim" and intent in SIM_HANDLERS:
+        return SIM_HANDLERS[intent]
+    return HANDLERS[intent]
+
 
 # intent -> slot chuỗi tự do cần Gemma trích.
 SLOT = {
@@ -203,7 +218,7 @@ def take_pending(device: str) -> tuple[str, str] | None:
 
 def speech(intent: str, text: str, params: dict) -> Iterator[str]:
     """Chạy handler cũ (đồng bộ, gọi app server) — được đọc trong thread TTS."""
-    return HANDLERS[intent](None, text, params=params)
+    return handler_for(intent)(None, text, params=params)
 
 
 def run_background(intent: str, text: str, params: dict, deliver=None, skip_ack: bool = False) -> threading.Thread:

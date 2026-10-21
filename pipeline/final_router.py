@@ -316,9 +316,9 @@ _MESSAGE_BLOCK = {
 
 async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None = None) -> Reply:
     intent = d.intent
-    if intent in ("contact_call", "message_send", "message_read"):
+    if config.CONTACT_CHANNEL != "sim" and intent in ("contact_call", "message_send", "message_read"):
         # Gọi điện / nhắn tin cần phiên WS + token riêng của kính: chặn TRƯỚC khi hỏi tên / đọc lại để không nói
-        # "Đang gọi..." rồi im. (Khẩn cấp không chặn ở đây: nó rơi về luồng cũ trong handler.)
+        # "Đang gọi..." rồi im. Kênh SIM đi qua điện thoại nên không cần phiên/token riêng. (Khẩn cấp không chặn ở đây: nó rơi về luồng cũ trong handler.)
         blocked = _call_blocker(ctx)
         if blocked:
             if intent != "contact_call":

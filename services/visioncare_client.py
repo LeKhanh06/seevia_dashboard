@@ -176,6 +176,14 @@ def messages_send(contact_alias: str, text: str, request_id: str | None = None) 
     })
 
 
+def contact_sms(name: str, text: str, request_id: str | None = None) -> dict:
+    """Kênh SIM: nhắn SMS qua danh bạ điện thoại (`contact/sms`, 202 + kết quả về qua callback/`requests/{id}`).
+
+    Khác `messages_send` (AB, qua mạng): đi theo luồng `run_action` như `contact/call`, `device_id` do client chèn."""
+    return call_service_api("api/v1/service/contact/sms", {
+        "name": name, "text": text, "request_id": request_id or str(uuid.uuid4())}).get("data", {}) or {}
+
+
 def messages_unread() -> list[dict]:
     """Tin chưa đọc (cũ -> mới, tối đa 50): `[{message_id, from_display_name, text, created_at}]`."""
     url = f"{config.VISIONCARE_HOST_URL.rstrip('/')}/api/v1/service/messages/unread"

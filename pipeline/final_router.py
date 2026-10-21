@@ -292,6 +292,11 @@ async def _lane_c(ctx: TurnContext, d: Decision, text: str, params: dict | None 
         return Reply(speech=[NO_LIVE_MESSAGE], intent=d.intent, lane="C")
     if d.intent == "alert_off":
         sessions.close_device(ctx.device, "nav")
+        from live import device_session  # nhập muộn: device_session nhập pipeline
+
+        held = device_session.session_for(ctx.device)
+        if held is not None:
+            held.drop_suspended_nav()  # nav đang bị OCR/cuộc gọi tạm dừng: người dùng đã tắt, đừng bật lại
         return Reply(cues=["nav_alert_off"], intent=d.intent, lane="C")
     # Làn C chỉ còn cảnh báo vật cản; dẫn đường (nav_start/nav_stop) là hành động điện thoại ở làn D.
     session = ctx.prewarmer.session("nav")  # alert_on

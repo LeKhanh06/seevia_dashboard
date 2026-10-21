@@ -70,17 +70,16 @@ def _stub_flow(monkeypatch, final_result=None, state="succeeded", error=None):
     return calls
 
 
-def test_navigation_start_speaks_the_destination_the_phone_confirmed(monkeypatch):
+def test_navigation_start_reports_maps_without_screen_instructions(monkeypatch):
     calls = _stub_flow(monkeypatch, {"navigation_id": "nav-9", "destination": {"address": "Chợ Bến Thành"}})
 
     out = "".join(navigation.handle_start(b"", "", {"destination": "Chợ Bến Thành"}))
 
     assert calls[0][0] == "api/v1/service/navigation/start"
-    assert "Chợ Bến Thành" in out
-    assert "Đã gửi chỉ đường tới Chợ Bến Thành về điện thoại" in out
-    # Maps opens through the launcher notification, which Android only
-    # auto-opens with the screen off, so the reply has to say so.
-    assert "Mở thông báo để đi bằng Google Maps" in out
+    assert calls[0][1]["destination"] == {"address": "Chợ Bến Thành"}
+    # Điện thoại tự mở Google Maps (full-screen intent); người dùng nghe qua kính, không bảo họ mở thông báo.
+    assert "Google Maps" in out
+    assert "thông báo" not in out
 
 
 def test_navigation_start_refuses_without_a_destination(monkeypatch):
@@ -181,7 +180,8 @@ def test_ride_quote_is_sent_at_the_first_turn(monkeypatch):
     # Làn D đã đọc lại điểm đến + có cửa sổ huỷ, nên lệnh đi ngay ở lượt này (không chờ lượt "xác nhận").
     assert calls[0][0] == "api/v1/service/ride/quote"
     assert calls[0][1]["destination"]["address"] == "Sân bay"
-    assert "xác nhận" in out and "hủy" in out
+    # Một bước: Grab đã mở với điểm đến, không bắt nói "xác nhận" thêm một lượt (ride_confirm chỉ mở lại Grab).
+    assert "Grab" in out and "nói xác nhận" not in out
     assert action_flow.recall("quote_id") == "quote-9"
 
 
@@ -229,17 +229,15 @@ def test_ride_destination_not_found_is_reported_not_guessed(monkeypatch):
     assert len(calls) == 1 and action_flow.recall("quote_id") is None
 
 
-def test_music_play_asks_which_artist_when_only_a_title_was_given(monkeypatch):
-    action_flow.forget("pending_song_title")
-    calls = _stub_flow(monkeypatch)
+def test_music_play_sends_a_bare_title_without_asking_the_artist(monkeypatch):
+    """Spotify xếp bản gốc lên đầu khi tìm theo tên bài trơn (đo 2026-10-22), nên không hỏi "ca sĩ nào?"."""
+    calls = _stub_flow(monkeypatch, {"title": "Nơi Này Có Anh", "artist": "Sơn Tùng M-TP"})
 
     out = "".join(music.handle_play(b"", "", {"song": "Nơi này có anh"}))
 
-    # A bare title matches covers, remixes and karaoke versions; picking one is
-    # a guess, and a blind listener cannot see they got the wrong track.
-    assert calls == []
-    assert "nhiều bài trùng tên" in out
-    assert "ca sĩ nào" in out
+    assert calls[0][1]["song"] == "Nơi này có anh"
+    assert "?" not in out
+    assert "Đã tìm được bài Nơi Này Có Anh của Sơn Tùng M-TP" in out
 
 
 @pytest.mark.parametrize(
@@ -248,21 +246,31 @@ def test_music_play_asks_which_artist_when_only_a_title_was_given(monkeypatch):
         ("mở nhạc đi", {"song": "nhạc"}),   # đo thật từ bộ phân loại
         ("bật nhạc lên", {}),               # đo thật: không tách được gì
         ("nghe nhạc", {"song": "nghe nhạc"}),
+        ("đổi bài khác đi", {"song": "bài khác"}),
     ],
 )
-def test_music_play_asks_which_song_when_none_was_named(command, params, monkeypatch):
-    """"Bật nhạc lên" là ý muốn nghe nhạc, chưa phải một bài cụ thể.
+def test_music_play_picks_a_popular_song_when_none_was_named(command, params, monkeypatch):
+    """"Bật nhạc lên" là ý muốn nghe nhạc, chưa phải một bài cụ thể: phát luôn một bài phổ biến, không hỏi lại.
 
-    Trước đây câu lệnh tự trở thành tên bài, nên ứng dụng nhạc đi tìm một bài
-    hát tên đúng bằng câu người dùng vừa nói.
+    Không đem nguyên câu lệnh đi tìm (ứng dụng nhạc ra một bài tên đúng bằng câu người dùng vừa nói).
     """
-    action_flow.forget("pending_song_title")
-    calls = _stub_flow(monkeypatch)
+    action_flow.reset_state()
+    calls = _stub_flow(monkeypatch, {"title": "Tò Te Tí", "artist": "Wren Evans"})
 
     out = "".join(music.handle_play(b"", command, params))
 
-    assert calls == []
-    assert out == music._ASK_SONG
+    assert calls[0][1]["song"] == music._GENERIC_QUERIES[0]
+    assert "?" not in out
+
+
+def test_music_play_generic_requests_rotate_so_another_song_plays(monkeypatch):
+    action_flow.reset_state()
+    calls = _stub_flow(monkeypatch, {"title": "x", "artist": "y"})
+
+    for _ in range(2):
+        "".join(music.handle_play(b"", "đổi bài khác", {"song": "bài khác"}))
+
+    assert [c[1]["song"] for c in calls] == list(music._GENERIC_QUERIES[:2])
 
 
 def test_music_volume_asks_instead_of_guessing_a_direction(monkeypatch):
@@ -293,28 +301,7 @@ def test_music_volume_still_acts_when_the_command_was_clear(params, expected, mo
     assert calls[0][1]["request_id"]
 
 
-def test_music_play_combines_the_artist_answer_with_the_pending_title(monkeypatch):
-    action_flow.forget("pending_song_title")
-    calls = _stub_flow(monkeypatch, {"title": "Nơi này có anh", "artist": "Sơn Tùng M-TP"})
-    "".join(music.handle_play(b"", "", {"song": "Nơi này có anh"}))
-
-    "".join(music.handle_play(b"", "", {"song": "Sơn Tùng M-TP"}))
-
-    assert calls[0][1]["song"] == "Nơi này có anh - Sơn Tùng M-TP"
-
-
-def test_music_play_honours_cu_phat_as_any_artist(monkeypatch):
-    action_flow.forget("pending_song_title")
-    calls = _stub_flow(monkeypatch, {"title": "Nơi này có anh", "artist": "Unknown"})
-    "".join(music.handle_play(b"", "", {"song": "Nơi này có anh"}))
-
-    "".join(music.handle_play(b"", "", {"song": "cứ phát"}))
-
-    assert calls[0][1]["song"] == "Nơi này có anh"
-
-
 def test_music_play_speaks_the_track_the_phone_actually_started(monkeypatch):
-    action_flow.forget("pending_song_title")
     calls = _stub_flow(monkeypatch, {"title": "Nơi này có anh", "artist": "Sơn Tùng M-TP"})
 
     out = "".join(music.handle_play(b"", "", {"song": "Nơi này có anh - Sơn Tùng M-TP"}))

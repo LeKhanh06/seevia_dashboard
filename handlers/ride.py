@@ -13,7 +13,6 @@ from handlers.action_flow import forget, recall, run_action
 _DEMO_CURRENT_LOCATION = {"lat": 10.7769, "lng": 106.7009}
 
 _ASK_DESTINATION = "Bạn muốn đi đâu? Vui lòng nói lại kèm tên điểm đến."
-_CONFIRM_HINT = "Nói xác nhận để đặt, hoặc nói lại điểm đến."
 _CONFIRM_ACK = "Đang xác nhận chuyến xe."
 _CANCEL_ACK = "Đang hủy chuyến xe."
 
@@ -23,20 +22,14 @@ _OPENING_RIDE_APP = "Đang mở ứng dụng đặt xe trên điện thoại, b�
 
 _CANCELLED = "Đã hủy, không đặt xe nữa."
 _NOTHING_TO_CONFIRM = "Chưa có chuyến nào để xác nhận, bạn hãy nói điểm đến trước."
-_WAITING_IN_APP = (
-    "Chuyến xe đang chờ bạn xác nhận trong ứng dụng. "
-    "Vui lòng nhấn vào thông báo trên điện thoại và xác nhận điểm đón, điểm đến."
-)
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (
     _ASK_DESTINATION,
-    _CONFIRM_HINT,
     _QUOTE_ACK,
     _OPENING_RIDE_APP,
     _CANCELLED,
     _NOTHING_TO_CONFIRM,
-    _WAITING_IN_APP,
     _CONFIRM_ACK,
     _CANCEL_ACK,
 )

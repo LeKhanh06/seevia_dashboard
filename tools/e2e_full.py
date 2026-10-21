@@ -652,7 +652,7 @@ async def sc_nav(c):
         r["result_ms"], _ = await result_spoken(c, mark, cmd, 10.0)
         if r["result_ms"] is None:
             problems.append("kết quả gửi chỉ đường KHÔNG được đọc")
-    # câu kết quả (khung `say` của result-*): phải nói "đã gửi về điện thoại, mở thông báo", không nói ĐT tự mở bản đồ
+    # câu kết quả (khung `say` của result-*): "đã gửi sang Google Maps", không bảo người dùng mở thông báo
     end = await g.wait_for(lambda e: e["k"] == "json" and e["f"].get("t") == "reply_end"
                            and str(e["f"].get("turn", "")).startswith("result-"), 10, t2.base)
     if end is None:
@@ -660,8 +660,7 @@ async def sc_nav(c):
     else:
         txt = " ".join(f["text"] for f in g.frames("say", t2.base) if f["turn"] == end["f"]["turn"])
         r["result_text"] = txt
-        if not (txt.startswith("Đã gửi chỉ đường tới") and "về điện thoại" in txt
-                and "Mở thông báo để đi bằng Google Maps" in txt):
+        if not (txt.startswith("Đã gửi chỉ đường") and "Google Maps" in txt and "thông báo" not in txt):
             problems.append(f"câu kết quả lạ: {txt!r}")
     if g.frames("cam", t2.base):
         problems.append("có khung `cam` sau nav_start (dẫn đường không được mở live)")

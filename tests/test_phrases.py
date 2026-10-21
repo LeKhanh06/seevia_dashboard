@@ -152,8 +152,10 @@ def _spoken_sentences(pieces) -> list[str]:
         f"{action_flow._utterance(music._STOP_ACK)}",
         f"{action_flow._utterance(phone._EMERGENCY_ACK)}",
         f"{action_flow._utterance(action_flow._DEFAULT_PROGRESS[0])}",
-        f"{result_speech._NAV_OPENED_WITH_TAP}\n",
+        f"{result_speech._NAV_SENT}\n",
+        f"{result_speech._NAV_STOPPED}\n",
         f"{result_speech._RIDE_APP_OPENED}\n",
+        f"{result_speech._RIDE_REQUESTED}\n",
     ],
 )
 def test_runtime_sentence_matches_a_prerendered_key(piece, fake_tts):

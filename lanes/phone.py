@@ -20,7 +20,7 @@ from collections.abc import Iterator
 
 import config
 from pipeline import device_ctx
-from handlers import music, navigation, phone, ride
+from handlers import music, navigation, phone, result_speech, ride
 from models import llm
 
 logger = logging.getLogger("blind_assist")
@@ -114,6 +114,17 @@ _TEXT_LEAD = re.compile(r"^(?:là|rằng|nói|bảo|:|rằng là)\s+", re.I)
 _TAIL = re.compile(r"\s+(?:giúp tôi|giùm tôi|cho tôi|với|nhé|nha|đi|ngay|luôn)\s*$", re.I)
 
 
+# Hướng âm lượng theo mặt chữ. Người dùng hay nói CẢM NHẬN ("to quá", "nghe không rõ") thay vì lệnh ("giảm"): hiểu
+# luôn thay vì hỏi "tăng hay giảm?". Thứ tự xét: tối đa -> kêu nhỏ ("nhỏ tiếng quá" là muốn TO lên) -> giảm -> tăng.
+_VOLUME_MAX = re.compile(r"to nhất|lớn nhất|tối đa|hết cỡ")
+_VOLUME_TOO_QUIET = re.compile(r"(?:nhỏ|bé|khẽ)(?: tiếng)? quá|(?:không|chưa|khó) nghe (?:rõ|thấy)|nghe không (?:rõ|thấy)")
+_VOLUME_DOWN = re.compile(
+    r"giảm|nhỏ lại|nhỏ đi|nhỏ bớt|nhỏ hơn|nhỏ tiếng|nhỏ xuống|bé lại|bé đi|bé bớt|bé hơn|bé tiếng|vặn nhỏ|vặn bé|"
+    r"(?:to|lớn|ồn|ầm|inh)(?: tiếng)? quá|chói tai"
+)
+_VOLUME_UP = re.compile(r"tăng|to lên|lớn lên|to hơn|lớn hơn|to tiếng|lớn tiếng|vặn to|vặn lớn")
+
+
 def extraction_prefix() -> list[dict]:
     """Phần đầu prompt trích tham số, để prewarm prefix cache."""
     return [llm.user_message(_EXTRACT_PROMPT.split("{fields}")[0])]
@@ -163,10 +174,14 @@ async def extract(intent: str, text: str) -> dict:
     elif intent == "music_volume":
         if number := re.search(r"\d+", lowered):
             params["volume"] = max(0, min(100, int(number.group(0))))
-        elif re.search(r"tăng|to lên|lớn lên|vặn to", lowered):
+        elif _VOLUME_MAX.search(lowered):
+            params["volume"] = 100
+        elif _VOLUME_TOO_QUIET.search(lowered):
             params["direction"] = "up"
-        elif re.search(r"giảm|nhỏ lại|nhỏ đi|bé lại|vặn nhỏ", lowered):
+        elif _VOLUME_DOWN.search(lowered):
             params["direction"] = "down"
+        elif _VOLUME_UP.search(lowered):
+            params["direction"] = "up"
     # Khẩn cấp (`emergency_call`) KHÔNG có tham số: chỉ gọi người thân đã cài, không bao giờ trích/quay số từ câu nói
     # (115/114/113 hay số bất kỳ). Đừng thêm lại.
 
@@ -221,6 +236,15 @@ def speech(intent: str, text: str, params: dict) -> Iterator[str]:
     return handler_for(intent)(None, text, params=params)
 
 
+# Câu lỗi bảo người dùng nói lại tên (điện thoại không tìm thấy địa điểm / bài hát): câu nói kế tiếp CHÍNH LÀ tên
+# đó, nên mở lại chỗ trống như sau "Bạn muốn đi đâu?". Không có bước này thì "Chợ Rẫy" nói lại đứng một mình bị hiểu
+# là trò chuyện và lệnh chết ở đó.
+_SAY_AGAIN = {
+    result_speech.error_speech("INVALID_DESTINATION"): {"nav_start", "ride_quote"},
+    result_speech.error_speech("SONG_NOT_FOUND"): {"music_play"},
+}
+
+
 def run_background(intent: str, text: str, params: dict, deliver=None, skip_ack: bool = False) -> threading.Thread:
     """Chạy action ở nền; mỗi câu kết quả đưa cho `deliver` (vd. đọc qua WS).
 
@@ -236,6 +260,8 @@ def run_background(intent: str, text: str, params: dict, deliver=None, skip_ack:
                 first = False
                 if is_ack and skip_ack:
                     continue
+                if intent in _SAY_AGAIN.get(piece.strip(), ()):
+                    set_pending(device_ctx.current.get(), intent)
                 if deliver is not None and piece.strip():
                     deliver(piece.strip())
         except Exception:  # noqa: BLE001
@@ -249,6 +275,9 @@ def run_background(intent: str, text: str, params: dict, deliver=None, skip_ack:
 # Hành động có tác dụng phụ thật: đọc lại cho nghe rồi chờ cửa sổ huỷ mới chạy.
 CONFIRM_INTENTS = {"contact_call", "emergency_call", "message_send", "ride_quote", "ride_confirm", "music_play",
                    "nav_start"}
+# Trong số đó, lệnh chỉ mở ứng dụng trên điện thoại của chính người dùng (không liên lạc ai, chưa tốn tiền: Grab vẫn
+# cần bấm Đặt xe): trả lời câu hỏi điểm đến/bài hát xong thì chạy luôn sau đọc lại, không hỏi "phải không?" nữa.
+SELF_ONLY_INTENTS = {"music_play", "nav_start", "ride_quote"}
 
 
 def readback(intent: str, params: dict) -> str:
@@ -268,10 +297,12 @@ def readback(intent: str, params: dict) -> str:
         # Chỉ đọc lại điều đã nghe được, KHÔNG nói "đang mở/đã mở": lúc này điện thoại chưa nhận lệnh nào, và nếu
         # STT nghe sai tên bài ("bùi lê rù") thì người dùng cần nghe nguyên văn để kịp huỷ. Việc có phát được hay
         # không do câu kết quả (hoặc câu lỗi) nói sau, khi điện thoại đã báo về thật.
-        song = re.sub(r"^(?:bài hát|bài|nhạc)\s+", "", (params.get("song") or "").strip(), flags=re.I)
+        if not music.names_a_song(params.get("song")):
+            return "Mở nhạc."  # "mở nhạc đi" / "đổi bài khác": handler tự chọn bài, câu kết quả đọc tên bài thật
+        song = re.sub(r"^(?:bài hát|bài|nhạc)\s+", "", params["song"].strip(), flags=re.I)
         return f"Mở nhạc {song}." if song else "Mở nhạc."
     if intent == "nav_start":
-        return f"Đang gửi chỉ đường tới {params.get('destination', '')} về điện thoại."
+        return f"Chỉ đường đi bộ tới {params.get('destination', '')}."
     raise KeyError(intent)
 
 

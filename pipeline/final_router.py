@@ -482,14 +482,22 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
 
     # Lượt trước hỏi "Bạn muốn đi đâu?": câu này chính là câu trả lời.
     pending = phone.take_pending(ctx.device)
+    if pending is not None and phone.is_no(text):
+        ctx.cancel_speculation()
+        return Reply(speech=[CANCELLED_MESSAGE], intent=pending[0], lane="D")
     if pending is not None and (d.intent == pending[0] or d.lane == "A"):
         intent, slot = pending
         params = await _params(ctx, intent, text) if d.intent == intent else {}
         params.setdefault(slot, phone._clean(text))
         if not params.get(slot):
             params[slot] = phone._clean(text)
-        # Điền chỗ trống bằng câu nói tự do -> không tin cậy, ép hỏi xác nhận.
-        d = Decision(intent, source=d.source)
+        if intent in phone.SELF_ONLY_INTENTS:
+            # Người dùng vừa trả lời đúng câu hỏi điểm đến/bài hát và sẽ nghe đọc lại + có cửa sổ huỷ: hỏi thêm
+            # "... phải không?" là hai câu hỏi cho một lệnh chỉ mở ứng dụng trên máy của chính họ.
+            d = Decision(intent, source="confirmed", backend="gemma", confidence=1.0)
+        else:
+            # Gọi/nhắn tới người khác: điền chỗ trống bằng câu nói tự do -> không tin cậy, ép hỏi xác nhận.
+            d = Decision(intent, source=d.source)
         ctx.cancel_speculation(keep_params=True)
         return await _lane_d(ctx, d, text, params)
 

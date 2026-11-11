@@ -43,6 +43,10 @@ _ERROR_SPEECH = {
     "QUOTE_NOT_FOUND": "Không tìm thấy báo giá chuyến đi.",
     "QUOTE_EXPIRED": "Báo giá chuyến đi đã hết hạn.",
     "NO_RIDE_AVAILABLE": "Hiện không có xe nào gần đây.",
+    # Điện thoại không mở được ứng dụng ngoài (chưa cài / bị chặn): nói thẳng tên ứng dụng thay vì câu chung
+    # "bấm vào thông báo" — không có thông báo nào để bấm.
+    "RIDE_PROVIDER_ERROR": "Chưa mở được Grab trên điện thoại, có thể Grab chưa được cài.",
+    "NAVIGATION_PROVIDER_ERROR": "Chưa mở được Google Maps trên điện thoại.",
     "RIDE_ACCOUNT_NOT_CONNECTED": "Chưa liên kết tài khoản đặt xe.",
     # App bỏ lệnh tới quá expires_at (FCM trễ) thay vì chạy lệnh cũ.
     "COMMAND_EXPIRED": "Điện thoại nhận lệnh quá muộn nên chưa làm. Bạn nói lại giúp tôi nhé.",
@@ -76,13 +80,13 @@ _TAP_NOTIFICATION = "Nếu màn hình đang mở, vui lòng nhấn vào thông b
 # Câu báo thành công không phụ thuộc kết quả trả về. Tách thành hằng số thay vì
 # viết thẳng trong `_success_speech` để `pipeline/phrases.py` dựng sẵn audio cho
 # chúng — đây là những câu được nói nhiều nhất trong cả demo.
-# Dẫn đường là gửi lộ trình về điện thoại (Google Maps), không phải mở bản đồ trên kính.
-_NAV_SENT_TAIL = "về điện thoại. Mở thông báo để đi bằng Google Maps."
-# Bản ghép sẵn cho trường hợp không có địa chỉ. Hai câu này ngắn nên lúc chạy
-# `_sentences()` gộp chúng lại thành MỘT câu; dựng sẵn từng câu rời thì khoá
-# không bao giờ trùng, nên phải dựng đúng bản ghép mà người dùng thật sự nghe.
-_NAV_OPENED_WITH_TAP = f"Đã gửi chỉ đường {_NAV_SENT_TAIL}"
-_NAV_STOPPED = "Đã dừng chỉ đường."
+# Dẫn đường là mở Google Maps chỉ đường đi bộ trên điện thoại (Maps tự đọc hướng dẫn), không phải bản đồ trên kính.
+# Không đọc lại địa chỉ: câu đọc lại của làn D vừa nói nó một hai giây trước. Không bảo "mở thông báo": người dùng
+# nghe qua kính, điện thoại tự mở Maps (full-screen intent).
+_NAV_SENT = "Đã gửi chỉ đường đi bộ sang Google Maps trên điện thoại."
+# Maps là ứng dụng riêng: điện thoại chỉ ngừng theo dõi lộ trình, không tắt được hướng dẫn đang chạy trong Maps.
+# Nói đúng như vậy thay vì "đã dừng" (báo bừa thành công).
+_NAV_STOPPED = "Đã dừng chỉ đường. Google Maps trên điện thoại có thể vẫn đang chạy."
 _MUSIC_STOPPED = "Đã dừng phát nhạc."
 _VOLUME_CHANGED = "Đã thay đổi âm lượng."
 _RIDE_CANCELLED = "Đã hủy chuyến xe."
@@ -95,20 +99,18 @@ _UNSPECIFIED_FAILURE = "Chưa thực hiện được, vui lòng thử lại."
 # sau khi người dùng xác nhận điểm đón, mà app không đi qua được bước xác nhận
 # đó — nên mọi con số ở đây là ước lượng của server, đọc lên là nói một cái giá
 # không ai cam kết.
-_RIDE_APP_OPENED = (
-    "Đã mở ứng dụng đặt xe. Vui lòng nhấn vào thông báo trên điện thoại, "
-    "kiểm tra lại điểm đón và điểm đến trong ứng dụng, rồi nói xác nhận để đặt xe, hoặc nói hủy."
-)
-_RIDE_REQUESTED = (
-    "Đã gửi yêu cầu đặt xe. Vui lòng nhấn vào thông báo trên điện thoại và "
-    "xác nhận điểm đón, điểm đến trong ứng dụng để hoàn tất."
-)
+#
+# Một bước: Grab không có API đặt xe công khai, chuyến chỉ thành khi người dùng bấm Đặt xe trong Grab. Trước đây câu
+# này bảo "nói xác nhận để đặt xe" rồi `ride_confirm` chỉ mở lại Grab và nói "Đã gửi yêu cầu đặt xe" — thêm một lượt
+# hỏi mà không làm gì thêm, và báo bừa là đã đặt.
+_RIDE_APP_OPENED = "Đã mở Grab, điểm đón là vị trí hiện tại. Bấm Đặt xe trong Grab để gọi xe."
+_RIDE_REQUESTED = "Đã mở lại Grab cho chuyến này. Bấm Đặt xe trong Grab để gọi xe."
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (
     _TIMEOUT_MESSAGE,
     _TAP_NOTIFICATION,
-    _NAV_OPENED_WITH_TAP,
+    _NAV_SENT,
     _NAV_STOPPED,
     _MUSIC_STOPPED,
     _VOLUME_CHANGED,
@@ -142,11 +144,7 @@ def _success_speech(operation: str, result: dict) -> str:
         return f"Đã tìm được bài {title}, đang phát."
 
     if operation == "navigation_start":
-        destination = result.get("destination") or {}
-        address = destination.get("address") if isinstance(destination, dict) else None
-        if not address:
-            return _NAV_OPENED_WITH_TAP
-        return f"Đã gửi chỉ đường tới {address} {_NAV_SENT_TAIL}"
+        return _NAV_SENT
 
     if operation == "music_stop":
         return _MUSIC_STOPPED
@@ -169,6 +167,11 @@ def _success_speech(operation: str, result: dict) -> str:
         return _RIDE_REQUESTED
 
     return _DONE
+
+
+def error_speech(code: str) -> str:
+    """Câu nói cho một mã lỗi nghiệp vụ (để nơi khác nhận ra câu đó khi nó được đọc)."""
+    return _ERROR_SPEECH[code]
 
 
 def speak_result(operation: str, data: dict | None) -> str:

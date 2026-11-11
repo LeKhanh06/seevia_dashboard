@@ -60,11 +60,7 @@ def test_nav_start_without_destination_asks_then_confirms_without_live(world):  
     assert r.headers["x-cue"] == "ask_destination" and calls["actions"] == []
     rec.text = "CHỢ BẾN THÀNH"
     labels["chợ bến thành"] = clef.ClefResult("chat", 0.6)
-    r = _turn("n2b")  # câu điền chỗ trống không đủ tin -> hỏi lại
-    assert "x-live" not in r.headers and calls["actions"] == []
-    rec.text = "ĐÚNG"
-    labels["đúng"] = clef.ClefResult("chat", 0.9)
-    r = _turn("n2c")
+    r = _turn("n2b")  # trả lời đúng câu "Bạn muốn đi đâu?" -> đọc lại + cửa sổ huỷ, không hỏi "phải không?" nữa
     assert "x-live" not in r.headers
     _wait_actions(calls)
     assert calls["actions"] == [("nav_start", {"destination": "Chợ bến thành"})]
@@ -101,12 +97,11 @@ def test_nav_phrases():
 
     assert navigation._START_ACK == "Đang gửi chỉ đường về điện thoại."
     ok = {"destination": {"address": "chợ Bến Thành"}}
+    # Câu đọc lại đã nói điểm đến; câu kết quả không lặp lại, không bảo người dùng mở thông báo.
     assert result_speech._success_speech("navigation_start", ok) == (
-        "Đã gửi chỉ đường tới chợ Bến Thành về điện thoại. Mở thông báo để đi bằng Google Maps."
+        "Đã gửi chỉ đường đi bộ sang Google Maps trên điện thoại."
     )
-    assert result_speech._success_speech("navigation_start", {}) == (
-        "Đã gửi chỉ đường về điện thoại. Mở thông báo để đi bằng Google Maps."
-    )
+    assert result_speech._success_speech("navigation_start", {}) == result_speech._success_speech("navigation_start", ok)
 
 
 def test_navigation_speech_never_says_phone_opens_the_map():

@@ -1,7 +1,7 @@
 """Chạy toàn tuyến SeeVia: client.html (kính giả lập) -> VH -> AB -> điện thoại; người dùng xem ở index.html."""
 import asyncio, os, sys, json, time
 
-REPO = "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/visioncare-host-demo"
+REPO = "/data/work/luanhh/local/SeeVia_system/visioncare-host-demo"
 SEEVIA = os.path.dirname(REPO)
 sys.path.insert(0, os.path.join(REPO, "demo-web", "e2e"))
 import browser_e2e as B

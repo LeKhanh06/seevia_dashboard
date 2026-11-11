@@ -29,9 +29,9 @@ logger = logging.getLogger("blind_assist")
 # chạy tiếp. Mỗi câu ở đây nói một điều CỤ THỂ hơn câu chào: đang chờ ai, chờ
 # tới đâu rồi.
 _DEFAULT_PROGRESS = (
-    "Vẫn đang chờ điện thoại phản hồi.",
+    "Vẫn đang chờ điện thoại trả lời.",
     "Sắp xong rồi, bạn chờ thêm chút nữa.",
-    "Điện thoại chưa báo về, nhưng chưa có gì bất thường.",
+    "Điện thoại chưa trả lời, mình vẫn đang chờ.",
 )
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
@@ -309,4 +309,4 @@ def run_action(
             time.sleep(config.VISIONCARE_RESULT_POLL_SECONDS)
 
     device_ctx.run_in_thread(reconcile_late, name=f"action-reconcile-{request_id[:8]}")
-    yield _utterance("Điện thoại vẫn đang thực hiện, tôi sẽ cập nhật khi có kết quả.")
+    yield _utterance("Điện thoại vẫn đang làm, có kết quả mình sẽ báo.")

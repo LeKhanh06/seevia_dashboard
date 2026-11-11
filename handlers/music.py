@@ -12,10 +12,6 @@ _ARTIST_MARKERS = (" - ", " của ", " by ")
 # Câu trả lời mang nghĩa "ai cũng được, cứ phát đi".
 _ANY_ARTIST_ANSWERS = ("cứ phát", "bất kỳ", "ai cũng được", "sao cũng được", "tuỳ", "tùy")
 
-# Nhắc bấm thông báo ngay từ câu đầu: ứng dụng nhạc mở qua notification, màn
-# hình đang bật thì Android chỉ hiện heads-up chứ không tự mở, nên người dùng
-# cần biết ngay chứ không phải chờ hết câu kết quả.
-_TAP_TO_OPEN = "Nếu màn hình đang bật, hãy nhấn vào thông báo trên điện thoại."
 _ASK_ARTIST_HINT = "Nói tên ca sĩ, hoặc nói cứ phát để nghe bản phổ biến nhất."
 
 # "mở nhạc đi" / "bật nhạc lên" là ý muốn nghe nhạc, chưa phải một bài cụ thể.
@@ -38,23 +34,22 @@ _PLAY_PROGRESS = (
     "Vẫn đang tìm bài hát trên ứng dụng nhạc.",
     "Đã mở ứng dụng nhạc, đang chờ bài hát bắt đầu phát.",
     "Vẫn đang chờ nhạc, bạn chờ thêm chút nữa.",
-    "Ứng dụng nhạc đang tải bài, chưa có gì bất thường.",
+    "Ứng dụng nhạc đang tải bài.",
     "Sắp xong rồi, bạn chờ một chút.",
 )
 
 _STOP_ACK = "Đang dừng nhạc."
-_STOP_FAILURE = "Không thể dừng nhạc, vui lòng thử lại."
+_STOP_FAILURE = "Chưa dừng được nhạc. Bạn thử lại nhé."
 _STOP_PROGRESS = ("Vẫn đang dừng nhạc, bạn chờ một chút.",)
 
 _VOLUME_ACK = "Đang chỉnh âm lượng."
-_VOLUME_FAILURE = "Không thể thay đổi âm lượng, vui lòng thử lại."
+_VOLUME_FAILURE = "Chưa chỉnh được âm lượng. Bạn thử lại nhé."
 _VOLUME_PROGRESS = ("Vẫn đang chỉnh âm lượng, bạn chờ một chút.",)
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio. Câu ack
 # của `music_play` có tên bài nên không dựng sẵn được cả câu — chỉ nửa sau là cố
 # định, và `_sentences()` cắt ở dấu chấm nên đúng nửa đó vẫn trúng cache.
 STATIC_SPEECH: tuple[str, ...] = (
-    _TAP_TO_OPEN,
     _ASK_ARTIST_HINT,
     _ASK_SONG,
     _ASK_VOLUME,
@@ -111,10 +106,7 @@ def handle_play(image: bytes, command_text: str, params: dict | None = None) -> 
         # tên — cover, remix, karaoke. Hỏi ca sĩ còn hơn phát nhầm rồi để người
         # khiếm thị tự mò cách đổi bài.
         remember(_PENDING_SONG, song)
-        yield (
-            f"Có thể có nhiều bài trùng tên {song}. Bạn muốn nghe của ca sĩ nào? "
-            f"{_ASK_ARTIST_HINT}"
-        )
+        yield f"Có nhiều bài tên {song}. Bạn muốn nghe của ca sĩ nào? {_ASK_ARTIST_HINT}"
         return
 
     payload = {"song": song}
@@ -125,8 +117,8 @@ def handle_play(image: bytes, command_text: str, params: dict | None = None) -> 
         "music_play",
         "api/v1/service/music/play",
         payload,
-        ack=f"Đang mở nhạc, tìm bài {song}. {_TAP_TO_OPEN}",
-        failure=f"Không thể phát bài hát {song}, vui lòng thử lại.",
+        ack=f"Đang mở nhạc, tìm bài {song}.",
+        failure=f"Chưa phát được bài {song}. Bạn thử lại nhé.",
         result_timeout=config.VISIONCARE_MUSIC_RESULT_TIMEOUT_SECONDS,
         progress=_PLAY_PROGRESS,
     )

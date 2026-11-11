@@ -15,7 +15,7 @@ from lanes import general, ocr_live, phone
 from live import call_bridge
 from live.session import sessions
 from models import search
-from pipeline import device_ctx, image_quality, pending_action, speech
+from pipeline import device_ctx, hearfix, image_quality, pending_action, speech
 from pipeline.image_buffer import image_buffer
 from pipeline.intent_early import Decision
 from pipeline.reply import Reply
@@ -324,6 +324,42 @@ async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None 
     return Reply(speech=[fired[0]], intent=intent, lane="D", on_audio_start=fired[1], params=params)
 
 
+async def _dispatch(ctx: TurnContext, d: Decision, text: str) -> Reply:
+    lane = d.lane
+    if lane == "A":
+        return await _lane_a(ctx, d, text)
+    if lane == "B":
+        return await _lane_b(ctx, d, text)
+    if lane == "C":
+        return await _lane_c(ctx, d, text)
+    return await _lane_d(ctx, d, text)
+
+
+async def _hearfix(ctx: TurnContext, text: str) -> Reply | None:
+    """Câu rơi vào `chat` mà nghe giống một lệnh bị STT nghe sai (V2, `pipeline/hearfix.py`).
+
+    Không bao giờ nói câu chung "Tôi chưa hiểu ý bạn": khớp mạnh thì chạy luôn (lệnh không tác dụng phụ / dừng-tắt) hoặc
+    hỏi xác nhận bằng đoán tốt nhất (lệnh có tác dụng phụ); khớp yếu thì đọc lại điều nghe được kèm vài lựa chọn.
+    """
+    sug = hearfix.suggest(text, ctx.device_state)
+    if sug is None:
+        return None
+    logger.info("hearfix: '%s' -> %s %s (%.2f)%s", text, sug.kind, sug.intent, sug.prob,
+                f" {sug.options}" if sug.kind == "options" else "")
+    ctx.cancel_speculation()
+    if sug.kind == "options":
+        return Reply(speech=[hearfix.options_question(text, sug.options)], intent="chat", lane="A")
+    if sug.kind == "act":
+        d = Decision(sug.intent, source="hearfix", backend="hearfix", confidence=sug.prob)
+        return await _dispatch(ctx, d, text)
+    try:
+        params = await phone.extract(sug.intent, text)
+    except Exception:  # noqa: BLE001 — trích lỗi thì hỏi chung ("Bạn muốn gọi điện phải không?")
+        params = {}
+    phone.set_pending_confirm(ctx.device, sug.intent, params)
+    return Reply(speech=[phone.ask_confirm(sug.intent, params)], intent=sug.intent, lane="D", params=params)
+
+
 async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if d.source == "no_speech":
         return Reply(cues=["no_speech"])
@@ -402,12 +438,11 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
         ctx.cancel_speculation(keep_params=True)
         return await _lane_d(ctx, d, text, params)
 
+    if d.intent == "chat" and not d.needs_web:
+        fixed = await _hearfix(ctx, text)
+        if fixed is not None:
+            return fixed
+
     lane = d.lane
     ctx.cancel_speculation(keep_answer=lane == "A", keep_params=lane in ("C", "D"))
-    if lane == "A":
-        return await _lane_a(ctx, d, text)
-    if lane == "B":
-        return await _lane_b(ctx, d, text)
-    if lane == "C":
-        return await _lane_c(ctx, d, text)
-    return await _lane_d(ctx, d, text)
+    return await _dispatch(ctx, d, text)

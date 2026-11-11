@@ -102,10 +102,10 @@ def test_nav_phrases():
     assert navigation._START_ACK == "Đang gửi chỉ đường về điện thoại."
     ok = {"destination": {"address": "chợ Bến Thành"}}
     assert result_speech._success_speech("navigation_start", ok) == (
-        "Đã gửi chỉ đường tới chợ Bến Thành về điện thoại. Mở thông báo để đi bằng Google Maps."
+        "Đã gửi chỉ đường tới chợ Bến Thành về điện thoại."
     )
     assert result_speech._success_speech("navigation_start", {}) == (
-        "Đã gửi chỉ đường về điện thoại. Mở thông báo để đi bằng Google Maps."
+        "Đã gửi chỉ đường về điện thoại."
     )
 
 

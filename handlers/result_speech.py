@@ -6,42 +6,39 @@ khác hẳn "chưa gọi được, hãy bấm vào thông báo trên điện tho
 hai đều ra cùng một câu "đã gửi yêu cầu".
 """
 
-_TIMEOUT_MESSAGE = "Điện thoại chưa phản hồi, vui lòng kiểm tra thông báo trên điện thoại."
+_TIMEOUT_MESSAGE = "Điện thoại chưa trả lời. Bạn thử nói lại nhé."
 
 # Mã lỗi nghiệp vụ -> câu nói. Mã không có ở đây rơi về câu chung của từng
 # action, nên thiếu một mã mới không làm người dùng nghe mã lỗi thô.
 _ERROR_SPEECH = {
-    "GLASSES_DEVICE_NOT_LINKED": "Kính chưa được ghép nối với tài khoản nào.",
-    "DELIVERY_FAILED": "Không kết nối được với điện thoại, vui lòng mở ứng dụng trên điện thoại.",
+    "GLASSES_DEVICE_NOT_LINKED": "Kính chưa ghép với tài khoản nào. Nhờ người thân ghép giúp bạn.",
+    "DELIVERY_FAILED": "Chưa nối được với điện thoại. Bạn thử lại sau ít phút nhé.",
     "CONTACT_NOT_FOUND": "Không tìm thấy người này trong danh bạ.",
-    "MULTIPLE_CONTACTS_FOUND": "Có nhiều người trùng tên trong danh bạ, vui lòng nói rõ hơn.",
-    "CONTACT_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền đọc danh bạ.",
-    "CALL_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền gọi điện.",
-    "SMS_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền gửi tin nhắn.",
-    "EMERGENCY_CONTACT_NOT_CONFIGURED": "Chưa cài số liên hệ khẩn cấp trên điện thoại.",
+    "MULTIPLE_CONTACTS_FOUND": "Có nhiều người trùng tên. Bạn nói rõ cả họ và tên nhé.",
+    "CONTACT_PERMISSION_DENIED": "Chưa đọc được danh bạ vì ứng dụng chưa có quyền.",
+    "CALL_PERMISSION_DENIED": "Chưa gọi được vì ứng dụng chưa có quyền gọi điện.",
+    "SMS_PERMISSION_DENIED": "Chưa nhắn được vì ứng dụng chưa có quyền gửi tin nhắn.",
+    "EMERGENCY_CONTACT_NOT_CONFIGURED": "Chưa cài người thân khẩn cấp.",
     "NO_ACTIVE_PLAYBACK": "Hiện không có bài hát nào đang phát, không cần dừng.",
-    "SONG_NOT_FOUND": "Không tìm thấy bài hát này, vui lòng nói lại tên bài.",
-    "PLAYBACK_STOP_FAILED": "Chưa dừng được nhạc, vui lòng thử lại.",
+    "SONG_NOT_FOUND": "Không tìm thấy bài này. Bạn nói lại tên bài nhé.",
+    "PLAYBACK_STOP_FAILED": "Chưa dừng được nhạc. Bạn thử lại nhé.",
     "MUSIC_ACCOUNT_NOT_CONNECTED": "Chưa liên kết tài khoản nghe nhạc.",
     # Không nói "hết hạn": đo trên máy thật, mã này về khi tài khoản là gói MIỄN
     # PHÍ, chứ không phải gói trả phí vừa hết hạn. Ứng dụng nhạc mở lên bình
     # thường nhưng từ chối nạp đúng bài được yêu cầu, vì gói miễn phí không cho
     # phát một bài chỉ định. Nói "hết hạn" khiến người dùng đi gia hạn một thứ họ
     # chưa từng mua; nói rõ nguyên nhân thì họ biết phải nâng cấp.
-    "SUBSCRIPTION_INACTIVE": (
-        "Tài khoản nghe nhạc đang dùng gói miễn phí nên không phát được bài chỉ định. "
-        "Cần nâng cấp gói trả phí để nghe đúng bài."
-    ),
+    "SUBSCRIPTION_INACTIVE": "Tài khoản nhạc đang dùng gói miễn phí nên chưa phát được đúng bài này.",
     "CURRENT_LOCATION_UNAVAILABLE": "Không lấy được vị trí hiện tại.",
     "LOCATION_PERMISSION_DENIED": "Ứng dụng chưa được cấp quyền vị trí.",
     # Không đoán hộ một địa điểm gần đúng: nói thẳng là không tìm thấy để người
     # dùng đọc lại tên, còn hơn đưa họ tới nhầm chỗ.
-    "INVALID_DESTINATION": "Không tìm thấy địa điểm này. Vui lòng nói lại tên địa điểm.",
-    "NAVIGATION_NOT_FOUND": "Hiện không có lộ trình nào đang chạy.",
-    "NAVIGATION_ALREADY_STOPPED": "Chỉ đường đã dừng từ trước.",
-    "QUOTE_NOT_FOUND": "Không tìm thấy báo giá chuyến đi.",
-    "QUOTE_EXPIRED": "Báo giá chuyến đi đã hết hạn.",
-    "NO_RIDE_AVAILABLE": "Hiện không có xe nào gần đây.",
+    "INVALID_DESTINATION": "Không tìm thấy địa điểm này. Bạn nói lại tên địa điểm nhé.",
+    "NAVIGATION_NOT_FOUND": "Không có chỉ đường nào đang chạy.",
+    "NAVIGATION_ALREADY_STOPPED": "Chỉ đường đã dừng rồi.",
+    "QUOTE_NOT_FOUND": "Không tìm thấy chuyến xe này. Bạn đặt lại giúp mình nhé.",
+    "QUOTE_EXPIRED": "Chuyến xe này đã hết hạn. Bạn đặt lại nhé.",
+    "NO_RIDE_AVAILABLE": "Hiện chưa có xe nào gần đây.",
     "RIDE_ACCOUNT_NOT_CONNECTED": "Chưa liên kết tài khoản đặt xe.",
     # App bỏ lệnh tới quá expires_at (FCM trễ) thay vì chạy lệnh cũ.
     "COMMAND_EXPIRED": "Điện thoại nhận lệnh quá muộn nên chưa làm. Bạn nói lại giúp tôi nhé.",
@@ -49,18 +46,15 @@ _ERROR_SPEECH = {
 
 # Câu nói khi action thất bại mà mã lỗi không có trong bảng trên.
 _GENERIC_FAILURE = {
-    "contact_call": "Chưa gọi được, vui lòng bấm vào thông báo trên điện thoại.",
-    "emergency_call": "Chưa phát được cuộc gọi khẩn cấp, vui lòng bấm vào thông báo trên điện thoại.",
-    "music_play": (
-        "Đã mở ứng dụng nhạc nhưng chưa phát được. "
-        "Vui lòng nhấn vào thông báo trên điện thoại rồi bấm nút phát."
-    ),
-    "music_stop": "Chưa dừng được nhạc, vui lòng thử lại.",
-    "music_volume": "Chưa thay đổi được âm lượng, vui lòng thử lại.",
-    "navigation_start": "Chưa bắt đầu được chỉ đường, vui lòng bấm vào thông báo trên điện thoại.",
-    "navigation_stop": "Chưa dừng được chỉ đường.",
-    "ride_quote": "Chưa mở được ứng dụng đặt xe, vui lòng bấm vào thông báo trên điện thoại.",
-    "ride_confirm": "Chưa gửi được yêu cầu đặt xe, vui lòng bấm vào thông báo trên điện thoại.",
+    "contact_call": "Chưa gọi được. Bạn thử nói lại nhé.",
+    "emergency_call": "Chưa gọi khẩn cấp được. Bạn thử nói lại ngay nhé.",
+    "music_play": "Đã mở ứng dụng nhạc nhưng chưa phát được. Bạn thử nói lại tên bài nhé.",
+    "music_stop": "Chưa dừng được nhạc. Bạn thử lại nhé.",
+    "music_volume": "Chưa chỉnh được âm lượng. Bạn thử lại nhé.",
+    "navigation_start": "Chưa chỉ đường được. Bạn thử nói lại địa điểm nhé.",
+    "navigation_stop": "Chưa dừng được chỉ đường. Bạn thử lại nhé.",
+    "ride_quote": "Chưa mở được ứng dụng đặt xe. Bạn thử nói lại nhé.",
+    "ride_confirm": "Chưa gửi được yêu cầu đặt xe. Bạn thử nói lại nhé.",
 }
 
 
@@ -69,13 +63,11 @@ _GENERIC_FAILURE = {
 # dùng đang cầm máy thì hệ điều hành cố ý chỉ hiện heads-up để không cắt ngang —
 # lúc đó phải chạm. Cuộc gọi không nằm trong nhóm này vì đi qua
 # TelecomManager.placeCall, không phải mở activity.
-_TAP_NOTIFICATION = "Nếu màn hình đang mở, vui lòng nhấn vào thông báo trên điện thoại."
-
 # Câu báo thành công không phụ thuộc kết quả trả về. Tách thành hằng số thay vì
 # viết thẳng trong `_success_speech` để `pipeline/phrases.py` dựng sẵn audio cho
 # chúng — đây là những câu được nói nhiều nhất trong cả demo.
 # Dẫn đường là gửi lộ trình về điện thoại (Google Maps), không phải mở bản đồ trên kính.
-_NAV_SENT_TAIL = "về điện thoại. Mở thông báo để đi bằng Google Maps."
+_NAV_SENT_TAIL = "về điện thoại."
 # Bản ghép sẵn cho trường hợp không có địa chỉ. Hai câu này ngắn nên lúc chạy
 # `_sentences()` gộp chúng lại thành MỘT câu; dựng sẵn từng câu rời thì khoá
 # không bao giờ trùng, nên phải dựng đúng bản ghép mà người dùng thật sự nghe.
@@ -86,25 +78,18 @@ _VOLUME_CHANGED = "Đã thay đổi âm lượng."
 _RIDE_CANCELLED = "Đã hủy chuyến xe."
 _DONE = "Đã thực hiện xong."
 # Action thất bại mà cả mã lỗi lẫn tên action đều không có câu riêng.
-_UNSPECIFIED_FAILURE = "Chưa thực hiện được, vui lòng thử lại."
+_UNSPECIFIED_FAILURE = "Chưa làm được. Bạn thử lại nhé."
 
 # Cố ý không đọc giá, loại xe hay thời gian chờ. Trên Grab thật, giá chỉ hiện
 # sau khi người dùng xác nhận điểm đón, mà app không đi qua được bước xác nhận
 # đó — nên mọi con số ở đây là ước lượng của server, đọc lên là nói một cái giá
 # không ai cam kết.
-_RIDE_APP_OPENED = (
-    "Đã mở ứng dụng đặt xe. Vui lòng nhấn vào thông báo trên điện thoại, "
-    "kiểm tra lại điểm đón và điểm đến trong ứng dụng, rồi nói xác nhận để đặt xe, hoặc nói hủy."
-)
-_RIDE_REQUESTED = (
-    "Đã gửi yêu cầu đặt xe. Vui lòng nhấn vào thông báo trên điện thoại và "
-    "xác nhận điểm đón, điểm đến trong ứng dụng để hoàn tất."
-)
+_RIDE_APP_OPENED = "Đã mở ứng dụng đặt xe. Bạn nói xác nhận để đặt xe, hoặc nói hủy."
+_RIDE_REQUESTED = "Đã gửi yêu cầu đặt xe."
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (
     _TIMEOUT_MESSAGE,
-    _TAP_NOTIFICATION,
     _NAV_OPENED_WITH_TAP,
     _NAV_STOPPED,
     _MUSIC_STOPPED,

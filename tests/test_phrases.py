@@ -167,12 +167,12 @@ def test_runtime_sentence_matches_a_prerendered_key(piece, fake_tts):
 def test_music_ack_tail_is_prerendered_even_though_head_is_dynamic(fake_tts):
     """Câu ack có tên bài: nửa đầu tổng hợp thật, nửa sau phải lấy sẵn."""
     phrases.warm()
-    ack = action_flow._utterance(f"Đang mở nhạc, tìm bài Nơi này có anh. {music._TAP_TO_OPEN}")
+    ask = f"Có nhiều bài tên Nơi này có anh. Bạn muốn nghe của ca sĩ nào? {music._ASK_ARTIST_HINT}"
 
-    sentences = _spoken_sentences([ack])
+    sentences = _spoken_sentences([ask])
 
     assert tts.prerendered(sentences[0]) is None  # có tên bài -> phải tổng hợp
-    assert tts.prerendered(sentences[-1]) is not None  # câu nhắc bấm -> lấy sẵn
+    assert tts.prerendered(sentences[-1]) is not None  # câu gợi ý nói tên ca sĩ -> lấy sẵn
 
 
 def test_phrase_key_ignores_whitespace_differences():

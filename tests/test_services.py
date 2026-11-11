@@ -78,9 +78,8 @@ def test_navigation_start_speaks_the_destination_the_phone_confirmed(monkeypatch
     assert calls[0][0] == "api/v1/service/navigation/start"
     assert "Chợ Bến Thành" in out
     assert "Đã gửi chỉ đường tới Chợ Bến Thành về điện thoại" in out
-    # Maps opens through the launcher notification, which Android only
-    # auto-opens with the screen off, so the reply has to say so.
-    assert "Mở thông báo để đi bằng Google Maps" in out
+    # The listener cannot tap a notification, so the reply never tells them to.
+    assert "thông báo" not in out
 
 
 def test_navigation_start_refuses_without_a_destination(monkeypatch):
@@ -113,7 +112,7 @@ def test_navigation_stop_refuses_when_nothing_is_running(monkeypatch):
 
     # The old code hardcoded "nav-123", which the host always rejected.
     assert calls == []
-    assert "không có lộ trình" in out.lower()
+    assert "không có chỉ đường" in out.lower()
 
 
 def test_contact_call_speaks_the_name_the_phone_resolved(monkeypatch):
@@ -238,7 +237,7 @@ def test_music_play_asks_which_artist_when_only_a_title_was_given(monkeypatch):
     # A bare title matches covers, remixes and karaoke versions; picking one is
     # a guess, and a blind listener cannot see they got the wrong track.
     assert calls == []
-    assert "nhiều bài trùng tên" in out
+    assert "nhiều bài tên" in out
     assert "ca sĩ nào" in out
 
 
@@ -340,7 +339,8 @@ def test_music_play_reports_silence_as_a_failure(monkeypatch):
     # The whole point of polling: "sent the request" used to be the only thing
     # the user ever heard, whether or not a single note came out.
     assert "chưa phát được" in out
-    assert "nhấn vào thông báo" in out
+    assert "thông báo" not in out  # người nghe không bấm được thông báo
+    assert "nói lại tên bài" in out
 
 
 def test_music_stop_and_volume_speak_the_confirmed_state(monkeypatch):
@@ -364,4 +364,4 @@ def test_no_result_at_slo_keeps_phone_action_running(monkeypatch):
 
     out = "".join(music.handle_stop(b"", "", {}))
 
-    assert "vẫn đang thực hiện" in out.lower()
+    assert "vẫn đang làm" in out.lower()

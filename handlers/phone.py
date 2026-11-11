@@ -9,23 +9,23 @@ from services import visioncare_client
 
 logger = logging.getLogger("blind_assist")
 
-_ASK_CONTACT = "Bạn muốn gọi cho ai? Vui lòng nói lại kèm tên người cần gọi."
+_ASK_CONTACT = "Bạn muốn gọi cho ai?"
 _CONNECTING = "Đang kết nối cuộc gọi, bạn chờ một chút."
 
 _EMERGENCY_ACK = "Đang kích hoạt cuộc gọi khẩn cấp."
-_EMERGENCY_FAILURE = "Không thể phát cuộc gọi khẩn cấp, vui lòng kiểm tra kết nối."
+_EMERGENCY_FAILURE = "Chưa gọi khẩn cấp được. Bạn thử nói lại ngay nhé."
 _EMERGENCY_PROGRESS = (
-    "Đang lấy vị trí và gọi số khẩn cấp, bạn giữ máy.",
+    "Đang gọi người thân khẩn cấp, bạn giữ máy.",
     "Vẫn đang kết nối cuộc gọi khẩn cấp, bạn giữ máy.",
 )
 
 _CALL_BUSY = "Kính đang có cuộc gọi."
 _CALL_NO_USER = "Kính chưa gắn với tài khoản để gọi điện."
-_EMERGENCY_NO_CONTACT = "Chưa cài người thân khẩn cấp trong ứng dụng."
+_EMERGENCY_NO_CONTACT = "Chưa cài người thân khẩn cấp."
 
 # Nhắn tin (C7). Câu "Đã gửi." và hai câu lỗi do mình thêm (spec không có): người khiếm thị cần biết tin đã đi.
-MSG_NEED_UPDATE = "Kính cần cập nhật để nhắn tin."
-MSG_NEED_OWN_TOKEN = "Kính cần token riêng để nhắn tin."
+MSG_NEED_UPDATE = "Kính cần cập nhật phần mềm để nhắn tin."
+MSG_NEED_OWN_TOKEN = "Kính chưa sẵn sàng để nhắn tin, cần được cài đặt lại."
 MSG_NONE = "Không có tin nhắn mới."
 _MSG_SENT = "Đã gửi."
 _MSG_ASK_NAME = "Bạn muốn nhắn cho ai?"
@@ -65,7 +65,7 @@ def handle_contact(image: bytes, command_text: str, params: dict | None = None) 
         "api/v1/service/contact/call",
         {"name": name},
         ack=f"Đang tìm số của {name}.",
-        failure=f"Không thể thực hiện cuộc gọi cho {name}, vui lòng thử lại.",
+        failure=f"Chưa gọi được cho {name}. Bạn thử lại nhé.",
         progress=(
             f"Vẫn đang tìm {name} trong danh bạ.",
             _CONNECTING,
@@ -112,7 +112,7 @@ def handle_contact_call(image: bytes, command_text: str, params: dict | None = N
     except call_bridge.GlassesBusy:
         yield _CALL_BUSY
         return
-    failure = f"Không thể gọi cho {name}, vui lòng thử lại."
+    failure = f"Chưa gọi được cho {name}. Bạn thử lại nhé."
     try:
         data = visioncare_client.call_start(name, call.media_token)
     except visioncare_client.VisionCareAPIError as exc:
@@ -229,11 +229,11 @@ def handle_message_send(image: bytes, command_text: str, params: dict | None = N
             yield _CALL_NO_USER
         else:
             logger.warning("message_send: AB từ chối (%s, HTTP %s)", code or "?", exc.status_code)
-            yield f"Không gửi được tin nhắn cho {name}, vui lòng thử lại."
+            yield f"Chưa gửi được tin nhắn cho {name}. Bạn thử lại nhé."
         return
     except Exception:  # noqa: BLE001
         logger.exception("message_send: lỗi bất ngờ khi gọi AB")
-        yield f"Không gửi được tin nhắn cho {name}, vui lòng thử lại."
+        yield f"Chưa gửi được tin nhắn cho {name}. Bạn thử lại nhé."
         return
     yield _MSG_SENT
 

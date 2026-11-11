@@ -312,7 +312,7 @@ def test_process_pipeline_error_still_streams_error_speech(stream_mode):
 
     assert response.status_code == 200
     assert len(response.content) > 0
-    assert spoken == ["Có lỗi xảy ra, vui lòng thử lại"]
+    assert spoken == ["Có lỗi xảy ra. Bạn thử lại nhé."]
 
 
 def test_process_streams_error_speech_when_model_fails_on_first_piece(stream_mode):
@@ -339,7 +339,7 @@ def test_process_streams_error_speech_when_model_fails_on_first_piece(stream_mod
 
     assert response.status_code == 200
     assert len(response.content) > 0
-    assert spoken == ["Có lỗi xảy ra, vui lòng thử lại"]
+    assert spoken == ["Có lỗi xảy ra. Bạn thử lại nhé."]
 
 
 def test_wav_mode_returns_complete_playable_file(tmp_path, monkeypatch):
@@ -396,7 +396,7 @@ def test_wav_mode_still_speaks_errors(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert response.content[:4] == b"RIFF"
-    assert spoken == ["Có lỗi xảy ra, vui lòng thử lại"]
+    assert spoken == ["Có lỗi xảy ra. Bạn thử lại nhé."]
 
 
 def test_stream_mode_unchanged(tmp_path, monkeypatch):
@@ -501,7 +501,7 @@ def test_process_streams_error_speech_when_model_dies_before_any_audio():
 
     assert response.status_code == 200
     assert len(response.content) > 0, "MCU nhận 200 rỗng, không nghe được gì"
-    assert spoken[-1] == "Có lỗi xảy ra, vui lòng thử lại"
+    assert spoken[-1] == "Có lỗi xảy ra. Bạn thử lại nhé."
 
 
 def test_stream_pcm_reraises_error_raised_before_first_chunk(tmp_path, monkeypatch):
@@ -662,7 +662,7 @@ def test_process_error_midstream_appends_error_speech(stream_mode, monkeypatch):
         response = client.post("/process", files=_files())
 
     assert response.status_code == 200
-    assert spoken[-1] == "Có lỗi xảy ra, vui lòng thử lại"
+    assert spoken[-1] == "Có lỗi xảy ra. Bạn thử lại nhé."
     # Lượt cứu cũng dùng đúng `failing_stream` nên nó chết lần hai; điều cần
     # kiểm là server không thử vòng thứ ba và không trả 500.
     assert response.content == b"\x01\x02" * 200
@@ -760,7 +760,7 @@ def test_error_during_preroll_speaks_error_instead_of_a_blip(tmp_path, monkeypat
         response = client.post("/process", files=_files())
 
     assert response.status_code == 200
-    assert spoken[-1] == "Có lỗi xảy ra, vui lòng thử lại"
+    assert spoken[-1] == "Có lỗi xảy ra. Bạn thử lại nhé."
     assert len(response.content) > 0
 
 
@@ -830,4 +830,4 @@ def test_process_needs_audio(tmp_path, monkeypatch):
         client.post("/process", files=files)
 
     assert calls == []
-    assert spoken == ["Không nhận được âm thanh, vui lòng nói lại."]
+    assert spoken == ["Chưa nghe thấy gì. Bạn nói lại nhé."]

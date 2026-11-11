@@ -2,7 +2,7 @@ import sys, json, random, re, wave, collections, unicodedata, difflib
 sys.path.insert(0, ".")
 import numpy as np
 from pipeline import stt, vad
-BENCH = "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/stt-bench-cache"
+BENCH = "/data/work/luanhh/local/SeeVia_system/stt-bench-cache"
 rows = [json.loads(l) for i in range(3) for l in open(f"{BENCH}/manifest_cmd.{i}.jsonl")]
 random.seed(1)
 rows = [r for r in rows if r["cond"] == "clean" and r["wav"].endswith("_v0_clean.wav")]

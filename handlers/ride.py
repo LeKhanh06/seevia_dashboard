@@ -12,7 +12,7 @@ from handlers.action_flow import forget, recall, run_action
 # vị trí thật khi phần cứng có module định vị.
 _DEMO_CURRENT_LOCATION = {"lat": 10.7769, "lng": 106.7009}
 
-_ASK_DESTINATION = "Bạn muốn đi đâu? Vui lòng nói lại kèm tên điểm đến."
+_ASK_DESTINATION = "Bạn muốn đi đâu? Hãy nói tên điểm đến."
 _CONFIRM_HINT = "Nói xác nhận để đặt, hoặc nói lại điểm đến."
 _CONFIRM_ACK = "Đang xác nhận chuyến xe."
 _CANCEL_ACK = "Đang hủy chuyến xe."
@@ -23,10 +23,7 @@ _OPENING_RIDE_APP = "Đang mở ứng dụng đặt xe trên điện thoại, b�
 
 _CANCELLED = "Đã hủy, không đặt xe nữa."
 _NOTHING_TO_CONFIRM = "Chưa có chuyến nào để xác nhận, bạn hãy nói điểm đến trước."
-_WAITING_IN_APP = (
-    "Chuyến xe đang chờ bạn xác nhận trong ứng dụng. "
-    "Vui lòng nhấn vào thông báo trên điện thoại và xác nhận điểm đón, điểm đến."
-)
+_WAITING_IN_APP = "Chuyến xe đang chờ bạn xác nhận. Bạn nói xác nhận để đặt, hoặc nói hủy."
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (
@@ -65,7 +62,7 @@ def handle_quote(image: bytes, command_text: str, params: dict | None = None) ->
             "destination": {"address": destination},
         },
         ack=_QUOTE_ACK,
-        failure=f"Không thể mở ứng dụng đặt xe đi {destination}, vui lòng thử lại.",
+        failure=f"Chưa mở được ứng dụng đặt xe đi {destination}. Bạn thử lại nhé.",
         progress=(
             f"Vẫn đang tìm xe đi {destination}.",
             _OPENING_RIDE_APP,
@@ -90,5 +87,5 @@ def handle_confirm(image: bytes, command_text: str, params: dict | None = None) 
         "api/v1/service/ride/confirm",
         {"quote_id": quote_id, "confirm": bool(confirm)},
         ack=_CONFIRM_ACK if confirm else _CANCEL_ACK,
-        failure="Chưa gửi được yêu cầu đặt xe, vui lòng thử lại." if confirm else "Chưa hủy được chuyến xe, vui lòng thử lại.",
+        failure="Chưa gửi được yêu cầu đặt xe. Bạn thử lại nhé." if confirm else "Chưa hủy được chuyến xe. Bạn thử lại nhé.",
     )

@@ -147,13 +147,13 @@ def _stream_headers(response_format: str) -> dict[str, str]:
         "X-Audio-Preroll-Seconds": preroll,
     }
 
-_ERROR_MESSAGE = "Có lỗi xảy ra, vui lòng thử lại"
+_ERROR_MESSAGE = "Có lỗi xảy ra. Bạn thử lại nhé."
 
 # Chỉ audio là bắt buộc: đó là câu lệnh, không có nó thì không biết người dùng
 # muốn gì. Ảnh thì tuỳ câu hỏi — "gọi cho mẹ" hay "kể chuyện cười" không cần ảnh
 # nào, nên đòi đủ cả hai ở đây là chặn oan. Câu hỏi thật sự cần ảnh mà thiếu ảnh
 # thì `pipeline/image_quality.py` nói, vì chỉ ở đó mới biết intent là gì.
-_MISSING_AUDIO_MESSAGE = "Không nhận được âm thanh, vui lòng nói lại."
+_MISSING_AUDIO_MESSAGE = "Chưa nghe thấy gì. Bạn nói lại nhé."
 
 # Câu đầu tiên, phát ngay khi gói tin vào tới server — trước cả STT.
 #

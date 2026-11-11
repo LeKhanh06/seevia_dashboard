@@ -1,14 +1,8 @@
 package com.youreyes.app.actions
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.os.Build
 import android.net.Uri
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 import java.util.UUID
@@ -16,13 +10,12 @@ import java.util.UUID
 private const val MAPS_PACKAGE = "com.google.android.apps.maps"
 
 /**
- * `navigation_start`: notify the user and open Google Maps when tapped.
+ * `navigation_start`: open Google Maps walking navigation to the destination.
  *
  * An address without coordinates is geocoded so the result can report real
  * coordinates; if that fails Maps still navigates by address and lat/lng are null.
  */
 class NavigationStartHandler : ActionHandler {
-    @SuppressLint("MissingPermission") // notifications are enabled first; notify failures are converted to action errors
     override fun execute(context: Context?, paramsJson: String): ActionExecutionResult {
         if (context == null) return failure("NAVIGATION_START_FAILED", "No context available")
         val json = runCatching { JSONObject(paramsJson) }.getOrElse {
@@ -43,28 +36,12 @@ class NavigationStartHandler : ActionHandler {
         }
         val navigationId = "nav-${UUID.randomUUID().toString().take(8)}"
         val address = place.address ?: target
-        val notified = runCatching {
-            if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return@runCatching false
-            ensureNavigationChannel(context)
-            if (!canOpen(context, openIntent)) return@runCatching false
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                navigationId.hashCode(),
-                openIntent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            val notification = NotificationCompat.Builder(context, COMMAND_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_map)
-                .setContentTitle("Chỉ đường tới $address")
-                .setContentText("chạm để mở Google Maps")
-                .setContentIntent(pendingIntent)
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .build()
-            NotificationManagerCompat.from(context).notify(navigationId.hashCode(), notification)
-            true
-        }.getOrDefault(false)
-        if (!notified) return failure("NAVIGATION_PROVIDER_ERROR", "Could not show navigation notification")
+        // Open Maps straight away (full-screen intent: opens by itself when the screen is off or locked) so its
+        // turn-by-turn voice starts without the blind user having to find and tap a notification.
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled() || !canOpen(context, openIntent)) {
+            return failure("NAVIGATION_PROVIDER_ERROR", "Could not open Google Maps")
+        }
+        launchUiIntent(context, openIntent, "Chỉ đường tới $address", "Google Maps, đi bộ")
 
         ActionSessions(context).put(
             ActionSessions.NAVIGATION, navigationId, JSONObject().put("state", "navigating")
@@ -74,18 +51,6 @@ class NavigationStartHandler : ActionHandler {
             "navigation_state" to "navigating",
             "travel_mode" to "walking",
             "destination" to place.toMap(),
-        )
-    }
-}
-
-private const val COMMAND_CHANNEL_ID = "appdemo_commands"
-
-private fun ensureNavigationChannel(context: Context) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-    val manager = context.getSystemService(NotificationManager::class.java) ?: return
-    if (manager.getNotificationChannel(COMMAND_CHANNEL_ID) == null) {
-        manager.createNotificationChannel(
-            NotificationChannel(COMMAND_CHANNEL_ID, "Lệnh từ kính", NotificationManager.IMPORTANCE_HIGH),
         )
     }
 }

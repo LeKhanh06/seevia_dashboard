@@ -9,6 +9,7 @@ import java.util.UUID
 
 private const val GRAB_PACKAGE = "com.grabtaxi.passenger"
 private const val QUOTE_VALID_MINUTES = 5L
+private const val PICKUP_FIX_TIMEOUT_MS = 3_000L
 
 /**
  * Opens Grab's booking screen for the trip. Grab is the ride app that operates
@@ -62,10 +63,10 @@ class RideQuoteHandler : ActionHandler {
             .put("address", place.address ?: "")
             .put("expires_at", expiresAt)
             .put("used", false)
-        json.optJSONObject("current_location")?.let {
-            if (it.has("lat") && it.has("lng")) {
-                quote.put("pickup_lat", it.getDouble("lat")).put("pickup_lng", it.getDouble("lng"))
-            }
+        // Pickup is where the PHONE is. The glasses have no GPS, so the server's `current_location` is a fixed demo
+        // point; sending it to Grab would book a pickup somewhere else. No fix -> no pickup, Grab uses its own GPS.
+        currentLocation(context, PICKUP_FIX_TIMEOUT_MS)?.let {
+            quote.put("pickup_lat", it.latitude).put("pickup_lng", it.longitude)
         }
         if (!openGrab(context, quote)) return failure("RIDE_PROVIDER_ERROR", "Grab is not installed")
         ActionSessions(context).put(ActionSessions.QUOTE, quoteId, quote)

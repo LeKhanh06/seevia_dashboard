@@ -19,7 +19,7 @@ import time
 import cv2
 import numpy as np
 
-EVAL = os.environ.get("EVAL_DIR", "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations")
+EVAL = os.environ.get("EVAL_DIR", "/data/work/luanhh/local/SeeVia_system/evaluations")
 sys.path.insert(0, EVAL)
 os.environ.setdefault("SEEVIA_VH_DIR", os.getcwd())
 from bench import common  # noqa: E402

@@ -3,7 +3,7 @@
 Thư mục: SeeVia_system/evaluations (không phải git). File: bench/hazard_scenarios.py, bench/hazard_logic.py, bench/hazard_grid.py, bench/test_hazard.py.
 Đọc trước: docs/superpowers/plans/sdd-od/task-4-report.md và task-5-report.md (bộ sinh + chấm điểm hiện tại), spec
 docs/superpowers/specs/2026-10-21-vat-can-du-doan-quy-dao-design.md §5–7.
-VH để import: SEEVIA_VH_DIR=/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-od (một agent khác đang sửa nó song song:
+VH để import: SEEVIA_VH_DIR=/data/work/luanhh/local/SeeVia_system/vh-od (một agent khác đang sửa nó song song:
 thêm `AntiAnnoy(release_s=…)`, `PredictParams.release_s`, sửa ước lượng Z khi đáy hộp bị cắt). Không sửa VH.
 
 ## 1. Ruling 17 — cột

@@ -1,63 +1,63 @@
 Reading additional input from stdin...
 OpenAI Codex v0.162.0-alpha.17.2
 --------
-workdir: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+workdir: /data/work/luanhh/local/SeeVia_system/evaluations
 model: gpt-6-luna
 provider: openai
 approval: never
-sandbox: workspace-write [workdir, /tmp, $TMPDIR, /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/plans/sdd-od]
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /data/work/luanhh/local/SeeVia_system/docs/superpowers/plans/sdd-od]
 reasoning effort: high
 reasoning summaries: none
 session id: 01a15e36-f75c-76f1-ad1c-4683b85188af
 --------
 user
-Đọc và làm theo /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md. Không hỏi lại.
+Đọc và làm theo /data/work/luanhh/local/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md. Không hỏi lại.
 hook: SessionStart
 hook: SessionStart Completed
 codex
 Dùng `superpowers:using-superpowers` để xác định quy trình phù hợp trước khi đọc và thực hiện brief.
 exec
-/bin/bash -lc 'cat /home/vannk/.codex/skills/.system/references/codex-tools.md && cat /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md' in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc 'cat /home/vannk/.codex/skills/.system/references/codex-tools.md && cat /data/work/luanhh/local/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md' in /data/work/luanhh/local/SeeVia_system/evaluations
  exited 1 in 0ms:
 cat: /home/vannk/.codex/skills/.system/references/codex-tools.md: No such file or directory
 
 exec
-/bin/bash -lc "rg --files /home/vannk/.codex/skills/.system /home/vannk/.codex/skills 2>/dev/null | rg 'codex-tools\\.md"'$|using-superpowers/SKILL'"\\.md"'$'"'" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc "rg --files /home/vannk/.codex/skills/.system /home/vannk/.codex/skills 2>/dev/null | rg 'codex-tools\\.md"'$|using-superpowers/SKILL'"\\.md"'$'"'" in /data/work/luanhh/local/SeeVia_system/evaluations
  exited 127 in 0ms:
 /bin/bash: rg: command not found
 
 exec
-/bin/bash -lc "find /home/vannk/.codex/skills -path '*codex-tools.md' -o -path '*using-superpowers/SKILL.md'" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc "find /home/vannk/.codex/skills -path '*codex-tools.md' -o -path '*using-superpowers/SKILL.md'" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 3ms:
 exec
-/bin/bash -lc 'cat /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md' in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc 'cat /data/work/luanhh/local/SeeVia_system/docs/superpowers/plans/sdd-od/codex-thongso-brief.md' in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 0ms:
 # Đề bài Codex: nháp phần AI (không vật cản) của báo cáo THÔNG SỐ CHỐT
 
-Viết file MỚI: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md (tiếng Việt, số kiểu Việt Nam: dấu phẩy thập phân). KHÔNG sửa file nào khác.
+Viết file MỚI: /data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md (tiếng Việt, số kiểu Việt Nam: dấu phẩy thập phân). KHÔNG sửa file nào khác.
 Mỗi con số phải lấy TỪ FILE JSON (đọc bằng python), không đoán; ghi đường dẫn file nguồn dưới mỗi bảng. Có CI thì ghi CI.
 
 ## Nguồn lượt chốt (2026-10-21, nhánh tích hợp vh-chot @ce592ae, gọi model MỚI, cache tag chot20261021)
-- C6 STT: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/stt_vivos/20261021-1715_full.json
-- C5 cổng chất lượng ảnh: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/quality_vizwiz/20261021-1721_full.json (file lớn, chỉ đọc phần tổng hợp)
-- C2a OCR VinText: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/ocr_vintext/20261021-1725_raw_spoken.json
-- C2b SROIE: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/ocr_sroie/20261021-1730_ask_spoken.json ; cảnh báo chữ số: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/ocr_numconf/20261021-1735_test.json
-- C2c ViTextVQA: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/ocr_vitextvqa/20261021-1737_ask_spoken.json
-- C3 đọc tiền: 1 khung τ0,999 /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/money_vnd/20261021-1738_choice_sys.json ; 3 khung (tham chiếu v1) /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/money_vnd/20261021-1741_multi_test.json ;
-  trễ ghép đôi cũ vs v2: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/money_vnd/20261021-1742_turn_latency_n60.json và /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/money_vnd/20261021-1750_turn_latency_n60.json (lần 2 trên vh-chot @706e08f)
-  ; luồng đọc lại (1 khung τ0,999 + đọc lại 1 lần τ0,999): số offline trong spec /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/specs/2026-10-21-doc-tien-3-khung-design.md §2 (test: sai 2,7 %, đúng 65,8 %, từ chối 31,5 %).
-- C4 VQA: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/vqa_vizwiz/20261021-1746_general_ask.json ; giám khảo mù Codex: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/VQA_ASK_CHOT.md ; trễ A/B: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/vqa_vizwiz/20261021-1747_latency_ab.json
-- Định tuyến intent gold test: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/intent_gold_test.json
-- Baseline 2026-10-20 để so: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/TONG_HOP.md (bảng chính).
+- C6 STT: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/stt_vivos/20261021-1715_full.json
+- C5 cổng chất lượng ảnh: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/quality_vizwiz/20261021-1721_full.json (file lớn, chỉ đọc phần tổng hợp)
+- C2a OCR VinText: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/ocr_vintext/20261021-1725_raw_spoken.json
+- C2b SROIE: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/ocr_sroie/20261021-1730_ask_spoken.json ; cảnh báo chữ số: /data/work/luanhh/local/SeeVia_system/evaluations/results/ocr_numconf/20261021-1735_test.json
+- C2c ViTextVQA: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/ocr_vitextvqa/20261021-1737_ask_spoken.json
+- C3 đọc tiền: 1 khung τ0,999 /data/work/luanhh/local/SeeVia_system/evaluations/results/money_vnd/20261021-1738_choice_sys.json ; 3 khung (tham chiếu v1) /data/work/luanhh/local/SeeVia_system/evaluations/results/money_vnd/20261021-1741_multi_test.json ;
+  trễ ghép đôi cũ vs v2: /data/work/luanhh/local/SeeVia_system/evaluations/results/money_vnd/20261021-1742_turn_latency_n60.json và /data/work/luanhh/local/SeeVia_system/evaluations/results/money_vnd/20261021-1750_turn_latency_n60.json (lần 2 trên vh-chot @706e08f)
+  ; luồng đọc lại (1 khung τ0,999 + đọc lại 1 lần τ0,999): số offline trong spec /data/work/luanhh/local/SeeVia_system/docs/superpowers/specs/2026-10-21-doc-tien-3-khung-design.md §2 (test: sai 2,7 %, đúng 65,8 %, từ chối 31,5 %).
+- C4 VQA: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/vqa_vizwiz/20261021-1746_general_ask.json ; giám khảo mù Codex: /data/work/luanhh/local/SeeVia_system/evaluations/reports/VQA_ASK_CHOT.md ; trễ A/B: /data/work/luanhh/local/SeeVia_system/evaluations/results/vqa_vizwiz/20261021-1747_latency_ab.json
+- Định tuyến intent gold test: /data/work/luanhh/local/SeeVia_system/evaluations/results/chot/intent_gold_test.json
+- Baseline 2026-10-20 để so: /data/work/luanhh/local/SeeVia_system/evaluations/reports/TONG_HOP.md (bảng chính).
 
 ## Cấu trúc file
 1. "Bảng so baseline 2026-10-20 → chốt": một dòng mỗi bàn (C2a, C2b, C2c, C3, C4, C5, C6, định tuyến): metric an toàn chính, metric chuẩn, trễ p50/p90 — cột baseline (từ TONG_HOP.md) và cột chốt (từ JSON), cột Δ.
    Dùng đúng tên metric như TONG_HOP.md. Nếu một metric không có trong JSON chốt thì ghi "—" và lý do.
-2. "Thông số chốt" (biến env → giá trị → chọn ở đâu): đọc giá trị mặc định thật trong /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-chot/config.py cho:
+2. "Thông số chốt" (biến env → giá trị → chọn ở đâu): đọc giá trị mặc định thật trong /data/work/luanhh/local/SeeVia_system/vh-chot/config.py cho:
    MONEY_MODE, MONEY_MIN_PROB, MONEY_MULTI_MIN_PROB, MONEY_RETRY, MONEY_RETRY_PROB, MONEY_RETRY_SETTLE_S, MONEY_RETRY_TIMEOUT_S, MONEY_BLUR_HINT,
    OCR_DIGIT_HEDGE_PROB, STT_DECODING, LLM_IMAGE_MAX_SIDE, LLM_OCR_IMAGE_MAX_SIDE, OCR_CAPTURE_WIDTH, HAZARD_MIN_SCORE, HAZARD_MIN_LEVEL và nhãn intent  (models/clef/client.py LABELS cuối).
-   Cột "chọn ở đâu": báo cáo nguồn (MONEY_OCR_CAI_TIEN.md, VQA_ASK.md, TONG_HOP.md...) — đọc các file trong /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/ để điền.
-3. "Ghi chú đọc số": không cache (tag chot20261021), máy dùng chung (loadavg ~10), lượt 1 có cache bị loại (/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/lan1_cache_cu/).
+   Cột "chọn ở đâu": báo cáo nguồn (MONEY_OCR_CAI_TIEN.md, VQA_ASK.md, TONG_HOP.md...) — đọc các file trong /data/work/luanhh/local/SeeVia_system/evaluations/reports/ để điền.
+3. "Ghi chú đọc số": không cache (tag chot20261021), máy dùng chung (loadavg ~10), lượt 1 có cache bị loại (/data/work/luanhh/local/SeeVia_system/evaluations/results/chot/lan1_cache_cu/).
 Không hỏi lại.
 
 codex
@@ -66,7 +66,7 @@ exec
 /bin/bash -lc "python - <<'PY'
 from pathlib import Path
 import json
-base=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations')
+base=Path('/data/work/luanhh/local/SeeVia_system/evaluations')
 files=[
 'results/chot/stt_vivos/20261021-1715_full.json',
 'results/chot/quality_vizwiz/20261021-1721_full.json',
@@ -94,7 +94,7 @@ for rel in files:
     else: print(f'{k}: {type(v).__name__}')
   elif isinstance(d,list): print('len',len(d),'first',d[:1])
  except Exception as e: print('ERROR',repr(e))
-PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+PY" in /data/work/luanhh/local/SeeVia_system/evaluations
  exited 127 in 0ms:
 /bin/bash: python: command not found
 
@@ -102,7 +102,7 @@ exec
 /bin/bash -lc "python3 - <<'PY'
 from pathlib import Path
 import json
-base=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations')
+base=Path('/data/work/luanhh/local/SeeVia_system/evaluations')
 files=['results/chot/stt_vivos/20261021-1715_full.json','results/chot/quality_vizwiz/20261021-1721_full.json','results/chot/ocr_vintext/20261021-1725_raw_spoken.json','results/chot/ocr_sroie/20261021-1730_ask_spoken.json','results/ocr_numconf/20261021-1735_test.json','results/chot/ocr_vitextvqa/20261021-1737_ask_spoken.json','results/money_vnd/20261021-1738_choice_sys.json','results/money_vnd/20261021-1741_multi_test.json','results/money_vnd/20261021-1742_turn_latency_n60.json','results/money_vnd/20261021-1750_turn_latency_n60.json','results/chot/vqa_vizwiz/20261021-1746_general_ask.json','results/vqa_vizwiz/20261021-1747_latency_ab.json','results/chot/intent_gold_test.json']
 for rel in files:
  p=base/rel
@@ -117,7 +117,7 @@ for rel in files:
     else: print(f'{k}: {type(v).__name__}')
   elif isinstance(d,list): print('len',len(d),'first',d[:1])
  except Exception as e: print('ERROR',repr(e))
-PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+PY" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 231ms:
 
 ### results/chot/stt_vivos/20261021-1715_full.json size 275009 type dict
@@ -197,7 +197,7 @@ n_errors: 0
 n_unanswerable: 104
 n_answerable: 196
 latency: dict keys=['ttft', 'total']
-handcheck_csv: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/vqa_vizwiz/handcheck_50_ask.csv
+handcheck_csv: /data/work/luanhh/local/SeeVia_system/evaluations/results/vqa_vizwiz/handcheck_50_ask.csv
 per_sample: list len=300 first=[{'image': 'VizWiz_val_00003155.jpg', 'question_en': 'Summary, what is on this page?', 'question_vi': 'Tóm tắt giúp tôi xem trang này có gì vậy?', 'answer_type': 'other', 'answerable': 1, 'gt_answers': ['advertisement for food', 'unanswerable', 'box for tv dinner', 'unanswerable', 'unanswerable', 'unanswerable', 'coupon', 'unanswerable', 'sweet sour shrimp', 'food'], 'output': 'Đây là tờ quảng cáo đồ ăn của\ncửa hàng Ninety Nine Cent. Hình ảnh bên trái là món gà chiên sốt đỏ kèm chanh và phô mai vụn. Bên phải có dòng chữ quảng cáo món ăn kích cỡ thật với giá chỉ 99 cent.', 'ttft_ms': 427.5159409735352, 'total_ms': 828.3069389872253, 'error': None, 'cached': False, 'gate_reason': None, 'words': 46, 'judge_error': None, 'refused': False, 'llm_matches': [0, 9], 'vqa_acc': 0.6666666666666666, 'matched': [0, 9]}]
 
 ### results/vqa_vizwiz/20261021-1747_latency_ab.json size 1461 type dict
@@ -208,7 +208,7 @@ words_mean: dict keys=['space', 'ask']
 ERROR JSONDecodeError('Extra data: line 2 column 1 (char 258)')
 
 exec
-/bin/bash -lc "find /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports -maxdepth 1 -type f -printf '%f\\n' | sort && sed -n '1,240p' /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/TONG_HOP.md" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc "find /data/work/luanhh/local/SeeVia_system/evaluations/reports -maxdepth 1 -type f -printf '%f\\n' | sort && sed -n '1,240p' /data/work/luanhh/local/SeeVia_system/evaluations/reports/TONG_HOP.md" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 0ms:
 HAZARD.md
 HAZARD_MODELS.md
@@ -263,7 +263,7 @@ exec
 /bin/bash -lc "python3 - <<'PY'
 from pathlib import Path
 import json
-b=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations')
+b=Path('/data/work/luanhh/local/SeeVia_system/evaluations')
 paths=['results/chot/stt_vivos/20261021-1715_full.json','results/chot/quality_vizwiz/20261021-1721_full.json','results/chot/ocr_vintext/20261021-1725_raw_spoken.json','results/chot/ocr_sroie/20261021-1730_ask_spoken.json','results/ocr_numconf/20261021-1735_test.json','results/chot/ocr_vitextvqa/20261021-1737_ask_spoken.json','results/money_vnd/20261021-1738_choice_sys.json','results/money_vnd/20261021-1741_multi_test.json','results/money_vnd/20261021-1742_turn_latency_n60.json','results/money_vnd/20261021-1750_turn_latency_n60.json','results/chot/vqa_vizwiz/20261021-1746_general_ask.json','results/vqa_vizwiz/20261021-1747_latency_ab.json']
 for rel in paths:
  d=json.loads((b/rel).read_text())
@@ -280,8 +280,8 @@ p=b/'results/chot/intent_gold_test.json'
 rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
 print('\\n### intent jsonl rows',len(rows),'sample',json.dumps(rows[:2],ensure_ascii=False))
 PY
-sed -n '1,260p' /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-chot/config.py
-sed -n '1,220p' /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-chot/models/clef/client.py" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+sed -n '1,260p' /data/work/luanhh/local/SeeVia_system/vh-chot/config.py
+sed -n '1,220p' /data/work/luanhh/local/SeeVia_system/vh-chot/models/clef/client.py" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 269ms:
 
 ### results/chot/stt_vivos/20261021-1715_full.json
@@ -818,7 +818,7 @@ exec
 /bin/bash -lc "python3 - <<'PY'
 from pathlib import Path
 import json
-b=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations')
+b=Path('/data/work/luanhh/local/SeeVia_system/evaluations')
 for rel in ['results/money_vnd/20261021-1738_choice_sys.json','results/money_vnd/20261021-1741_multi_test.json','results/money_vnd/20261021-1742_turn_latency_n60.json','results/money_vnd/20261021-1750_turn_latency_n60.json','results/chot/vqa_vizwiz/20261021-1746_general_ask.json','results/vqa_vizwiz/20261021-1747_latency_ab.json','results/chot/intent_gold_test.json']:
  p=b/rel
  print('\\n##',rel)
@@ -839,12 +839,12 @@ for rel in ['results/money_vnd/20261021-1738_choice_sys.json','results/money_vnd
 PY
 python3 - <<'PY'
 from pathlib import Path
-p=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-chot/config.py')
+p=Path('/data/work/luanhh/local/SeeVia_system/vh-chot/config.py')
 s=p.read_text()
 want=['MONEY_MODE','MONEY_MIN_PROB','MONEY_MULTI_MIN_PROB','MONEY_RETRY','MONEY_RETRY_PROB','MONEY_RETRY_SETTLE_S','MONEY_RETRY_TIMEOUT_S','MONEY_BLUR_HINT','OCR_DIGIT_HEDGE_PROB','STT_DECODING','LLM_IMAGE_MAX_SIDE','LLM_OCR_IMAGE_MAX_SIDE','OCR_CAPTURE_WIDTH','HAZARD_MIN_SCORE','HAZARD_MIN_LEVEL']
 for line in s.splitlines():
  if any(line.startswith(k+' =') for k in want): print(line)
-PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+PY" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 128ms:
 
 ## results/money_vnd/20261021-1738_choice_sys.json
@@ -877,7 +877,7 @@ metrics {"vqa_acc_all": {"value": 0.8377777777777778, "ci": [0.801111111111111, 
 latency {"ttft": {"n": 300, "p50_ms": 343.74, "p90_ms": 369.02, "p99_ms": 399.59, "mean_ms": 337.77, "max_ms": 427.52}, "total": {"n": 300, "p50_ms": 439.12, "p90_ms": 569.42, "p99_ms": 790.54, "mean_ms": 455.15, "max_ms": 3901.52}}
 
 ## results/vqa_vizwiz/20261021-1747_latency_ab.json
-{"meta": {"time": "2026-10-21T17:47:07", "host": "gpu156", "python": "3.11.15", "argv": ["/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/bench/vqa_latency_ab.py", "--n", "60"], "vh_commit": "ce592ae", "vh_branch": "chot-ai-2026-10-21", "vh_dirty": false, "cuda_visible_devices": null, "gpu_at_start": [], "gpu_at_end": [], "config": {"task": "vqa_latency_ab", "n": 60, "llm": "gemma-4-26b"}}, "latency": {"space": {"ttft": {"n": 60, "p50_ms": 244.6, "p90_ms": 286.73, "p99_ms": 308.32, "mean_ms": 245.25, "max_ms": 313.91}, "total": {"n": 60, "p50_ms": 540.52, "p90_ms": 638.79, "p99_ms": 714.26, "mean_ms": 546.98, "max_ms": 716.02}}, "ask": {"ttft": {"n": 60, "p50_ms": 292.87, "p90_ms": 307.64, "p99_ms": 338.02, "mean_ms": 287.52, "max_ms": 372.46}, "total": {"n": 60, "p50_ms": 374.81, "p90_ms": 512.02, "p99_ms": 1028.59, "mean_ms": 402.82, "max_ms": 1369.91}}}, "paired_delta_ask_minus_space": {"ttft": {"delta_mean_ms": 42.26691855971391, "ci": [33.679834617772336, 50.89028761850689], "n": 60}, "total": {"delta_mean_ms": -144.1583802215367, "ci": [-180.3942698221605, -97.43226893867056], "n": 60}}, "words_mean": {"space": 34.7, "ask": 20.416666666666668}}
+{"meta": {"time": "2026-10-21T17:47:07", "host": "gpu156", "python": "3.11.15", "argv": ["/data/work/luanhh/local/SeeVia_system/evaluations/bench/vqa_latency_ab.py", "--n", "60"], "vh_commit": "ce592ae", "vh_branch": "chot-ai-2026-10-21", "vh_dirty": false, "cuda_visible_devices": null, "gpu_at_start": [], "gpu_at_end": [], "config": {"task": "vqa_latency_ab", "n": 60, "llm": "gemma-4-26b"}}, "latency": {"space": {"ttft": {"n": 60, "p50_ms": 244.6, "p90_ms": 286.73, "p99_ms": 308.32, "mean_ms": 245.25, "max_ms": 313.91}, "total": {"n": 60, "p50_ms": 540.52, "p90_ms": 638.79, "p99_ms": 714.26, "mean_ms": 546.98, "max_ms": 716.02}}, "ask": {"ttft": {"n": 60, "p50_ms": 292.87, "p90_ms": 307.64, "p99_ms": 338.02, "mean_ms": 287.52, "max_ms": 372.46}, "total": {"n": 60, "p50_ms": 374.81, "p90_ms": 512.02, "p99_ms": 1028.59, "mean_ms": 402.82, "max_ms": 1369.91}}}, "paired_delta_ask_minus_space": {"ttft": {"delta_mean_ms": 42.26691855971391, "ci": [33.679834617772336, 50.89028761850689], "n": 60}, "total": {"delta_mean_ms": -144.1583802215367, "ci": [-180.3942698221605, -97.43226893867056], "n": 60}}, "words_mean": {"space": 34.7, "ask": 20.416666666666668}}
 
 ## results/chot/intent_gold_test.json
 JSONL rows 149
@@ -902,7 +902,7 @@ exec
 /bin/bash -lc "python3 - <<'PY'
 from pathlib import Path
 import json, statistics, math
-p=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/results/chot/intent_gold_test.json')
+p=Path('/data/work/luanhh/local/SeeVia_system/evaluations/results/chot/intent_gold_test.json')
 r=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
 print('n',len(r),'exact',sum(x['gold']==x['pred'] for x in r),'accuracy',sum(x['gold']==x['pred'] for x in r)/len(r))
 print('action_fp',sum(bool(x.get('action_fp')) for x in r))
@@ -916,8 +916,8 @@ print('latency p50,p90 ms',pct(.5),pct(.9))
 from collections import Counter
 print('per label',Counter(x['gold'] for x in r))
 PY
-for f in MONEY_OCR_CAI_TIEN.md VQA_ASK.md VQA_ASK_CHOT.md VQA.md OCR.md MONEY.md QUALITY.md STT.md HAZARD.md; do echo \"### "'$f"; rg -n -i "chọn|tau|0,999|0,9|MONEY_|digit|CI|ngưỡng|threshold|hazard|confidence|beam|multi|retry|blur|896|1600|F1" "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/$f" | head -n 30; done
-rg -n "HAZARD_MIN_LEVEL|HAZARD_MIN_SCORE" /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-chot/config.py' in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+for f in MONEY_OCR_CAI_TIEN.md VQA_ASK.md VQA_ASK_CHOT.md VQA.md OCR.md MONEY.md QUALITY.md STT.md HAZARD.md; do echo \"### "'$f"; rg -n -i "chọn|tau|0,999|0,9|MONEY_|digit|CI|ngưỡng|threshold|hazard|confidence|beam|multi|retry|blur|896|1600|F1" "/data/work/luanhh/local/SeeVia_system/evaluations/reports/$f" | head -n 30; done
+rg -n "HAZARD_MIN_LEVEL|HAZARD_MIN_SCORE" /data/work/luanhh/local/SeeVia_system/vh-chot/config.py' in /data/work/luanhh/local/SeeVia_system/evaluations
  exited 127 in 132ms:
 n 149 exact 146 accuracy 0.9798657718120806
 action_fp 41
@@ -948,14 +948,14 @@ per label Counter({'chat': 25, 'message_send': 18, 'message_read': 13, 'music_st
 exec
 /bin/bash -lc "python3 - <<'PY'
 from pathlib import Path
-base=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports')
+base=Path('/data/work/luanhh/local/SeeVia_system/evaluations/reports')
 terms=('chọn','ngưỡng','tau','0.999','0,999','MONEY_','digit','confidence','hazard','beam','multi','retry','blur','image_max','capture_width','label')
 for name in ['MONEY_OCR_CAI_TIEN.md','VQA_ASK.md','VQA_ASK_CHOT.md','VQA.md','OCR.md','MONEY.md','QUALITY.md','STT.md','HAZARD.md']:
  print('\\n###',name)
  for i,line in enumerate((base/name).read_text().splitlines(),1):
   if any(t.lower() in line.lower() for t in terms):
    print(f'{i}: {line[:350]}')
-PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+PY" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 46ms:
 
 ### MONEY_OCR_CAI_TIEN.md
@@ -1050,7 +1050,7 @@ PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluation
 codex
 Tôi đã chốt các metric tương ứng và tính p50/p90 từ summary JSON (riêng intent từ từng dòng JSONL). C3 không có baseline như đã ghi trong tổng hợp; định tuyến cũng chưa có dòng baseline, nên hai ô này sẽ có dấu “—” kèm lý do. Tiếp theo tôi ghi đúng một file báo cáo mới.
 exec
-/bin/bash -lc 'test ! -e /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md && cat > /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md <<'"'EOF'
+/bin/bash -lc 'test ! -e /data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md && cat > /data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md <<'"'EOF'
 # THÔNG SỐ CHỐT — phần AI (nháp)
 
 Lượt chốt ngày 2026-10-21 chạy trên nhánh "'`chot-ai-2026-10-21`, commit `ce592ae`, gọi model mới với cache tag `chot20261021`. Số đo phần trăm được ghi theo thang 0–100; CI là CI 95% nếu JSON có cung cấp. Trễ ghi p50/p90, đơn vị ms. Δ = chốt − baseline; với metric rủi ro, số âm là giảm rủi ro.
@@ -1139,21 +1139,21 @@ Giá trị là mặc định thật được đọc từ `vh-chot/config.py`; bi
 EOF
 python3 - <<'"'PY'
 from pathlib import Path
-p=Path('/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md')
+p=Path('/data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md')
 print('created',p.exists(),'bytes',p.stat().st_size)
-PY" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+PY" in /data/work/luanhh/local/SeeVia_system/evaluations
  succeeded in 34ms:
 created True bytes 8364
 
 exec
-/bin/bash -lc "git status --short -- evaluations/reports/THONG_SO_CHOT_nhap_ai.md && sed -n '1,220p' evaluations/reports/THONG_SO_CHOT_nhap_ai.md" in /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations
+/bin/bash -lc "git status --short -- evaluations/reports/THONG_SO_CHOT_nhap_ai.md && sed -n '1,220p' evaluations/reports/THONG_SO_CHOT_nhap_ai.md" in /data/work/luanhh/local/SeeVia_system/evaluations
  exited 128 in 0ms:
 fatal: not a git repository (or any parent up to mount point /)
 Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
 
 codex
-Đã tạo nháp báo cáo tại [THONG_SO_CHOT_nhap_ai.md](/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md). Báo cáo có bảng so baseline, thông số mặc định, CI và đường dẫn nguồn JSON cùng ghi chú lượt đo. Chỉ tạo file này; không chạy test.
+Đã tạo nháp báo cáo tại [THONG_SO_CHOT_nhap_ai.md](/data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md). Báo cáo có bảng so baseline, thông số mặc định, CI và đường dẫn nguồn JSON cùng ghi chú lượt đo. Chỉ tạo file này; không chạy test.
 tokens used
 80,142
-Đã tạo nháp báo cáo tại [THONG_SO_CHOT_nhap_ai.md](/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md). Báo cáo có bảng so baseline, thông số mặc định, CI và đường dẫn nguồn JSON cùng ghi chú lượt đo. Chỉ tạo file này; không chạy test.
+Đã tạo nháp báo cáo tại [THONG_SO_CHOT_nhap_ai.md](/data/work/luanhh/local/SeeVia_system/evaluations/reports/THONG_SO_CHOT_nhap_ai.md). Báo cáo có bảng so baseline, thông số mặc định, CI và đường dẫn nguồn JSON cùng ghi chú lượt đo. Chỉ tạo file này; không chạy test.
 HẾT exit 0

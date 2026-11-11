@@ -1,6 +1,6 @@
 # Đề bài Codex: chặn Z trên của hộp bị cắt đáy theo giới hạn nhìn thấy mặt đất
 
-Repo: /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-od (git worktree; KHÔNG commit — người điều phối commit).
+Repo: /data/work/luanhh/local/SeeVia_system/vh-od (git worktree; KHÔNG commit — người điều phối commit).
 Python: ~/.venvs/seevia/bin/python. Chỉ sửa: live/hazard_geom.py, live/hazard_track.py, tests/test_hazard_predict.py.
 
 ## Vấn đề
@@ -21,6 +21,6 @@ Hiện tại track mới bị cắt cả đáy lẫn mép bên lấy Z theo bề
 4. Chạy `~/.venvs/seevia/bin/python -m pytest tests/test_hazard_predict.py -q` rồi `~/.venvs/seevia/bin/python -m pytest -q`; tất cả phải pass
    (không sửa tests/test_v2_units.py, test_v2_api.py, test_modes_split.py, test_debug_frames.py).
 5. Ghi kết quả (file đã sửa, số test trước/sau, output pytest dòng cuối) vào
-   /workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/docs/superpowers/plans/sdd-od/codex-clip-report.md
+   /data/work/luanhh/local/SeeVia_system/docs/superpowers/plans/sdd-od/codex-clip-report.md
 
 Cấm: sửa file khác; thêm gói; đổi hành vi khi HAZARD_LOGIC=area. Không hỏi lại.

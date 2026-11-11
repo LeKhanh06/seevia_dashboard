@@ -14,7 +14,7 @@ from live.hazard import Detection
 from live import hazard_geom
 from live.hazard_geom import Camera, CLASS_HEIGHT_M
 
-CLASSES_VH = "/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/evaluations/train/classes_vh.json"
+CLASSES_VH = "/data/work/luanhh/local/SeeVia_system/evaluations/train/classes_vh.json"
 
 CAM = Camera(320, 240, 66.0, 1.6)
 

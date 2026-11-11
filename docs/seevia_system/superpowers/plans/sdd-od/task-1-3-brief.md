@@ -13,7 +13,7 @@ Spec: SeeVia_system/docs/superpowers/specs/2026-10-21-vat-can-du-doan-quy-dao-de
 - Camera danh nghĩa: 320×240, HFOV 66°, cao 1,6 m (lấy từ config, không hard-code trong logic).
 - Ngân sách trễ: `assess + step` p90 ≤ 1 ms/khung (CPU); `ego_motion.measure` p90 ≤ 2 ms trên QVGA thật; tổng chuỗi server C1c p90 ≤ 10 ms.
 - Bàn đo C1b thuần CPU (`common.setup(gpu=False)`), song song tối đa 8 tiến trình (máy dùng chung). Đo trễ: kiểm `uptime` + `nvidia-smi` trước, chạy liền nhau.
-- Chạy bàn đo từ `SeeVia_system/evaluations/` với `SEEVIA_VH_DIR=/workingspace_aiclub/WorkingSpace/Personal/vannk/SeeVia_system/vh-od`.
+- Chạy bàn đo từ `SeeVia_system/evaluations/` với `SEEVIA_VH_DIR=/data/work/luanhh/local/SeeVia_system/vh-od`.
 - Comment/docstring tiếng Việt, cùng mật độ và giọng như `live/hazard.py`.
 - Probe NFS trước khi ghi file kết quả lớn (> 64 KB): ghi file thử 5 MB + fsync, kiểm kích thước.
 

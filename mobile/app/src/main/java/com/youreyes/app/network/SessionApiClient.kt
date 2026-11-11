@@ -84,9 +84,14 @@ class SessionApiClient(
 
     // ---- messages ----
 
-    /** Returns the new `message_id`. Resending with the same [requestId] never duplicates the message. */
-    fun sendMessage(ownerUserId: String, text: String, requestId: String): ApiResult<String> {
-        val body = JSONObject().put("owner_user_id", ownerUserId).put("text", text).put("request_id", requestId)
+    /**
+     * Returns the new `message_id`. Resending with the same [requestId] never duplicates the message.
+     * [peerUserId] is the glasses owner I am a relative of; with [toRelative] it is instead the relative
+     * I (the glasses owner) am texting (protocol 7.4: exactly one of `owner_user_id` / `relative_user_id`).
+     */
+    fun sendMessage(peerUserId: String, text: String, requestId: String, toRelative: Boolean = false): ApiResult<String> {
+        val body = JSONObject().put(if (toRelative) "relative_user_id" else "owner_user_id", peerUserId)
+            .put("text", text).put("request_id", requestId)
         return call("POST", "/api/v1/messages", body) { it.getString("message_id") }
     }
 

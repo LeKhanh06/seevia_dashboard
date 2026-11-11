@@ -147,6 +147,15 @@ class ContactCallResult(BaseModel):
     phone_number: str
 
 
+class ContactSmsResult(BaseModel):
+    """Final result after texting one uniquely matched contact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    contact_name: str
+    sms_sent: Literal[True]
+
+
 class LocationGetResult(BaseModel):
     """Final result of a device location lookup."""
 
@@ -168,5 +177,6 @@ type ActionResult = (
     | NavigationStopResult
     | EmergencyCallResult
     | ContactCallResult
+    | ContactSmsResult
     | LocationGetResult
 )

@@ -61,6 +61,11 @@ val DEFAULT_FUNCTION_TEST_ROWS: List<FunctionTestRow> = listOf(
         paramsJson = """{"name":"Em iu"}""",
     ),
     FunctionTestRow(
+        action = "contact_sms",
+        label = "Nhắn tin liên hệ",
+        paramsJson = """{"name":"Em iu","text":"Xin chào"}""",
+    ),
+    FunctionTestRow(
         action = "location_get",
         label = "Vị trí hiện tại",
         paramsJson = "{}",

@@ -277,6 +277,43 @@ class ContactCallHandler : ActionHandler {
     }
 }
 
+/** `contact_sms`: text exactly one contact whose name matches, over the SIM. */
+class ContactSmsHandler : ActionHandler {
+    override fun execute(context: Context?, paramsJson: String): ActionExecutionResult {
+        val params = runCatching { JSONObject(paramsJson) }.getOrNull()
+        val name = params?.optString("name").orEmpty().trim()
+        val text = params?.optString("text").orEmpty().trim()
+        if (name.isEmpty()) return failure("CONTACT_NOT_FOUND", "Contact name must not be empty")
+        if (text.isEmpty()) return failure("SMS_SEND_FAILED", "SMS text must not be empty")
+        if (context == null) return failure("SMS_SEND_FAILED", "No context available")
+        if (!hasPermission(context, Manifest.permission.READ_CONTACTS)) {
+            return failure("CONTACT_PERMISSION_DENIED", "READ_CONTACTS permission not granted")
+        }
+
+        val matches = ContactLookup.findByName(context, name)
+        if (matches.isEmpty()) return failure("CONTACT_NOT_FOUND", "No contact matched '$name'")
+        if (matches.size > 1) {
+            return failure(
+                "MULTIPLE_CONTACTS_FOUND",
+                "Multiple contacts matched",
+                mapOf(
+                    "candidates" to matches.map {
+                        mapOf("name" to it.name, "phone_number" to ContactLookup.maskPhoneNumber(it.phoneNumber))
+                    }
+                ),
+            )
+        }
+        val match = matches.single()
+        if (!hasPermission(context, Manifest.permission.SEND_SMS)) {
+            return failure("SMS_PERMISSION_DENIED", "SEND_SMS permission not granted")
+        }
+        if (!sendSmsAndAwaitResult(context, match.phoneNumber, text)) {
+            return failure("SMS_SEND_FAILED", "SMS to '${match.name}' was not sent")
+        }
+        return success("contact_name" to match.name, "sms_sent" to true)
+    }
+}
+
 @SuppressLint("MissingPermission") // READ_PHONE_STATE checked
 private fun phoneCallState(context: Context): Int? {
     if (!hasPermission(context, Manifest.permission.READ_PHONE_STATE)) return null

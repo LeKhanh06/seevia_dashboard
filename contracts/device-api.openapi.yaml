@@ -117,6 +117,7 @@ components:
       - navigation_stop
       - emergency_call
       - contact_call
+      - contact_sms
       - location_get
       - capabilities_get
       - call_answer

@@ -27,22 +27,16 @@ class AppVoiceEnv(
 
     override fun isLoggedIn(): Boolean = SessionApi.hasSession(app)
 
-    /** People whose glasses this account can call and message (an active link where I am the relative). */
+    /**
+     * Everyone this account can message: the glasses owners I am a relative of (can also be called), and
+     * the relatives I invited as a glasses owner (messages only: the server has no owner-to-relative call).
+     */
     override suspend fun contacts(): List<VoiceContact> {
         val now = System.currentTimeMillis()
         if (cached.isNotEmpty() && now - cachedAt < CACHE_MS) return cached
         val result = withContext(Dispatchers.IO) { SessionApi.run(app) { it.careLinks() } }
         if (result is ApiResult.Ok) {
-            cached = result.data
-                .filter { it.role == "relative" && it.status == "active" }
-                .map { link ->
-                    VoiceContact(
-                        id = link.ownerUserId,
-                        name = link.peerDisplayName.ifBlank { link.displayName }.ifBlank { "Người thân" },
-                        aliases = listOf(link.displayName).filter { it.isNotBlank() },
-                    )
-                }
-                .distinctBy { it.id }
+            cached = contactsFrom(result.data)
             cachedAt = now
         }
         return cached
@@ -54,7 +48,7 @@ class AppVoiceEnv(
 
     override suspend fun sendMessage(contact: VoiceContact, text: String): String? {
         val result = withContext(Dispatchers.IO) {
-            SessionApi.run(app) { it.sendMessage(contact.id, text, UUID.randomUUID().toString()) }
+            SessionApi.run(app) { it.sendMessage(contact.id, text, UUID.randomUUID().toString(), toRelative = !contact.canCall) }
         }
         return if (result is ApiResult.Ok) null else apiErrorVi(result)
     }
@@ -106,7 +100,28 @@ class AppVoiceEnv(
         navigate(VoiceRoutes.routeFor(screen))
     }
 
-    private companion object {
-        const val CACHE_MS = 60_000L
+    companion object {
+        private const val CACHE_MS = 60_000L
+
+        /** Active links as contacts: owners I can call first (they win a tie), then my own relatives. */
+        fun contactsFrom(links: List<com.youreyes.app.calls.CareLink>): List<VoiceContact> {
+            val active = links.filter { it.status == "active" }
+            val glassesOwners = active.filter { it.role == "relative" }.map { link ->
+                VoiceContact(
+                    id = link.ownerUserId,
+                    name = link.peerDisplayName.ifBlank { link.displayName }.ifBlank { "Người thân" },
+                    aliases = listOf(link.displayName).filter { it.isNotBlank() },
+                )
+            }
+            val myRelatives = active.filter { it.role == "owner" }.map { link ->
+                VoiceContact(
+                    id = link.relativeUserId,
+                    name = link.displayName.ifBlank { link.peerDisplayName }.ifBlank { "Người thân" },
+                    aliases = (link.aliases + link.peerDisplayName).filter { it.isNotBlank() }.distinct(),
+                    canCall = false,
+                )
+            }
+            return (glassesOwners + myRelatives).distinctBy { it.id }
+        }
     }
 }

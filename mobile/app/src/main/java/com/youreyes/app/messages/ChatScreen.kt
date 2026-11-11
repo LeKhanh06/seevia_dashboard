@@ -70,12 +70,13 @@ fun ChatRoute(
     peerUserId: String,
     peerName: String,
     modifier: Modifier = Modifier,
+    toRelative: Boolean = false,
     onBack: () -> Unit = {},
 ) {
     val app = LocalContext.current.applicationContext as Application
     val viewModel: ChatViewModel = viewModel(
-        key = "chat-$peerUserId",
-        factory = viewModelFactory { initializer { ChatViewModel(app, peerUserId, peerName) } },
+        key = "chat-$peerUserId-$toRelative",
+        factory = viewModelFactory { initializer { ChatViewModel(app, peerUserId, peerName, toRelative) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
 

@@ -39,6 +39,7 @@ _BODIES: dict[Action, dict[str, Any]] = {
     Action.NAVIGATION_STOP: {"navigation_id": "nav-1"},
     Action.EMERGENCY_CALL: {},
     Action.CONTACT_CALL: {"name": "Mẹ"},
+    Action.CONTACT_SMS: {"name": "em iu", "text": "con về"},
     Action.LOCATION_GET: {},
     Action.CAPABILITIES_GET: {},
     Action.CALL_ANSWER: {},

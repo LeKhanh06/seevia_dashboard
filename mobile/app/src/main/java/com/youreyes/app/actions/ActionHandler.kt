@@ -48,6 +48,7 @@ class ActionRegistry(
                 ActionType.CAPABILITIES_GET -> CapabilitiesGetHandler()
                 ActionType.CALL_ANSWER -> CallAnswerHandler()
                 ActionType.CALL_REJECT -> CallRejectHandler()
+                ActionType.CONTACT_SMS -> ContactSmsHandler()
             }
         }
     }

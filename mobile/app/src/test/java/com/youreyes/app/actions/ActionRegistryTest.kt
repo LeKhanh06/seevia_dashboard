@@ -14,7 +14,7 @@ class ActionRegistryTest {
     private val serverActions = setOf(
         "ride_quote", "ride_confirm", "music_play", "music_stop", "music_volume",
         "navigation_start", "navigation_stop", "emergency_call", "contact_call",
-        "location_get", "capabilities_get", "call_answer", "call_reject",
+        "location_get", "capabilities_get", "call_answer", "call_reject", "contact_sms",
     )
 
     private fun errorCode(action: String, params: String = "{}"): String {
@@ -58,6 +58,17 @@ class ActionRegistryTest {
     @Test
     fun `music play without a song is song not found`() {
         assertEquals("SONG_NOT_FOUND", errorCode("music_play", """{"volume":60}"""))
+    }
+
+    @Test
+    fun `contact sms with an empty name is contact not found`() {
+        assertEquals("CONTACT_NOT_FOUND", errorCode("contact_sms", """{"name":"  ","text":"hi"}"""))
+    }
+
+    @Test
+    fun `contact sms with empty text or no device is a send failure`() {
+        assertEquals("SMS_SEND_FAILED", errorCode("contact_sms", """{"name":"em iu","text":" "}"""))
+        assertEquals("SMS_SEND_FAILED", errorCode("contact_sms", """{"name":"em iu","text":"con về"}"""))
     }
 
     @Test

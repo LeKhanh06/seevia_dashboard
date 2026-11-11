@@ -123,11 +123,15 @@ object Routes {
     const val DEV_TEST = "dev-test"
     const val CARE = "care"
     const val READINESS = "readiness"
-    const val CHAT = "chat/{peerUserId}?name={name}"
+    const val CHAT = "chat/{peerUserId}?name={name}&toRelative={toRelative}"
 
-    /** Conversation with the glasses owner [peerUserId]; [name] only titles the screen. */
-    fun chatRoute(peerUserId: String, name: String): String =
-        "chat/${android.net.Uri.encode(peerUserId)}?name=${android.net.Uri.encode(name)}"
+    /**
+     * Conversation with [peerUserId]; [name] only titles the screen. By default the peer is a glasses owner
+     * I am a relative of; with [toRelative] the peer is a relative I (the glasses owner) invited.
+     */
+    fun chatRoute(peerUserId: String, name: String, toRelative: Boolean = false): String =
+        "chat/${android.net.Uri.encode(peerUserId)}?name=${android.net.Uri.encode(name)}" +
+            if (toRelative) "&toRelative=true" else ""
 }
 
 private data class BottomDestination(
@@ -292,7 +296,7 @@ private fun NavGraphBuilder.appDestinations(
             onNavigateToCare = { navController.navigate(Routes.CARE) },
             onNavigateToGlasses = { navController.navigate(Routes.GLASSES) },
             onNavigateToReadiness = { navController.navigate(Routes.READINESS) },
-            onOpenChat = { peerUserId, name -> navController.navigate(Routes.chatRoute(peerUserId, name)) },
+            onOpenChat = { peerUserId, name, toRelative -> navController.navigate(Routes.chatRoute(peerUserId, name, toRelative)) },
         )
     }
     composable(Routes.FEATURES) { FeaturesScreen(modifier = modifier) }
@@ -341,7 +345,7 @@ private fun NavGraphBuilder.appDestinations(
             modifier = modifier,
             onBack = back,
             onNavigateToAuth = { navController.navigate(Routes.AUTH) },
-            onOpenChat = { peerUserId, name -> navController.navigate(Routes.chatRoute(peerUserId, name)) },
+            onOpenChat = { peerUserId, name, toRelative -> navController.navigate(Routes.chatRoute(peerUserId, name, toRelative)) },
         )
     }
     composable(
@@ -349,11 +353,13 @@ private fun NavGraphBuilder.appDestinations(
         arguments = listOf(
             navArgument("peerUserId") { type = NavType.StringType },
             navArgument("name") { type = NavType.StringType; defaultValue = "" },
+            navArgument("toRelative") { type = NavType.BoolType; defaultValue = false },
         ),
     ) { entry ->
         ChatRoute(
             peerUserId = entry.arguments?.getString("peerUserId").orEmpty(),
             peerName = entry.arguments?.getString("name").orEmpty(),
+            toRelative = entry.arguments?.getBoolean("toRelative") ?: false,
             modifier = modifier,
             onBack = back,
         )

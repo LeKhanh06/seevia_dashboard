@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.schemas.service_requests import (
     ContactCallRequest,
+    ContactSmsRequest,
     EmergencyCallRequest,
     LocationGetRequest,
     MusicPlayRequest,
@@ -47,6 +48,7 @@ REQUEST_EXAMPLES: tuple[tuple[type[BaseModel], dict[str, Any]], ...] = (
     (NavigationStopRequest, BASE_REQUEST | {"navigation_id": "nav-123"}),
     (EmergencyCallRequest, BASE_REQUEST),
     (ContactCallRequest, BASE_REQUEST | {"name": "Nguyễn Văn A"}),
+    (ContactSmsRequest, BASE_REQUEST | {"name": "em iu", "text": "con về"}),
     (LocationGetRequest, BASE_REQUEST),
 )
 
@@ -181,6 +183,19 @@ def test_contact_call_rejects_empty_name() -> None:
         ContactCallRequest.model_validate(BASE_REQUEST | {"name": ""})
 
 
+@pytest.mark.parametrize("text", ["", "   ", "x" * 321])
+def test_contact_sms_rejects_empty_or_too_long_text(text: str) -> None:
+    """Reject blank text and text over the 320-character limit."""
+    with pytest.raises(ValidationError):
+        ContactSmsRequest.model_validate(BASE_REQUEST | {"name": "em iu", "text": text})
+
+
+def test_contact_sms_accepts_text_at_limit() -> None:
+    """Accept text of exactly 320 characters."""
+    request = ContactSmsRequest.model_validate(BASE_REQUEST | {"name": "em iu", "text": "x" * 320})
+    assert len(request.text) == 320
+
+
 @pytest.mark.parametrize(("request_model", "payload"), REQUEST_EXAMPLES)
 def test_documented_request_rejects_unexpected_field(
     request_model: type[BaseModel],
@@ -198,6 +213,7 @@ def test_documented_request_rejects_unexpected_field(
         (MusicPlayRequest, "song", {}),
         (NavigationStopRequest, "navigation_id", {}),
         (ContactCallRequest, "name", {}),
+        (ContactSmsRequest, "text", {"name": "em iu"}),
     ],
 )
 def test_client_supplied_field_rejects_whitespace_only_value(

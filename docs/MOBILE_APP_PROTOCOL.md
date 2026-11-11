@@ -142,7 +142,7 @@ lưu lúc đăng ký.
 | `request_id` | UUID của thao tác; khoá chống chạy trùng, chép nguyên vào report |
 | `user_id` | chép nguyên vào report |
 | `device_id` | id **kính** (không phải id điện thoại), chép nguyên vào report |
-| `action` | một trong 13 action (mục 4) |
+| `action` | một trong 14 action (mục 4) |
 | `params_json` | tham số dạng chuỗi JSON, thiếu hoặc rỗng thì app coi là `{}` |
 | `issued_at` | lúc server tạo lệnh (ISO-8601 UTC) |
 | `deadline_at` | hiện luôn bằng `issued_at` + 1 giây, chỉ mang tính tham khảo, app bỏ qua |

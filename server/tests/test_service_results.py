@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.schemas.service_results import (
     ContactCallResult,
+    ContactSmsResult,
     EmergencyCallResult,
     MusicPlayResult,
     MusicStopResult,
@@ -72,6 +73,7 @@ RESULT_EXAMPLES: tuple[tuple[type[BaseModel], dict[str, Any]], ...] = (
             "sms_sent": True,
         },
     ),
+    (ContactSmsResult, {"contact_name": "em iu", "sms_sent": True}),
     (
         ContactCallResult,
         {

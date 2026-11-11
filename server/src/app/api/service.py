@@ -21,6 +21,7 @@ from app.schemas.service_requests import (  # noqa: TC001
     CallRejectRequest,
     CapabilitiesGetRequest,
     ContactCallRequest,
+    ContactSmsRequest,
     EmergencyCallRequest,
     LocationGetRequest,
     MusicPlayRequest,
@@ -143,6 +144,12 @@ async def post_emergency_call(body: EmergencyCallRequest, accept: Accept) -> Acc
 async def post_contact_call(body: ContactCallRequest, accept: Accept) -> AcceptedResponse:
     """Call a contact by name."""
     return await accept(Action.CONTACT_CALL, body)
+
+
+@router.post("/contact/sms", **_ACCEPTED)
+async def post_contact_sms(body: ContactSmsRequest, accept: Accept) -> AcceptedResponse:
+    """Text a contact by name over the SIM."""
+    return await accept(Action.CONTACT_SMS, body)
 
 
 @router.post("/location/get", **_ACCEPTED)

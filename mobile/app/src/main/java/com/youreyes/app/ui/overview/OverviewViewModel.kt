@@ -27,16 +27,20 @@ import kotlinx.coroutines.tasks.await
 /** What the daily-use buttons on Home say underneath their titles. */
 data class QuickState(
     val glasses: GlassesBrief = GlassesBrief(GlassesBrief.State.CHECKING),
-    /** People whose glasses this account can call or message. */
+    /** Everyone this account can message; only some of them ([VoiceContact.canCall]) can also be called. */
     val contacts: List<VoiceContact> = emptyList(),
     val loggedIn: Boolean = false,
 ) {
+    private val callable: List<VoiceContact> get() = contacts.filter { it.canCall }
+
     val callDetail: String
         get() = when {
             !loggedIn -> "Cần đăng nhập"
             contacts.isEmpty() -> "Chưa có người thân"
-            contacts.size == 1 -> contacts.first().name
-            else -> "${contacts.size} người thân"
+            // The server only has relative-to-glasses calls: a glasses owner's phone cannot ring a relative yet.
+            callable.isEmpty() -> "Chưa gọi được người thân từ điện thoại chủ kính"
+            callable.size == 1 -> callable.first().name
+            else -> "${callable.size} người thân"
         }
 
     val messageDetail: String

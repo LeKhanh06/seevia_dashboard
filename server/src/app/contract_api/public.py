@@ -12,6 +12,7 @@ from app.schemas.service_requests import (
     CallRejectRequest,
     CapabilitiesGetRequest,
     ContactCallRequest,
+    ContactSmsRequest,
     EmergencyCallRequest,
     LocationGetRequest,
     MusicPlayRequest,
@@ -148,6 +149,17 @@ async def emergency_call(_request: EmergencyCallRequest) -> Never:
 )
 async def contact_call(_request: ContactCallRequest) -> Never:
     """Describe the contact call endpoint contract."""
+    _contract_only()
+
+
+@router.post(
+    "/api/v1/service/contact/sms",
+    response_model=AcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=PUBLIC_VALIDATION_RESPONSE,
+)
+async def contact_sms(_request: ContactSmsRequest) -> Never:
+    """Describe the contact SMS endpoint contract."""
     _contract_only()
 
 

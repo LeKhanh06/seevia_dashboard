@@ -29,6 +29,7 @@ EXPECTED_ROUTES = (
         21 * 60,
     ),
     ("/api/v1/service/contact/call", Operation.CONTACT_CALL, Action.CONTACT_CALL, 60),
+    ("/api/v1/service/contact/sms", Operation.CONTACT_SMS, Action.CONTACT_SMS, 60),
     ("/api/v1/service/location/get", Operation.LOCATION_GET, Action.LOCATION_GET, 30),
     (
         "/api/v1/service/capabilities",
@@ -58,8 +59,8 @@ def test_public_route_maps_to_fixed_action_and_timeout(
 
 def test_mapping_covers_each_operation_and_action_once() -> None:
     """Keep every action and operation enum value covered one-to-one."""
-    assert len(ACTION_ROUTES) == 13
-    assert len(ACTION_ROUTE_MAP) == 13
+    assert len(ACTION_ROUTES) == 14
+    assert len(ACTION_ROUTE_MAP) == 14
     assert {route.operation for route in ACTION_ROUTES} == set(Operation)
     assert {route.action for route in ACTION_ROUTES} == set(Action)
 

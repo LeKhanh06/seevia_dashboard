@@ -296,6 +296,22 @@ class PhoneSim:
                 "contact_name": match_name,  # tên LƯU trong danh bạ, không phải tên người dùng nói
                 "phone_number": _mask(number),
             }
+        if action == "contact_sms":  # CallActions.kt ContactSmsHandler
+            name = str(p.get("name", "")).strip()
+            text = str(p.get("text", "")).strip()
+            if not name:
+                return self._err("CONTACT_NOT_FOUND", "Contact name must not be empty")
+            if not text:
+                return self._err("SMS_SEND_FAILED", "SMS text must not be empty")
+            matches = self._find_contacts(name)
+            if not matches:
+                return self._err("CONTACT_NOT_FOUND", f"No contact matched '{name}'")
+            if len(matches) > 1:
+                cands = [{"name": nm, "phone_number": _mask(num)} for nm, num in matches]
+                return self._err(
+                    "MULTIPLE_CONTACTS_FOUND", "Multiple contacts matched", candidates=cands
+                )
+            return True, {"contact_name": matches[0][0], "sms_sent": True}
         if action == "ride_quote":  # RideActions.kt RideQuoteHandler
             place = self._resolve_place(p.get("destination"))
             if place is None or place["lat"] is None:

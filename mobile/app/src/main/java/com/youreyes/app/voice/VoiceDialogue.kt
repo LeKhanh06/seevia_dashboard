@@ -156,7 +156,7 @@ class VoiceDialogue(private val env: VoiceEnv) {
             ContactMatch.NotFound -> {
                 val named = VoiceParser.matchContacts(command.spoken, contacts)
                 if (named is ContactMatch.Found) {
-                    VoiceReply("${named.contact.name} chưa nhận được cuộc gọi từ app. ${namesHint(callable, "gọi")}")
+                    VoiceReply("Gọi ${named.contact.name} từ điện thoại chủ kính chưa làm được. Bạn có thể nhắn tin cho ${named.contact.name}.")
                 } else {
                     VoiceReply("Mình không thấy “${command.spoken}” trong danh sách người thân. ${namesHint(callable, "gọi")}")
                 }

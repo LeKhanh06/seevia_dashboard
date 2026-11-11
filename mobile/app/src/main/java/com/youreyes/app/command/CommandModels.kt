@@ -3,7 +3,7 @@ package com.youreyes.app.command
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** The 13 actions the server can push; must match `server/src/app/actions.py`. */
+/** The 14 actions the server can push; must match `server/src/app/actions.py`. */
 enum class ActionType(val value: String) {
     RIDE_QUOTE("ride_quote"),
     RIDE_CONFIRM("ride_confirm"),
@@ -17,7 +17,8 @@ enum class ActionType(val value: String) {
     LOCATION_GET("location_get"),
     CAPABILITIES_GET("capabilities_get"),
     CALL_ANSWER("call_answer"),
-    CALL_REJECT("call_reject");
+    CALL_REJECT("call_reject"),
+    CONTACT_SMS("contact_sms");
 
     companion object {
         fun fromValue(value: String): ActionType? = entries.find { it.value == value }

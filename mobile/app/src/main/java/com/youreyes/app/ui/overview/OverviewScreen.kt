@@ -75,7 +75,7 @@ fun OverviewRoute(
     onNavigateToCare: () -> Unit = {},
     onNavigateToGlasses: () -> Unit = {},
     onNavigateToReadiness: () -> Unit = {},
-    onOpenChat: (peerUserId: String, name: String) -> Unit = { _, _ -> },
+    onOpenChat: (peerUserId: String, name: String, toRelative: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val viewModel: OverviewViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
@@ -104,7 +104,7 @@ fun OverviewRoute(
         onNavigateToGlasses = onNavigateToGlasses,
         onMessages = {
             val only = quick.contacts.singleOrNull()
-            if (only != null) onOpenChat(only.id, only.name) else onNavigateToCare()
+            if (only != null) onOpenChat(only.id, only.name, !only.canCall) else onNavigateToCare()
         },
         modifier = modifier,
     )

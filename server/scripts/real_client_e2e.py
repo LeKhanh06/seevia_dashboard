@@ -86,6 +86,7 @@ def case_bodies(cfg: Config, ctx: dict[str, str]) -> dict[str, tuple[str, dict[s
             {"navigation_id": ctx.get("navigation_id", "nav-manual-test")},
         ),
         "contact_call": ("contact/call", {"name": cfg.contact_name}),
+        "contact_sms": ("contact/sms", {"name": cfg.contact_name, "text": "SeeVia e2e"}),
         "call_answer": ("call/answer", {}),
         "call_reject": ("call/reject", {}),
         "emergency_call": ("emergency/call", {}),

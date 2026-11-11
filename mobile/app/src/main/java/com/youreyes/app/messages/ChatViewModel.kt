@@ -42,6 +42,8 @@ class ChatViewModel(
     application: Application,
     private val peerUserId: String,
     val peerName: String,
+    /** The peer is a relative I (the glasses owner) invited, not a glasses owner I am a relative of. */
+    private val toRelative: Boolean = false,
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(ChatScreenState())
@@ -100,11 +102,11 @@ class ChatViewModel(
     private fun deliver(send: PendingSend) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                SessionApi.run(getApplication()) { it.sendMessage(peerUserId, send.text, send.requestId) }
+                SessionApi.run(getApplication()) { it.sendMessage(peerUserId, send.text, send.requestId, toRelative) }
             }
             if (result is ApiResult.Ok) {
                 pending = pending.filterNot { it.requestId == send.requestId }
-                incoming = incoming + ChatMessage(result.data, "to_glasses", true, send.text, send.createdAt, null)
+                incoming = incoming + ChatMessage(result.data, if (toRelative) "to_relative" else "to_glasses", true, send.text, send.createdAt, null)
                 rebuild(error = "")
             } else {
                 pending = pending.map { if (it.requestId == send.requestId) it.failed() else it }

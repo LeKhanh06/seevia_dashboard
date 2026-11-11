@@ -73,7 +73,7 @@ fun CareRoute(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     onNavigateToAuth: () -> Unit = {},
-    onOpenChat: (peerUserId: String, name: String) -> Unit = { _, _ -> },
+    onOpenChat: (peerUserId: String, name: String, toRelative: Boolean) -> Unit = { _, _, _ -> },
 ) {
     val viewModel: CareViewModel = viewModel()
     val state by viewModel.state.collectAsState()
@@ -99,7 +99,14 @@ fun CareRoute(
             pendingCall = link
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         },
-        onMessage = { link -> onOpenChat(link.ownerUserId, link.peerDisplayName) },
+        onMessage = { link ->
+            // role is mine in the link: "owner" = I am the glasses owner and texting my relative.
+            if (link.role == "owner") {
+                onOpenChat(link.relativeUserId, link.displayName.ifBlank { link.peerDisplayName }, true)
+            } else {
+                onOpenChat(link.ownerUserId, link.peerDisplayName, false)
+            }
+        },
         onForm = viewModel::onForm,
         onInvite = viewModel::invite,
         modifier = modifier,
@@ -194,7 +201,9 @@ fun CareScreen(
 
         if (state.care.myRelatives.isNotEmpty()) {
             SectionLabel(text = "Người thân của bạn")
-            state.care.myRelatives.forEach { link -> RelativeCard(link, state.busyLinkId == null) { confirmRevoke = link } }
+            state.care.myRelatives.forEach { link ->
+                RelativeCard(link, state.busyLinkId == null, onMessage = { onMessage(link) }) { confirmRevoke = link }
+            }
         }
 
         if (state.care.isEmpty && !state.isLoading) {
@@ -247,7 +256,7 @@ fun CareScreen(
 }
 
 @Composable
-private fun RelativeCard(link: CareLink, enabled: Boolean, onRevoke: () -> Unit) {
+private fun RelativeCard(link: CareLink, enabled: Boolean, onMessage: () -> Unit, onRevoke: () -> Unit) {
     CareCard {
         PersonHeader(name = link.displayName.ifBlank { link.peerDisplayName }, phone = link.peerPhoneMasked)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,6 +270,20 @@ private fun RelativeCard(link: CareLink, enabled: Boolean, onRevoke: () -> Unit)
         if (link.aliases.isNotEmpty()) {
             Text(
                 text = "Kính gọi là: " + link.aliases.joinToString(", "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppTheme.colors.inkSecondary,
+            )
+        }
+        if (link.status == "active") {
+            ActionButton(
+                text = "Nhắn tin",
+                description = "Nhắn tin cho ${link.displayName.ifBlank { link.peerDisplayName }}",
+                icon = Icons.AutoMirrored.Filled.Message,
+                onClick = onMessage,
+                primary = true,
+            )
+            Text(
+                text = "Gọi người thân từ điện thoại chủ kính chưa làm được. Bạn nhắn tin được.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = AppTheme.colors.inkSecondary,
             )

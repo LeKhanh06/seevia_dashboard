@@ -291,6 +291,38 @@ paths:
                   details: {}
       security:
       - PublicBearerAuth: []
+  /api/v1/service/contact/sms:
+    post:
+      summary: Contact Sms
+      description: Describe the contact SMS endpoint contract.
+      operationId: contact_sms_api_v1_service_contact_sms_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactSmsRequest'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse_AcceptedData_'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                error:
+                  code: INVALID_REQUEST
+                  message: Invalid request
+                  details: {}
+      security:
+      - PublicBearerAuth: []
   /api/v1/service/location/get:
     post:
       summary: Location Get
@@ -483,6 +515,7 @@ components:
       - $ref: '#/components/schemas/NavigationStopResult'
       - $ref: '#/components/schemas/EmergencyCallResult'
       - $ref: '#/components/schemas/ContactCallResult'
+      - $ref: '#/components/schemas/ContactSmsResult'
       - $ref: '#/components/schemas/LocationGetResult'
     CallAnswerRequest:
       properties:
@@ -577,6 +610,47 @@ components:
       - phone_number
       title: ContactCallResult
       description: Final result after calling one uniquely matched contact.
+    ContactSmsRequest:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+        name:
+          type: string
+          title: Name
+        text:
+          type: string
+          maxLength: 320
+          title: Text
+      additionalProperties: false
+      type: object
+      required:
+      - device_id
+      - request_id
+      - name
+      - text
+      title: ContactSmsRequest
+      description: Send one SMS to exactly one contact selected by name.
+    ContactSmsResult:
+      properties:
+        contact_name:
+          type: string
+          title: Contact Name
+        sms_sent:
+          type: boolean
+          const: true
+          title: Sms Sent
+      additionalProperties: false
+      type: object
+      required:
+      - contact_name
+      - sms_sent
+      title: ContactSmsResult
+      description: Final result after texting one uniquely matched contact.
     CurrentLocation:
       properties:
         lat:
@@ -1017,6 +1091,7 @@ components:
       - navigation_stop
       - emergency_call
       - contact_call
+      - contact_sms
       - location_get
       - capabilities_get
       - call_answer

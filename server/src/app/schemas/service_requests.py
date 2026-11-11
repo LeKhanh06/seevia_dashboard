@@ -133,6 +133,13 @@ class ContactCallRequest(ServiceRequest):
     contact_id: str | None = None
 
 
+class ContactSmsRequest(ServiceRequest):
+    """Send one SMS to exactly one contact selected by name."""
+
+    name: TrimmedNonEmptyStr
+    text: Annotated[TrimmedNonEmptyStr, Field(max_length=320)]
+
+
 class LocationGetRequest(ServiceRequest):
     """Request the device's current location."""
 

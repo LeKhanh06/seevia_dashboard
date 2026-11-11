@@ -29,6 +29,7 @@ class Operation(StrEnum):
     NAVIGATION_STOP = "navigation_stop"
     EMERGENCY_CALL = "emergency_call"
     CONTACT_CALL = "contact_call"
+    CONTACT_SMS = "contact_sms"
     LOCATION_GET = "location_get"
     CAPABILITIES_GET = "capabilities_get"
     CALL_ANSWER = "call_answer"
@@ -47,6 +48,7 @@ class Action(StrEnum):
     NAVIGATION_STOP = "navigation_stop"
     EMERGENCY_CALL = "emergency_call"
     CONTACT_CALL = "contact_call"
+    CONTACT_SMS = "contact_sms"
     LOCATION_GET = "location_get"
     CAPABILITIES_GET = "capabilities_get"
     CALL_ANSWER = "call_answer"
@@ -84,6 +86,7 @@ ACTION_ROUTES: Final = (
     _route("navigation/stop", Action.NAVIGATION_STOP, 45),
     _route("emergency/call", Action.EMERGENCY_CALL, 21 * 60),
     _route("contact/call", Action.CONTACT_CALL, 60),
+    _route("contact/sms", Action.CONTACT_SMS, 60),
     _route("location/get", Action.LOCATION_GET, 30),
     _route("capabilities", Action.CAPABILITIES_GET, 30),
     _route("call/answer", Action.CALL_ANSWER, 20),

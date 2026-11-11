@@ -49,6 +49,7 @@ private val actionLabels: Map<String, String> = mapOf(
     ActionType.CAPABILITIES_GET.value to "Kiểm tra quyền",
     ActionType.CALL_ANSWER.value to "Nghe cuộc gọi",
     ActionType.CALL_REJECT.value to "Từ chối cuộc gọi",
+    ActionType.CONTACT_SMS.value to "Nhắn tin liên hệ",
 )
 
 /**

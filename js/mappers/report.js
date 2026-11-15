@@ -7,7 +7,7 @@ import { arr, obj, metric } from "./util.js";
 const PAGES = {
   "see-read": { features: ["ocr", "ocr_live", "money", "ask"], cards: ["share_of_total", "completion", "usage_time"] },
   find: { features: ["find", "space", "hazard"], cards: ["share_of_total", "completion", "usage_time"] },
-  connect: { features: ["chat", "family", "internet_call", "music"], cards: ["share_of_total", "completion", "usage_time"], connectLink: true },
+  connect: { features: ["chat", "family", "internet_call", "music"], cards: ["share_of_total", "completion", "usage_time"] },
   go: { features: ["directions", "ride", "alert_mode"], cards: ["share_of_total", "alert_time", "alerts_per_hour"] },
 };
 const DETAILS = {

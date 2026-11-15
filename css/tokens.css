@@ -24,6 +24,10 @@
   --line-card: #E6E9F6;
   --card-raised: #FFFFFF;         /* thẻ nổi, menu thả */
   --th-bg: #F6F8FF;               /* tiêu đề cột bảng */
+  --th-ink: #6E6A91;
+  --chip-accent-ink: #2A55EC;
+  --card-accent: transparent;
+  --section-bar: #305FFA;
   --row-hover: #EEF1FC;
   --input-bg: #FFFFFF;
   --ink-dim: #6E6A91;
@@ -79,7 +83,7 @@
   color-scheme: dark;
 
   --bg: #1D1B4A;
-  --bg-gradient: linear-gradient(165deg, #1D1B4A 0%, #1D1B4A 60%, #232058 100%);
+  --bg-gradient: radial-gradient(900px 420px at 88% -80px, rgba(91, 124, 255, 0.30), transparent 72%), linear-gradient(165deg, #1D1B4A 0%, #1D1B4A 60%, #232058 100%);
   --card: #2A2866;
   --card-raised: #38357F;
   --sidebar-bg: #1A1846;
@@ -87,6 +91,10 @@
   --line: #48449A;                /* đường kẻ bảng, viền ô nhập */
   --line-card: #3F3B90;           /* viền thẻ */
   --th-bg: #2F2C72;
+  --th-ink: #8BA6FF;
+  --chip-accent-ink: #C9D6FF;              /* chữ tiêu đề cột: màu nhấn */
+  --card-accent: #5B7CFF;         /* viền trên thẻ KPI / chi tiết */
+  --section-bar: #8BA6FF;         /* thanh nhấn trước tiêu đề mục */
   --row-hover: #343080;
   --input-bg: #232155;
   --skeleton-a: #2A2866; --skeleton-b: #38357F;

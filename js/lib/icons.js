@@ -23,6 +23,7 @@ const SHAPES = {
   logout: [P("M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M9 12h10")],
   download: [P("M12 4v11m0 0 4-4m-4 4-4-4M5 20h14")],
   "chevron-down": [P("m6 9 6 6 6-6")],
+  check: [P("m5 12.5 4.5 4.5L19 7.5")],
   "chevron-up": [P("m6 15 6-6 6 6")],
   "chevron-left": [P("m15 6-6 6 6 6")],
   "chevron-right": [P("m9 6 6 6-6 6")],

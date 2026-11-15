@@ -3,6 +3,7 @@ import { h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
 import { vi } from "../i18n/vi.js";
 import { rangeText, rangeFor } from "../core/period.js";
+import { dropdown } from "./components.js";
 import { NAV_ORDER, ROUTES } from "../registry.js";
 import { currentTheme, onThemeChange } from "../core/theme.js";
 import { CONFIG } from "../config.js";
@@ -105,13 +106,12 @@ export function setActiveNav(root, id) {
 
 function periodSelect(ctx, onPeriod) {
   const p = ctx.period;
-  const optionKeys = ["today", "week", "month"];
-  const options = optionKeys.map(k => h("option", { value: k, selected: p.period === k }, `${vi.periods[k]} ${rangeText(rangeFor(k))}`));
-  if (p.period === "custom") options.push(h("option", { value: "custom", selected: true }, `${vi.periods.custom} ${rangeText(p)}`));
-  return h("div", { class: "period-select" }, icon("calendar", { size: 18 }),
-    h("span", { class: "period-text" }, `${vi.periods[p.period]} `, h("b", null, rangeText(p))),
-    icon("chevron-down", { size: 16, cls: "select-caret" }),
-    h("select", { id: "period-select", class: "period-native", "aria-label": vi.header.periodLabel, onChange: e => onPeriod(e.target.value) }, options));
+  const options = ["today", "week", "month"].map(k => ({ value: k, label: vi.periods[k], hint: rangeText(rangeFor(k)) }));
+  if (p.period === "custom") options.push({ value: "custom", label: vi.periods.custom, hint: rangeText(p) });
+  return dropdown({
+    id: "period-select", ariaLabel: vi.header.periodLabel, value: p.period, options, onChange: onPeriod, align: "end", cls: "period-select",
+    trigger: sel => h("span", { class: "dd-value" }, icon("calendar", { size: 18 }), h("span", null, `${sel.label} `, h("b", null, sel.hint))),
+  });
 }
 
 export function pageHead(def, ctx, { onPeriod, onExport }) {

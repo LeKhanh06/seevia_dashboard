@@ -34,18 +34,18 @@ export function viewOverview(vm) {
   });
   draw();
 
-  const summary = section({ title: o.usageTitle, subtitle: vm.summary.subtitle, id: "ov-usage", cls: "overview-summary" }, tabs, host, seeAll("#quality", o.seeQuality));
+  const summary = section({ title: o.usageTitle, id: "ov-usage", cls: "overview-summary" }, tabs, host, seeAll("#quality", o.seeQuality));
 
-  const groups = section({ title: o.groupsTitle, subtitle: o.groupsSub, id: "ov-groups", cls: "fill" },
+  const groups = section({ title: o.groupsTitle, id: "ov-groups", cls: "fill" },
     donut({ items: vm.groups.items, total: vm.groups.total, centerUnit: o.total, ariaLabel: o.groupsTitle }),
     seeAll("#see-read", o.seeGroup));
 
   const topRows = vm.top.rows.map(r => [r.label, { text: r.usesText, bar: r.bar }, r.completion]);
-  const top = section({ title: o.topTitle, subtitle: o.topSub, id: "ov-top", cls: "fill" },
+  const top = section({ title: o.topTitle, id: "ov-top", cls: "fill" },
     dataTable({ caption: o.topTitle, columns: [{ key: "f", label: o.colFeature }, { key: "u", label: o.colUses, align: "end" }, { key: "c", label: o.colCompletion, align: "end" }], rows: topRows }),
     seeAll("#see-read", o.seeAllFeatures));
 
-  const attention = section({ title: o.attentionTitle, subtitle: o.attentionSub, id: "ov-attn" },
+  const attention = section({ title: o.attentionTitle, id: "ov-attn" },
     vm.attention.length
       ? h("ul", { class: "attention-list" }, vm.attention.map(a => h("li", null, icon("alert", { size: 18, cls: "tone-warn" }), h("span", null, a.text), a.href ? h("a", { href: a.href }, vi.common.view) : null)))
       : emptyState(o.attentionEmpty),
@@ -104,8 +104,8 @@ function outcomeTable(group, caption) {
 export function viewQuality(vm, ctx) {
   const q = vi.quality, period = ctx.periodLabel;
   return h("div", { class: "stack-y" },
-    section({ title: q.completionTitle, subtitle: fill(q.completionSub, period), id: "q-comp" }, metricGrid(vm.completion, "cols-4")),
-    section({ title: q.speedTitle, subtitle: q.speedSub, id: "q-speed" }, metricGrid(vm.speed, "cols-3")),
+    section({ title: q.completionTitle, id: "q-comp" }, metricGrid(vm.completion, "cols-4")),
+    section({ title: q.speedTitle, id: "q-speed" }, metricGrid(vm.speed, "cols-3")),
     h("div", { class: "grid-2" },
       section({ title: vm.outcomes.title, tip: vi.sectionTips.outcomes, id: "q-out", cls: "fill" }, vm.outcomes.rows.length ? outcomeTable(vm.outcomes, vm.outcomes.title) : emptyState()),
       section({ title: vm.attempts.title, tip: vi.sectionTips.attempts, id: "q-att", cls: "fill" }, vm.attempts.rows.length ? outcomeTable(vm.attempts, vm.attempts.title) : emptyState())));

@@ -113,9 +113,50 @@ export function searchBox({ id, label, placeholder, value, onSearch }) {
   return h("label", { class: "search-box", for: id }, icon("search", { size: 18 }), input);
 }
 
-// Hộp chọn dạng "Nhãn: Giá trị" — chỉ một mũi tên xổ xuống.
+// Danh sách chọn tự dựng (thay <select> gốc để đồng bộ giao diện): aria-haspopup="listbox",
+// bàn phím ↑ ↓ Home End Enter Space Esc Tab, đóng khi bấm ra ngoài.
+//   options: [{ value, label, hint? }]; trigger(selected) trả về nội dung nút; align: "start" | "end".
+export function dropdown({ id, ariaLabel, value, options, onChange, trigger, cls = "", align = "start" }) {
+  const selected = options.find(o => o.value === value) || options[0];
+  const button = h("button", { id, class: "dd-trigger", type: "button", "aria-haspopup": "listbox", "aria-expanded": "false", "aria-label": ariaLabel, "aria-controls": `${id}-list` });
+  button.append(trigger(selected), icon("chevron-down", { size: 16, cls: "dd-caret" }));
+  const items = options.map(o => h("li", {
+    class: "dd-option", role: "option", tabindex: "-1", "aria-selected": String(o.value === selected.value), dataset: { value: o.value },
+    onClick: () => choose(o),
+  }, h("span", { class: "dd-label" }, o.label), o.hint ? h("span", { class: "dd-hint" }, o.hint) : null, o.value === selected.value ? icon("check", { size: 16, cls: "dd-check" }) : null));
+  const list = h("ul", { class: ["dd-menu", align === "end" ? "is-end" : ""], id: `${id}-list`, role: "listbox", "aria-label": ariaLabel, hidden: true }, ...items);
+  const wrap = h("div", { class: ["dd", cls] }, button, list);
+
+  const isOpen = () => !list.hidden;
+  function open() {
+    list.hidden = false; void list.offsetWidth; list.classList.add("is-open"); button.setAttribute("aria-expanded", "true");
+    (items.find(i => i.getAttribute("aria-selected") === "true") || items[0]).focus();
+  }
+  function close(restore = true) {
+    if (!isOpen()) return;
+    list.classList.remove("is-open"); button.setAttribute("aria-expanded", "false");
+    setTimeout(() => { if (!list.classList.contains("is-open")) list.hidden = true; }, 150);
+    if (restore) button.focus();
+  }
+  function choose(o) { close(); if (o.value !== selected.value) onChange(o.value); }
+  button.addEventListener("click", () => (isOpen() ? close() : open()));
+  button.addEventListener("keydown", e => { if (["ArrowDown", "ArrowUp"].includes(e.key)) { e.preventDefault(); if (!isOpen()) open(); } });
+  list.addEventListener("keydown", e => {
+    const i = items.indexOf(document.activeElement);
+    const move = n => { e.preventDefault(); items[(n + items.length) % items.length].focus(); };
+    if (e.key === "ArrowDown") move(i + 1); else if (e.key === "ArrowUp") move(i - 1);
+    else if (e.key === "Home") move(0); else if (e.key === "End") move(items.length - 1);
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (i >= 0) choose(options[i]); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); } else if (e.key === "Tab") close(false);
+  });
+  document.addEventListener("click", e => { if (isOpen() && !wrap.contains(e.target)) close(false); });
+  return wrap;
+}
+
+// Hộp chọn dạng "Nhãn: Giá trị".
 export function selectChip({ id, label, value, options, onChange }) {
-  const select = h("select", { id, class: "select-native", onChange: e => onChange(e.target.value) },
-    options.map(o => h("option", { value: o.value, selected: o.value === value }, o.label)));
-  return h("div", { class: "select-chip" }, h("label", { for: id }, `${label}:`), select, icon("chevron-down", { size: 16, cls: "select-caret" }));
+  return dropdown({
+    id, ariaLabel: label, value, options, onChange, cls: "select-chip",
+    trigger: sel => h("span", { class: "dd-value" }, h("span", { class: "dd-prefix" }, `${label}:`), " ", h("strong", null, sel.label)),
+  });
 }

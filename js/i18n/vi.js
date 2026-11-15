@@ -16,7 +16,7 @@ export const vi = {
   },
 
   header: {
-    exportCsv: "Xuất CSV", exportBusy: "Đang xuất…", periodLabel: "Kỳ báo cáo",
+    exportCsv: "Xuất CSV", exportXlsx: "Xuất Excel", exportBusy: "Đang xuất…", periodLabel: "Kỳ báo cáo",
     themeToDark: "Chế độ tối", themeToLight: "Chế độ sáng",
     account: "Tài khoản Admin", back: "Quay lại",
   },
@@ -223,7 +223,7 @@ export const vi = {
 
   time: {
     peakFoot: "Và {range} giờ", hoursUnit: "giờ", usesFoot: "{value} lượt", weekendFoot: "T7 + CN", usesWord: "{value} lượt",
-    heatTitle: "Lượt theo khung giờ × thứ",
+    heatTitle: "Lượt theo khung giờ × thứ", heatScope: { week: "Cộng dồn các ngày trong tuần này theo thứ và giờ bắt đầu", month: "Cộng dồn các ngày trong tháng này theo thứ và giờ bắt đầu", custom: "Cộng dồn các ngày trong kỳ theo thứ và giờ bắt đầu" },
     heatCell: "{weekday}, {hour}h: {value} lượt", dayTitle: "Lượt theo ngày", dayTable: { day: "Ngày", uses: "Lượt" }, hourColumn: "Giờ",
     dayCell: "{label}: {value} lượt",
   },

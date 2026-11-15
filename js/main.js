@@ -12,6 +12,7 @@ import { resolvePeriod, rememberPeriod, periodName, compareName, periodFileTag, 
 import { initTheme, toggleTheme } from "./core/theme.js";
 import { initTooltips } from "./core/tooltip.js";
 import { downloadCsv, downloadBlob } from "./core/csv.js";
+import { buildXlsx } from "./core/xlsx.js";
 import { stagger, countUp } from "./core/motion.js";
 import { ROUTES, apiQuery } from "./registry.js";
 import { buildTopbar, buildSidebar, setActiveNav, pageHead } from "./views/shell.js";
@@ -194,7 +195,9 @@ async function exportCsv() {
   const button = document.querySelector("#export-csv");
   button.disabled = true;
   const tag = def.period ? periodFileTag(ctx.period) : todayISO();
-  const filename = `seevia-${def.id}-${tag}.csv`;
+  const xlsx = CONFIG.EXPORT_FORMAT === "xlsx" && !CONFIG.CSV_SERVER_EXPORT;
+  const filename = `seevia-${def.id}-${tag}.${xlsx ? "xlsx" : "csv"}`;
+  const save = (headers, rows) => (xlsx ? downloadBlob(filename, buildXlsx(headers, rows, vi.routes[def.id]?.title)) : downloadCsv(filename, headers, rows));
   try {
     if (CONFIG.CSV_SERVER_EXPORT) {
       downloadBlob(filename, await api.getCsv(def.endpoint(ctx), apiQuery(def, ctx, { page: null }), { group: "export" }));
@@ -211,9 +214,9 @@ async function exportCsv() {
         if (!vm.csv.rows.length) break;
         page += 1;
       }
-      downloadCsv(filename, first.headers, rows);
+      save(first.headers, rows);
     } else {
-      downloadCsv(filename, current.vm.csv.headers, current.vm.csv.rows);
+      save(current.vm.csv.headers, current.vm.csv.rows);
     }
   } catch (error) {
     if (!(error instanceof ApiError && error.kind === "aborted")) alert(errorMessage(error));

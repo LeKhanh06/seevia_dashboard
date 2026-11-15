@@ -22,6 +22,10 @@ export const CONFIG = Object.freeze({
   // false: dashboard tự tạo CSV từ dữ liệu đang hiển thị (UTF-8 có BOM).
   CSV_SERVER_EXPORT: false,
 
+  // Định dạng file khi dashboard tự tạo từ dữ liệu đang hiển thị: "xlsx" (mở đúng tiếng Việt ở mọi phần mềm bảng tính,
+  // khuyến nghị) hoặc "csv" (UTF-8 có BOM; một số phần mềm như WPS không nhận BOM nên có thể lỗi font).
+  EXPORT_FORMAT: "xlsx",
+
   // Số dòng mỗi trang cho các danh sách phân trang phía server.
   PAGE_SIZE: 10,
 

@@ -63,7 +63,7 @@ export function makeReportMapper(route) {
       isEmpty: !arr(raw?.features).length,
       csv: {
         headers: ["Chức năng", "Lượt sử dụng", "Đơn vị lượt", "Hoàn thành (%)", "Chờ nghe tiếng đầu (ms)", "Lỗi"],
-        rows: cfg.features.map(key => { const f = byKey[key] || {}; return [vi.features[key] || key, f.uses ?? "", f.uses_unit ?? "", f.completion_rate ?? "", f.first_audio_p50_ms ?? "", f.errors ?? ""]; }),
+        rows: cfg.features.map(key => { const f = byKey[key] || {}; return [vi.features[key] || key, f.uses ?? "", (vi.usesUnit[f.uses_unit] ?? "").trim() || "lượt", f.completion_rate ?? "", f.first_audio_p50_ms ?? "", f.errors ?? ""]; }),
       },
     };
   };

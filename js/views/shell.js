@@ -123,7 +123,7 @@ export function pageHead(def, ctx, { onPeriod, onExport }) {
   const title = def.detail ? ctx.params[0] || route.title : route.title;
   const actions = [];
   if (def.period) actions.push(periodSelect(ctx, onPeriod));
-  if (def.export) actions.push(h("button", { class: "button button-outline export-button", type: "button", id: "export-csv", onClick: onExport }, icon("download", { size: 18 }), h("span", null, vi.header.exportCsv)));
+  if (def.export) actions.push(h("button", { class: "button button-outline export-button", type: "button", id: "export-csv", onClick: onExport }, icon("download", { size: 18 }), h("span", null, CONFIG.EXPORT_FORMAT === "xlsx" && !CONFIG.CSV_SERVER_EXPORT ? vi.header.exportXlsx : vi.header.exportCsv)));
   return h("div", { class: "page-head" },
     h("div", { class: "page-title" }, breadcrumb,
       h("h1", null, def.dot ? h("i", { class: `title-dot cat-${def.dot}`, "aria-hidden": "true" }) : null, h("span", null, title), route.badge ? h("span", { class: `badge badge-core cat-${def.dot || 1}` }, route.badge) : null),

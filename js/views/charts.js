@@ -73,7 +73,7 @@ export function lineChart({ series, names, ariaLabel }) {
   const box = responsive((W, H) => {
     const L = 48, R = 28, T = 14, B = 30, plotW = W - L - R, plotH = H - T - B;
     const values = pts.flatMap(p => [p.current, p.previous]).filter(v => v !== null);
-    const { max, step } = niceScale(Math.max(...values, 0));
+    const { max, step } = niceScale(Math.max(...values, 0) * 1.1);
     const x = i => (pts.length === 1 ? L + plotW / 2 : L + (plotW * i) / (pts.length - 1));
     const y = v => T + plotH * (1 - v / max);
     const path = key => {
@@ -120,8 +120,10 @@ export function barChart({ bars, ariaLabel, valueHeader, dayHeader = vi.time.day
     // Trục giá trị có nhãn số nguyên; nhãn trên đầu cột chỉ hiện khi đủ chỗ.
     const L = 36, R = 8, T = 34, B = 30, plotW = W - L - R, base = H - B, plotH = base - T;
     const allInt = bars.every(b => Number.isInteger(b.value));
-    let { max, step } = niceScale(top);
-    if (allInt) { step = Math.max(1, Math.ceil(step)); max = Math.max(step, Math.ceil(top / step) * step); }
+    // Trần trục cao hơn cột lớn nhất ~20% để số trên đầu cột không sát mép (ví dụ 68 → trục tới 100, không phải 80).
+    const room = top * 1.2;
+    let { max, step } = niceScale(room);
+    if (allInt) { step = Math.max(1, Math.ceil(step)); max = Math.max(step, Math.ceil(room / step) * step); }
     const slot = plotW / bars.length, bw = Math.max(5, Math.min(44, slot * 0.58));
     const y = v => base - (v / max) * plotH;
     const grid = [], ticks = [];

@@ -1,7 +1,7 @@
 /* Các trang: Cộng đồng & Thiết bị, Thời điểm, Chất lượng & tốc độ, Gắn bó, An toàn. */
 import { vi, fill } from "../i18n/vi.js";
 import { fmtDate, fmtInt, fmtPct, fmtDec, fmtDuration, fmtMs, fmtMinutes, fmtFraction, ratio, toNum, DASH } from "../lib/format.js";
-import { compareName } from "../core/period.js";
+import { compareName, daysBetween } from "../core/period.js";
 import { arr, obj, metric, delta, bucketLabel, bucketTitle } from "./util.js";
 import { weekdayOf } from "../core/period.js";
 
@@ -62,8 +62,23 @@ export function mapTime(raw, ctx) {
     title: bucketTitle(d.date, "day", 1), value: toNum(d.uses) ?? 0, empty: toNum(d.uses) === null,
     tip: toNum(d.uses) === null ? "" : fill(t.dayCell, { label: bucketTitle(d.date, "day", 1), value: fmtInt(d.uses) }),
   }));
+  // Bố cục theo kỳ đo: ngày → theo giờ; tuần → theo ngày rồi giờ × thứ; tháng/dài hơn → theo tuần, theo ngày, giờ × thứ.
+  const span = daysBetween(ctx.period.from, ctx.period.to);
+  const mode = single ? "day" : span <= 7 ? "week" : "month";
+  const hourBars = arr(r.by_hour).map(x => {
+    const label = `${String(x.hour).padStart(2, "0")}h`, v = toNum(x.uses);
+    return { label, title: label, value: v ?? 0, empty: v === null, tip: v === null ? "" : fill(t.hourCell, { label, value: fmtInt(v) }) };
+  });
+  const dm = d => `${d.slice(8, 10)}/${d.slice(5, 7)}`, dmy = d => fmtDate(d);
+  const weekBars = arr(r.by_week).map(w => {
+    const v = toNum(w.uses), title = w.week_start === w.week_end ? dmy(w.week_start) : `${dmy(w.week_start)} – ${dmy(w.week_end)}`;
+    return { label: w.week_start === w.week_end ? dm(w.week_start) : `${dm(w.week_start)}–${dm(w.week_end)}`, title, value: v ?? 0, empty: v === null, tip: v === null ? "" : fill(t.weekCell, { label: title, value: fmtInt(v) }) };
+  });
+  const hasData = list => list.some(b => b.value > 0);
   return {
-    cards, heat, hasHeat: heat.rows.length > 0 && max > 0, bars, hasBars: bars.length > 1 && bars.some(b => b.value > 0),
+    mode, cards, heat, hasHeat: heat.rows.length > 0 && max > 0,
+    hourBars, hasHourBars: hasData(hourBars), weekBars, hasWeekBars: weekBars.length > 1 && hasData(weekBars),
+    bars, hasBars: bars.length > 1 && hasData(bars),
     csv: { headers: ["Ngày", "Thứ", "Lượt"], rows: days.map(d => [d.date, d.weekday ?? "", d.uses ?? ""]) },
   };
 }

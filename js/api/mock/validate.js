@@ -27,6 +27,8 @@ export function validateMock() {
     eq(t("các nhóm + SOS = tổng kỳ"), sum(ov.groups.map(g => g.uses)) + ov.sos_uses, total);
     eq(t("lượt theo ngày (Thời điểm) = tổng kỳ"), sum(time.by_day.map(d => d.uses)), total);
     eq(t("heatmap giờ × thứ = tổng kỳ"), sum(time.heatmap.cells.flat()), total);
+    eq(t("lượt theo giờ = tổng kỳ"), sum(time.by_hour.map(x => x.uses)), total);
+    if (time.by_week.length) eq(t("lượt theo tuần = tổng kỳ"), sum(time.by_week.map(x => x.uses)), total);
     eq(t("các trạng thái = tổng kỳ"), sum(ql.outcomes.map(o => o.uses)), total);
     eq(t("total_uses (Chất lượng) = tổng kỳ"), ql.total_uses, total);
     eq(t("SOS = thành công + thất bại + bị hủy"), sf.sos.count, sf.sos.success + sf.sos.failed + sf.sos.cancelled_within_5s);

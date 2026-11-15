@@ -137,7 +137,7 @@ Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và me
 ```
 
 ### `GET /admin/stats/time`
-`peak_hours` `{start_hour, end_hour, secondary_start_hour, secondary_end_hour}` (0–23, null được), `busiest_day` `{date, uses}` (ngày có nhiều lượt nhất trong kỳ; null khi kỳ là một ngày), `weekend_uses` int, `by_day[]` `{date, weekday, uses}`, `heatmap` `{weekdays:[1..7], hours:[0..23], cells: int[7][24]}` (hàng = thứ, cột = giờ bắt đầu).
+`peak_hours` `{start_hour, end_hour, secondary_start_hour, secondary_end_hour}` (0–23, null được), `busiest_day` `{date, uses}` (ngày có nhiều lượt nhất trong kỳ; null khi kỳ là một ngày), `weekend_uses` int, `by_day[]` `{date, weekday, uses}`, `by_hour[]` `{hour 0–23, uses}` (null với giờ chưa tới), `by_week[]` `{week_start, week_end, uses}` (tuần Thứ Hai → Chủ Nhật, chỉ khi kỳ dài hơn 7 ngày; tuần đầu/cuối kỳ có thể chưa đủ 7 ngày), `heatmap` `{weekdays:[1..7], hours:[0..23], cells: int[7][24]}` (hàng = thứ, cột = giờ bắt đầu).
 ```json
 { "peak_hours": { "start_hour": 7, "end_hour": 9, "secondary_start_hour": 17, "secondary_end_hour": 20 },
   "busiest_day": { "date": "2026-11-12", "uses": 60 }, "weekend_uses": 47,

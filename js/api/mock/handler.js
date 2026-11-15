@@ -191,7 +191,22 @@ function time(p) {
     weekend_uses: totals[5] + totals[6],
     by_day: s.hourly ? [{ date: p.from, weekday: weekdayOf(p.from), uses: sum(s.uses) }] : p.dates.map((date, i) => ({ date, weekday: weekdayOf(date), uses: s.uses[i] })),
     heatmap: { weekdays: [1, 2, 3, 4, 5, 6, 7], hours: Array.from({ length: 24 }, (_, h) => h), cells: heat },
+    by_hour: s.hourly ? s.uses.map((uses, hour) => ({ hour, uses })) : Array.from({ length: 24 }, (_, hour) => ({ hour, uses: sum(heat.map(r => r[hour])) })),
+    // Theo tuần (Thứ Hai → Chủ Nhật), chỉ khi kỳ dài hơn một tuần; tuần ở đầu/cuối kỳ có thể chưa đủ 7 ngày.
+    by_week: p.days > 7 ? weeksOf(p, s) : [],
   };
+}
+
+function weeksOf(p, s) {
+  const out = [];
+  p.dates.forEach((date, i) => {
+    const start = addDays(date, 1 - weekdayOf(date));
+    let w = out.find(x => x.key === start);
+    if (!w) { w = { key: start, week_start: date, week_end: date, uses: null }; out.push(w); }
+    w.week_end = date;
+    if (s.uses[i] !== null) w.uses = (w.uses ?? 0) + s.uses[i];
+  });
+  return out.map(({ key, ...rest }) => rest);
 }
 
 function quality(p) {

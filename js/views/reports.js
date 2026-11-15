@@ -84,11 +84,18 @@ export const viewCommunity = vm => h("div", { class: "stack-y" }, kpiGrid(vm.car
 
 // ---- Thời điểm ------------------------------------------------------------------------------
 export function viewTime(vm, ctx) {
-  const t = vi.time;
-  return h("div", { class: "stack-y" },
-    kpiGrid(vm.cards, vm.cards.length),
-    section({ title: t.heatTitle, subtitle: t.heatScope[ctx.period.period], tip: vi.sectionTips.heat, id: "tm-heat" }, vm.hasHeat ? heatmap({ heat: vm.heat, ariaLabel: t.heatTitle }) : emptyState()),
-    vm.bars.length > 1 ? section({ title: t.dayTitle, tip: vi.sectionTips.byDay, id: "tm-day" }, vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: t.dayTitle, valueHeader: t.dayTable.uses }) : emptyState()) : null);
+  const t = vi.time, tips = vi.sectionTips;
+  const hourSection = section({ title: t.hourTitle, tip: tips.byHour, id: "tm-hour" },
+    vm.hasHourBars ? barChart({ bars: vm.hourBars, ariaLabel: t.hourTitle, valueHeader: t.dayTable.uses, dayHeader: t.hourColumn2 }) : emptyState());
+  const weekSection = section({ title: t.weekTitle, tip: tips.byWeek, id: "tm-week" },
+    vm.hasWeekBars ? barChart({ bars: vm.weekBars, ariaLabel: t.weekTitle, valueHeader: t.dayTable.uses, dayHeader: t.weekColumn }) : emptyState());
+  const daySection = section({ title: t.dayTitle, tip: tips.byDay, id: "tm-day" },
+    vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: t.dayTitle, valueHeader: t.dayTable.uses }) : emptyState());
+  const heatSection = section({ title: t.heatTitle, subtitle: t.heatScope[ctx.period.period], tip: tips.heat, id: "tm-heat" },
+    vm.hasHeat ? heatmap({ heat: vm.heat, ariaLabel: t.heatTitle }) : emptyState());
+  // Hôm nay: chỉ theo giờ · Tuần: theo ngày rồi giờ × thứ · Tháng: theo tuần, theo ngày, rồi giờ × thứ.
+  const sections = vm.mode === "day" ? [hourSection] : vm.mode === "week" ? [daySection, heatSection] : [weekSection, daySection, heatSection];
+  return h("div", { class: "stack-y" }, kpiGrid(vm.cards, vm.cards.length), ...sections);
 }
 
 // ---- Chất lượng & tốc độ --------------------------------------------------------------------

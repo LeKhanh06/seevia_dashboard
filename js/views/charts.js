@@ -4,6 +4,7 @@
  */
 import { h, s } from "../lib/dom.js";
 import { vi, fill } from "../i18n/vi.js";
+import { fmtInt } from "../lib/format.js";
 import { emptyState } from "./components.js";
 
 export const CHART_HEIGHT = 240;
@@ -114,38 +115,40 @@ export function lineChart({ series, names, ariaLabel }) {
 // ---- Biểu đồ cột (Gắn bó, Thời điểm) -----------------------------------------------------
 export function barChart({ bars, ariaLabel, valueHeader, dayHeader = vi.time.dayTable.day }) {
   if (!bars.length) return emptyState(vi.chart.noData);
-  const top = Math.max(...bars.map(b => b.value), 1);
-  const maxima = bars.filter(b => b.value === top).length;
+  const real = bars.filter(b => !b.empty);
+  const top = Math.max(...real.map(b => b.value), 1);
+  const maxima = real.filter(b => b.value === top).length;
+  const lastReal = bars.reduce((acc, b, i) => (b.empty ? acc : i), -1);
+  const few = bars.length <= 8;   // ít cột thì ghi số trên mọi cột; nhiều cột chỉ ghi cột cao nhất và cột mới nhất
   const box = responsive((W, H) => {
-    // Trục giá trị có nhãn số nguyên; nhãn trên đầu cột chỉ hiện khi đủ chỗ.
-    const L = 36, R = 8, T = 34, B = 30, plotW = W - L - R, base = H - B, plotH = base - T;
-    const allInt = bars.every(b => Number.isInteger(b.value));
-    // Trần trục cao hơn cột lớn nhất ~20% để số trên đầu cột không sát mép (ví dụ 68 → trục tới 100, không phải 80).
+    const L = 40, R = 10, T = 30, B = 30, plotW = W - L - R, base = H - B, plotH = base - T;
+    const allInt = real.every(b => Number.isInteger(b.value));
+    // Trần trục cao hơn cột lớn nhất ~20% để có chỗ thở; chỉ 3–5 mốc để khỏi rối.
     const room = top * 1.2;
     let { max, step } = niceScale(room);
     if (allInt) { step = Math.max(1, Math.ceil(step)); max = Math.max(step, Math.ceil(room / step) * step); }
-    const slot = plotW / bars.length, bw = Math.max(5, Math.min(44, slot * 0.58));
+    const slot = plotW / bars.length, bw = Math.max(4, Math.min(34, slot * 0.5));
     const y = v => base - (v / max) * plotH;
     const grid = [], ticks = [];
     for (let v = 0; v <= max + 1e-9; v += step) {
-      grid.push(s("line", { class: "grid-line", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
-      ticks.push(s("text", { class: "axis-text", x: L - 10, y: y(v) + 4, "text-anchor": "end" }, String(v)));
+      grid.push(s("line", { class: ["grid-line", v === 0 ? "is-base" : ""], x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      ticks.push(s("text", { class: "axis-text", x: L - 10, y: y(v) + 4, "text-anchor": "end" }, fmtInt(v)));
     }
-    const every = Math.max(1, Math.ceil(bars.length / Math.max(1, Math.floor(plotW / 30))));
-    const showValues = slot >= 26;
-    const items = bars.map((b, i) => {
-      const bh = b.value > 0 ? Math.max(3, (b.value / max) * plotH) : 0, cx = L + slot * i + slot / 2;
-      // Chỉ tô nổi bật khi có một (tối đa hai) cột cao nhất, tránh nhấn mạnh ngẫu nhiên một cột trong nhiều cột bằng nhau.
-      const peak = b.value === top && maxima <= 2;
-      return s("g", null,
-        bh && !b.empty ? s("rect", { class: ["chart-bar", peak ? "is-peak" : ""], x: cx - bw / 2, y: base - bh, width: bw, height: bh, rx: Math.min(8, bw / 2), tabindex: 0, role: "img", "aria-label": b.tip, dataset: { tooltip: b.tip }, style: { "--i": i } }) : null,
-        showValues && !b.empty ? s("text", { class: "bar-value", x: cx, y: base - bh - 8, "text-anchor": "middle" }, String(b.value)) : null,
-        i % every === 0 ? s("text", { class: "axis-text", x: cx, y: H - 8, "text-anchor": "middle" }, b.label) : null);
+    const every = Math.max(1, Math.ceil(bars.length / Math.max(1, Math.floor(plotW / 44))));
+    const hits = [], bodies = [], labels = [];
+    bars.forEach((b, i) => {
+      const cx = L + slot * i + slot / 2, bh = b.value > 0 && !b.empty ? Math.max(3, (b.value / max) * plotH) : 0;
+      const peak = !b.empty && b.value === top && maxima <= 2;
+      // Vùng rê chuột phủ cả cột (kể cả cột thấp), mang tooltip và hỗ trợ bàn phím.
+      if (!b.empty) hits.push(s("rect", { class: "bar-hit", x: L + slot * i, y: T - 8, width: slot, height: base - T + 8, tabindex: 0, role: "img", "aria-label": b.tip, dataset: { tooltip: b.tip } }));
+      if (bh) bodies.push(s("rect", { class: ["chart-bar", peak ? "is-peak" : ""], x: cx - bw / 2, y: base - bh, width: bw, height: bh, rx: Math.min(6, bw / 2), style: { "--i": i } }));
+      if (!b.empty && b.value > 0 && (few || peak || i === lastReal)) labels.push(s("text", { class: ["bar-value", peak ? "is-peak" : ""], x: cx, y: base - bh - 8, "text-anchor": "middle" }, fmtInt(b.value)));
+      if (i % every === 0 || i === bars.length - 1 && every === 1) labels.push(s("text", { class: ["axis-text", b.empty ? "is-dim" : ""], x: cx, y: H - 8, "text-anchor": "middle" }, b.label));
     });
     const defs = s("defs", null, s("linearGradient", { id: "bar-peak", x1: 0, y1: 1, x2: 0, y2: 0 }, s("stop", { offset: "0%", class: "bar-stop-from" }), s("stop", { offset: "100%", class: "bar-stop-to" })));
-    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, defs, grid, ticks, items);
+    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, defs, grid, ticks, hits, bodies, labels);
   });
-  const table = tableToggle({ caption: ariaLabel, headers: [dayHeader, valueHeader], rows: bars.map(b => [b.title, b.empty ? "—" : b.value]) });
+  const table = tableToggle({ caption: ariaLabel, headers: [dayHeader, valueHeader], rows: bars.map(b => [b.title, b.empty ? "—" : fmtInt(b.value)]) });
   return h("div", { class: "chart-wrap" }, box, table);
 }
 

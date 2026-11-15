@@ -51,6 +51,8 @@ export const vi = {
   },
   sectionTips: {
     heat: m("Lượt theo khung giờ × thứ", "24 khung giờ 0h–23h theo giờ Việt Nam (UTC+7); một lượt tính vào khung giờ lúc bắt đầu. Ngày 00:00–23:59, tuần từ Thứ Hai đến Chủ Nhật; lượt vắt qua nửa đêm tính vào ngày bắt đầu.", "Ô đậm hơn là nhiều lượt hơn.").tip,
+    byHour: m("Lượt theo giờ", "Số lượt trong từng khung giờ 0h–23h theo giờ Việt Nam (UTC+7); mỗi lượt tính vào khung giờ lúc bắt đầu.", "Tìm giờ cao điểm.").tip,
+    byWeek: m("Lượt theo tuần", "Tổng lượt mỗi tuần, tuần tính từ Thứ Hai đến Chủ Nhật; tuần ở đầu hoặc cuối kỳ có thể chưa đủ 7 ngày. Lượt vắt qua nửa đêm tính vào ngày bắt đầu.", "Cho thấy xu hướng qua các tuần trong kỳ.").tip,
     byDay: m("Lượt theo ngày", "Tổng lượt mỗi ngày, ngày tính theo giờ Việt Nam.", "Cho thấy nhịp dùng trong kỳ.").tip,
     engagement: m("Chủ kính hoạt động theo ngày", "Số chủ kính có ít nhất 1 lượt sử dụng trong ngày; chỉ kết nối kính thì không tính.", "Cho thấy mức duy trì theo ngày.").tip,
     outcomes: m("Lượt sử dụng", "Đếm trên lượt sử dụng (không phải tác vụ): mỗi lượt kết thúc ở một trong sáu trạng thái hoàn thành, thất bại, hủy, không xác nhận hoặc bỏ cuộc.", "Cho thấy tỷ lệ hoàn thành, thất bại, hủy.").tip,
@@ -226,6 +228,8 @@ export const vi = {
     heatTitle: "Lượt theo khung giờ × thứ", heatScope: { week: "Cộng dồn các ngày trong tuần này theo thứ và giờ bắt đầu", month: "Cộng dồn các ngày trong tháng này theo thứ và giờ bắt đầu", custom: "Cộng dồn các ngày trong kỳ theo thứ và giờ bắt đầu" },
     heatCell: "{weekday}, {hour}h: {value} lượt", dayTitle: "Lượt theo ngày", dayTable: { day: "Ngày", uses: "Lượt" }, hourColumn: "Giờ",
     dayCell: "{label}: {value} lượt",
+    hourTitle: "Lượt theo giờ", hourCell: "{label}: {value} lượt", hourColumn2: "Giờ",
+    weekTitle: "Lượt theo tuần", weekColumn: "Tuần", weekCell: "{label}: {value} lượt",
   },
 
   quality: {

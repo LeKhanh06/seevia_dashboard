@@ -300,7 +300,8 @@ body.is-login .main-content { padding: 0; }
 .chart-box { width: 100%; }
 .chart-svg { display: block; overflow: visible; }
 .axis-text { fill: var(--sub); font-size: 12px; }
-.grid-line { stroke: var(--chart-grid); stroke-width: 1; }
+.grid-line { stroke: var(--chart-grid); stroke-width: 1; stroke-dasharray: 2 5; }
+.grid-line.is-base { stroke-dasharray: none; }
 .chart-line { fill: none; stroke: var(--chart-main); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .chart-line-prev { fill: none; stroke: var(--chart-prev); stroke-width: 2; stroke-dasharray: 5 5; }
 .chart-area { opacity: 1; }
@@ -311,8 +312,12 @@ body.is-login .main-content { padding: 0; }
 .chart-bar { fill: var(--chart-light); }
 .chart-bar.is-peak { fill: url(#bar-peak); }
 .bar-stop-from { stop-color: var(--chart-peak-from); } .bar-stop-to { stop-color: var(--chart-peak-to); }
-.chart-bar:hover { filter: brightness(1.12); }
-.bar-value { fill: var(--deep); font-size: 14px; font-weight: 700; }
+.bar-value { fill: var(--sub); font-size: 13px; font-weight: 600; }
+.bar-value.is-peak { fill: var(--deep); font-size: 14px; font-weight: 700; }
+.axis-text.is-dim { opacity: .55; }
+.bar-hit { fill: transparent; outline: none; transition: fill var(--dur-fast, 150ms); }
+.bar-hit:hover, .bar-hit:focus-visible { fill: var(--soft); }
+.bar-hit:hover + .chart-bar, .chart-bar:hover { filter: brightness(1.08); }
 .legend { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--sub); }
 .legend-item { display: inline-flex; align-items: center; gap: 8px; }
 .legend-line { display: inline-block; width: 24px; height: 0; border-top: 3px solid var(--chart-main); }

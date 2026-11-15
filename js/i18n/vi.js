@@ -128,9 +128,10 @@ export const vi = {
     first_audio_p90: m("Chờ nghe tiếng đầu (chậm, p90)", "p90 là mức chờ mà 90% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên: 9 trong 10 lượt không chờ lâu hơn mức này.", "Đo độ trễ ở những lượt chậm."),
     final_p50: m("Chờ đến kết quả cuối (thường, p50)", "p50 là thời gian mà 50% lượt không vượt quá, từ lúc nhả nút đến kết quả cuối.", "Đo tổng thời gian chờ của người dùng."),
     // Gắn bó
-    active_today: m("Hoạt động hôm nay (DAU)", "DAU: số chủ kính hoạt động hôm nay. “Hoạt động” là có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính.", "Đo mức duy trì theo ngày."),
-    active_week: m("Hoạt động tuần này (WAU)", "WAU: số chủ kính hoạt động trong tuần này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính).", "Đo mức duy trì theo tuần."),
-    active_month: m("Hoạt động tháng này (MAU)", "MAU: số chủ kính hoạt động trong tháng này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính).", "Đo mức duy trì theo tháng."),
+    active_today: m("Hoạt động hôm nay", "DAU: số chủ kính hoạt động hôm nay. “Hoạt động” là có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính.", "Đo mức duy trì theo ngày."),
+    active_week: m("Hoạt động tuần này", "WAU: số chủ kính hoạt động trong tuần này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính).", "Đo mức duy trì theo tuần."),
+    active_month: m("Hoạt động tháng này", "MAU: số chủ kính hoạt động trong tháng này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính).", "Đo mức duy trì theo tháng."),
+    active_period: m("Hoạt động trong kỳ", "Số chủ kính có ít nhất 1 lượt sử dụng trong kỳ đã chọn; kính chỉ kết nối thì không tính.", "Đo mức duy trì trong kỳ."),
     new_users: m("Người dùng mới", "Số tài khoản mới tạo trong kỳ.", "Theo dõi tăng trưởng."),
     active_glasses: m("Kính có hoạt động", "Số kính có ít nhất 1 lượt sử dụng trong kỳ trên tổng số kính; kính chỉ kết nối thì không tính.", "Cho biết bao nhiêu kính đang được dùng."),
     avg_active_days: m("Số ngày sử dụng TB", "Trung bình số ngày có hoạt động của mỗi chủ kính trong kỳ.", "Cho biết mức đều đặn khi dùng."),
@@ -250,9 +251,9 @@ export const vi = {
   },
 
   engagement: {
-    foot: { avg_active_days: "Mỗi chủ kính" },
-    chartTitle: "Chủ kính hoạt động theo ngày", 
-    cell: "{label}: {value} chủ kính", columnDay: "Ngày", columnOwners: "Chủ kính",
+    foot: { active_today: "DAU · trong kỳ", active_week: "WAU · trong kỳ", active_month: "MAU · trong kỳ", active_period: "Trong kỳ", avg_active_days: "Mỗi chủ kính" },
+    chartTitle: "Chủ kính hoạt động theo ngày", chartTitleHour: "Chủ kính hoạt động theo giờ", 
+    cell: "{label}: {value} chủ kính", columnDay: "Ngày", columnHour: "Giờ", columnOwners: "Chủ kính",
   },
 
   safety: {

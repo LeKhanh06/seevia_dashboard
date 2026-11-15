@@ -155,9 +155,9 @@ Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và me
 ```
 
 ### `GET /admin/stats/engagement`
-`active_today` (DAU), `active_week` (WAU), `active_month` (MAU) — số chủ kính hoạt động hôm nay / tuần này / tháng này, `new_users`, `active_glasses`, `total_glasses` (int), `avg_active_days` number, `period_days` int, `daily[]` `{date, active_owners}`. "Hoạt động" = có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính.
+`active_owners` (số chủ kính hoạt động trong **kỳ đang chọn**: hôm nay → DAU, tuần này → WAU, tháng này → MAU), `new_users`, `active_glasses`, `total_glasses` (int), `avg_active_days` number, `period_days` int, `granularity` (`day`\|`hour`; `hour` khi kỳ là một ngày), `daily[]` `{date, active_owners}` (`date` là ngày, hoặc thời điểm theo giờ khi `granularity = hour`). "Hoạt động" = có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính.
 ```json
-{ "active_today": 2, "active_week": 3, "active_month": 3, "new_users": 1, "active_glasses": 3, "total_glasses": 3, "avg_active_days": 5.3, "period_days": 7,
+{ "active_owners": 3, "granularity": "day", "new_users": 1, "active_glasses": 3, "total_glasses": 3, "avg_active_days": 5.3, "period_days": 7,
   "daily": [ { "date": "2026-11-09", "active_owners": 2 } ] }
 ```
 

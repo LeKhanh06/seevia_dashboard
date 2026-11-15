@@ -55,9 +55,10 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Chờ nghe tiếng đầu (thường, p50) | `speed.first_audio_p50_ms` | mili giây | p50 là mức chờ mà 50% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên. | Đo độ trễ của một lượt bình thường. | Chất lượng & tốc độ |
 | Chờ nghe tiếng đầu (chậm, p90) | `speed.first_audio_p90_ms` | mili giây | p90 là mức chờ mà 90% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên: 9 trong 10 lượt không chờ lâu hơn mức này. | Đo độ trễ ở những lượt chậm. | Chất lượng & tốc độ |
 | Chờ đến kết quả cuối (thường, p50) | `speed.final_result_p50_ms` | mili giây | p50 là thời gian mà 50% lượt không vượt quá, từ lúc nhả nút đến kết quả cuối. | Đo tổng thời gian chờ của người dùng. | Chất lượng & tốc độ |
-| Hoạt động hôm nay (DAU) | `active_today` | chủ kính | DAU: số chủ kính hoạt động hôm nay. “Hoạt động” là có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính. | Đo mức duy trì theo ngày. | Gắn bó |
-| Hoạt động tuần này (WAU) | `active_week` | chủ kính | WAU: số chủ kính hoạt động trong tuần này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tuần. | Gắn bó |
-| Hoạt động tháng này (MAU) | `active_month` | chủ kính | MAU: số chủ kính hoạt động trong tháng này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tháng. | Gắn bó |
+| Hoạt động hôm nay | `active_owners (kỳ = hôm nay)` | chủ kính | DAU: số chủ kính hoạt động hôm nay. “Hoạt động” là có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính. | Đo mức duy trì theo ngày. | Gắn bó |
+| Hoạt động tuần này | `active_owners (kỳ = tuần này)` | chủ kính | WAU: số chủ kính hoạt động trong tuần này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tuần. | Gắn bó |
+| Hoạt động tháng này | `active_owners (kỳ = tháng này)` | chủ kính | MAU: số chủ kính hoạt động trong tháng này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tháng. | Gắn bó |
+| Hoạt động trong kỳ | `active_owners (kỳ tùy chọn)` | chủ kính | Số chủ kính có ít nhất 1 lượt sử dụng trong kỳ đã chọn; kính chỉ kết nối thì không tính. | Đo mức duy trì trong kỳ. | Gắn bó |
 | Người dùng mới | `new_users` | tài khoản | Số tài khoản mới tạo trong kỳ. | Theo dõi tăng trưởng. | Gắn bó |
 | Kính có hoạt động | `active_glasses, total_glasses` | kính | Số kính có ít nhất 1 lượt sử dụng trong kỳ trên tổng số kính; kính chỉ kết nối thì không tính. | Cho biết bao nhiêu kính đang được dùng. | Gắn bó |
 | Số ngày sử dụng TB | `avg_active_days, period_days` | ngày | Trung bình số ngày có hoạt động của mỗi chủ kính trong kỳ. | Cho biết mức đều đặn khi dùng. | Gắn bó |

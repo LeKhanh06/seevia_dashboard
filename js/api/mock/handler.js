@@ -176,10 +176,11 @@ function engagement(p) {
   const s = seriesFor(p);
   return {
     range: rangeOf(p),
-    active_today: 2, active_week: 3, active_month: 3,
+    active_owners: p.from === p.to ? 2 : 3,   // chủ kính hoạt động trong KỲ đang chọn (hôm nay → DAU, tuần → WAU, tháng → MAU)
     new_users: Math.round(p.days / 7), active_glasses: 3, total_glasses: 3,
     avg_active_days: p.days <= 7 ? Math.round(5.3 * (p.days / 7) * 10) / 10 : Math.round(p.days * 0.7 * 10) / 10, period_days: p.days,
-    daily: s.hourly ? [{ date: p.from, active_owners: Math.max(...s.owners) }] : p.dates.map((date, i) => ({ date, active_owners: s.owners[i] })),
+    granularity: s.hourly ? "hour" : "day",
+    daily: s.buckets.map((date, i) => ({ date, active_owners: s.owners[i] })),
   };
 }
 

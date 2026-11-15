@@ -114,8 +114,9 @@ export function viewQuality(vm, ctx) {
 // ---- Gắn bó ---------------------------------------------------------------------------------
 export function viewEngagement(vm) {
   const e = vi.engagement;
-  return h("div", { class: "stack-y" }, kpiGrid(vm.cards, 3),
-    section({ title: e.chartTitle, tip: vi.sectionTips.engagement, id: "en-chart" }, vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: e.chartTitle, valueHeader: e.columnOwners }) : emptyState()));
+  const title = vm.hourly ? e.chartTitleHour : e.chartTitle;
+  return h("div", { class: "stack-y" }, kpiGrid(vm.cards, vm.cards.length === 4 ? 4 : 3),
+    section({ title, tip: vi.sectionTips.engagement, id: "en-chart" }, vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: title, valueHeader: e.columnOwners, dayHeader: vm.hourly ? e.columnHour : e.columnDay }) : emptyState()));
 }
 
 // ---- An toàn --------------------------------------------------------------------------------

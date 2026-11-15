@@ -97,21 +97,24 @@ export function mapQuality(raw, ctx) {
 }
 
 // ---- Gắn bó -------------------------------------------------------------------------------
-export function mapEngagement(raw) {
+export function mapEngagement(raw, ctx) {
   const e = vi.engagement, r = obj(raw), m = vi.metrics;
-  const days = arr(r.daily);
+  const hourly = r.granularity === "hour", days = arr(r.daily);
+  const gran = hourly ? "hour" : "day";
   const bars = days.map(d => ({
-    label: bucketLabel(d.date, "day", days.length), title: bucketTitle(d.date, "day", 1), value: toNum(d.active_owners) ?? 0,
-    tip: fill(e.cell, { label: bucketTitle(d.date, "day", 1), value: fmtInt(d.active_owners) }),
+    label: bucketLabel(d.date, gran, days.length), title: bucketTitle(d.date, gran, 1), value: toNum(d.active_owners) ?? 0,
+    tip: fill(e.cell, { label: bucketTitle(d.date, gran, 1), value: fmtInt(d.active_owners) }),
   }));
+  const key = `active_${ctx.period.period}`;   // chỉ hiện chỉ số hoạt động của kỳ đang chọn
+  const cards = [
+    metric(m[key] || m.active_period, fmtInt(r.active_owners), e.foot.active_period),
+    metric(m.new_users, fmtInt(r.new_users), e.foot.new_users), metric(m.active_glasses, fmtFraction(r.active_glasses, r.total_glasses), e.foot.active_glasses),
+  ];
+  // "Số ngày sử dụng TB" chỉ có nghĩa khi kỳ dài hơn một ngày.
+  if (!hourly) cards.push(metric(m.avg_active_days, toNum(r.avg_active_days) === null ? DASH : `${fmtDec(r.avg_active_days)} / ${fmtInt(r.period_days)}`, e.foot.avg_active_days));
   return {
-    cards: [
-      metric(m.active_today, fmtInt(r.active_today), e.foot.active_today), metric(m.active_week, fmtInt(r.active_week), e.foot.active_week), metric(m.active_month, fmtInt(r.active_month), e.foot.active_month),
-      metric(m.new_users, fmtInt(r.new_users), e.foot.new_users), metric(m.active_glasses, fmtFraction(r.active_glasses, r.total_glasses), e.foot.active_glasses),
-      metric(m.avg_active_days, toNum(r.avg_active_days) === null ? DASH : `${fmtDec(r.avg_active_days)} / ${fmtInt(r.period_days)}`, e.foot.avg_active_days),
-    ],
-    bars, hasBars: bars.some(b => b.value > 0),
-    csv: { headers: ["Ngày", "Chủ kính hoạt động"], rows: days.map(d => [d.date, d.active_owners ?? ""]) },
+    cards, hourly, bars, hasBars: bars.some(b => b.value > 0),
+    csv: { headers: [hourly ? "Giờ" : "Ngày", "Chủ kính hoạt động"], rows: days.map(d => [d.date, d.active_owners ?? ""]) },
   };
 }
 

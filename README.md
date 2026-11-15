@@ -1,29 +1,107 @@
 # SeeVia Admin Dashboard
 
-Frontend tĩnh (HTML, CSS, JavaScript ES module), không build. Chỉ xem, không có nút tạo/sửa/xóa.
+Bảng điều khiển dành cho nhóm vận hành **SeeVia** (kính thông minh cho người khiếm thị). Dashboard **chỉ xem**: hiển thị số liệu tổng hợp toàn hệ thống, danh sách tài khoản, danh sách thiết bị và lỗi hệ thống. Không có thao tác tạo, sửa, xóa, và không hiển thị số liệu của từng cá nhân.
 
-## Chạy
-Mở thư mục `Dashboard/` bằng Live Server hoặc `python -m http.server 8765`, rồi mở `http://127.0.0.1:8765/`. (ES module không chạy qua `file://`.)
-Mặc định `USE_MOCK = true`; thông tin đăng nhập mẫu hiện trên màn hình đăng nhập.
+Ứng dụng là frontend tĩnh (HTML, CSS, JavaScript ES module), **không cần cài đặt hay build**, chạy được ngay với dữ liệu mẫu và ghép backend thật chỉ bằng cách đổi hai dòng cấu hình.
 
-## Ghép backend (không phải sửa giao diện)
-1. `js/config.js`: `USE_MOCK = false`, `API_BASE_URL = "<địa chỉ API>"` (cần CORS nếu khác origin).
-2. Backend làm theo `docs/API_CONTRACT.md`.
-Dashboard dùng toàn đường dẫn tương đối nên đặt dưới đường dẫn con (base path) vẫn chạy.
+## Tính năng
 
-## Kiến trúc 3 lớp
+- **Tổng quan**: lượt sử dụng, chủ kính hoạt động, tỷ lệ hoàn thành, thời gian sử dụng; so sánh với kỳ trước; biểu đồ theo ngày/giờ.
+- **Báo cáo chức năng**: Đọc & Nhận diện, Tìm & Hiểu, Kết nối, Di chuyển, Cộng đồng & Thiết bị.
+- **Phân tích**: Thời điểm (heatmap giờ × thứ), Chất lượng & tốc độ, Gắn bó (DAU/WAU/MAU), An toàn (SOS, cảnh báo vật cản).
+- **Quản trị (chỉ xem)**: Tài khoản, Thiết bị, Lỗi hệ thống, Cấu hình, Hồ sơ quản trị viên.
+- Chọn kỳ **hôm nay / tuần này / tháng này** (giờ Việt Nam); kỳ nằm trong URL nên chia sẻ link vẫn đúng.
+- **Xuất CSV** (UTF-8 có BOM, mở đúng tiếng Việt trong Excel).
+- Giao diện **Sáng / Tối**, responsive từ điện thoại đến màn hình rộng, hỗ trợ bàn phím và trình đọc màn hình.
+- Trạng thái **đang tải, rỗng, lỗi** cho mọi trang; tự thử lại khi lỗi mạng.
+
+## Chạy thử
+
+Cần một máy chủ tĩnh bất kỳ (ES module không chạy qua `file://`):
+
+```bash
+python -m http.server 8765
+```
+
+Chạy lệnh trong thư mục chứa `index.html`, rồi mở `http://127.0.0.1:8765/`. Có thể dùng Live Server (VS Code) hoặc `npx serve` thay cho Python.
+
+Ở chế độ dữ liệu mẫu, tài khoản đăng nhập hiển thị ngay trên màn hình đăng nhập.
+
+## Kết nối backend thật
+
+Chỉ sửa `js/config.js`, không phải đổi giao diện:
+
+```js
+USE_MOCK: false,
+API_BASE_URL: "https://api.example.com",   // gốc API; cần bật CORS nếu khác origin
+```
+
+| Tùy chọn | Ý nghĩa |
+|---|---|
+| `USE_MOCK` | `true`: dùng dữ liệu mẫu trong `js/api/mock/`. `false`: gọi API thật |
+| `API_BASE_URL` | Gốc API (đường dẫn tương đối hoặc URL đầy đủ) |
+| `REQUEST_TIMEOUT_MS` | Thời gian chờ mỗi yêu cầu |
+| `TIMEZONE` | Múi giờ tính kỳ báo cáo (`Asia/Ho_Chi_Minh`) |
+| `CSV_SERVER_EXPORT` | `true`: xuất CSV bằng `format=csv` từ backend; `false`: tự tạo từ dữ liệu đang hiển thị |
+| `PAGE_SIZE` | Số dòng mỗi trang của danh sách |
+
+Backend làm theo **[docs/API_CONTRACT.md](docs/API_CONTRACT.md)**: các endpoint `GET /admin/...` chỉ đọc, kèm `POST /admin/auth/login` và `logout`. Định nghĩa từng chỉ số (tên hiển thị, trường API, đơn vị, cách tính) nằm trong **[docs/METRICS.md](docs/METRICS.md)**.
+
+Mọi tài nguyên dùng đường dẫn tương đối, nên có thể đặt dưới một đường dẫn con (ví dụ `https://example.com/admin/`) mà không hỏng.
+
+## Kiến trúc
+
+Ba lớp tách bạch, view không biết dữ liệu đến từ đâu:
+
 | Lớp | Thư mục | Vai trò |
 |---|---|---|
-| Dữ liệu | `js/api/` | `client.js` là nơi duy nhất gọi `fetch` (token, timeout, 401/403/5xx, thử lại GET 1 lần, hủy yêu cầu cũ). `api/mock/` là dữ liệu mẫu cùng hình dạng API thật. |
-| Chuyển đổi | `js/mappers/` | Phản hồi API → cấu trúc hiển thị (định dạng vi-VN, null/0 → "—", nhãn + tooltip). |
-| Giao diện | `js/views/` | Chỉ nhận dữ liệu đã chuẩn hóa và dựng DOM (không `innerHTML`). |
+| Dữ liệu | `js/api/` | `client.js` là nơi **duy nhất** gọi mạng: gắn token, timeout, xử lý 401/403/5xx, thử lại GET một lần, hủy yêu cầu cũ khi đổi trang hoặc đổi kỳ. `mock/` chứa dữ liệu mẫu cùng hình dạng với API thật |
+| Chuyển đổi | `js/mappers/` | Đưa phản hồi API về cấu trúc hiển thị: định dạng vi-VN, giá trị thiếu hoặc 0 hiện "—", gắn nhãn và tooltip |
+| Giao diện | `js/views/` | Chỉ nhận dữ liệu đã chuẩn hóa và dựng DOM; không dùng `innerHTML` với dữ liệu từ API |
 
-Khác: `js/registry.js` (route → endpoint/mapper/view), `js/i18n/vi.js` (toàn bộ chữ + tooltip "Tác dụng"), `js/core/` (router hash, kỳ, phiên, theme, CSV, tooltip), `css/tokens.css` (nơi duy nhất định nghĩa màu).
+```
+├── index.html
+├── css/
+│   ├── tokens.css      # Toàn bộ màu (Sáng/Tối), nơi duy nhất định nghĩa màu
+│   ├── app.css         # Bố cục và thành phần
+│   ├── motion.css      # Hiệu ứng; chỉnh ở --dur-*, --ease; tự tắt khi bật giảm chuyển động
+│   └── fonts.css       # Be Vietnam Pro (lưu sẵn, không dùng CDN)
+├── js/
+│   ├── config.js       # Cấu hình duy nhất
+│   ├── registry.js     # Route → endpoint → mapper → view
+│   ├── api/            # Lớp dữ liệu (client.js, mock/)
+│   ├── mappers/        # Lớp chuyển đổi
+│   ├── views/          # Lớp giao diện (thành phần, biểu đồ, khung, các trang)
+│   ├── i18n/vi.js      # Toàn bộ chữ hiển thị và tooltip "Cách tính / Tác dụng"
+│   ├── core/           # Router hash, kỳ báo cáo, phiên, theme, CSV, tooltip, motion
+│   └── lib/            # DOM, định dạng vi-VN, icon SVG
+├── docs/               # API_CONTRACT.md, METRICS.md
+├── tools/              # check-routes.mjs (kiểm thử nhanh)
+└── assets/             # Logo, font
+```
 
-URL: `#overview?period=week`, `#accounts?q=tk&status=active&sort=created_at&order=desc&page=2`, `#account-detail/TK-0001`.
+Đường dẫn trang theo hash: `#overview?period=week`, `#accounts?q=tk&status=active&sort=created_at&order=desc&page=2`, `#account-detail/TK-0001`, `#profile`.
 
-## Ghi chú
-- `docs/METRICS.md`: bảng chỉ số (tên, trường API, đơn vị, cách tính) sinh từ `js/i18n/vi.js`.
-- `css/motion.css`: hiệu ứng; chỉnh thời gian ở `--dur-*`, `--ease`. Tự tắt khi bật giảm chuyển động.
-- Chế độ dữ liệu mẫu hiện nhãn "Dữ liệu mẫu" ở chân sidebar; tắt khi `USE_MOCK = false`.
-- `tools/check-routes.mjs`: duyệt mọi route bằng Chrome headless, báo lỗi nếu chữ/tooltip chứa "[object", "undefined", "NaN" và chạy kiểm tra chéo số liệu mẫu (`js/api/mock/validate.js`). Chạy: `node tools/check-routes.mjs`.
+## Tùy biến
+
+- **Đổi nhãn, chú thích, tooltip**: sửa `js/i18n/vi.js`, không cần đụng logic.
+- **Đổi màu**: sửa `css/tokens.css` (`:root` cho Sáng, `[data-theme="dark"]` cho Tối). Mọi CSS và JS khác chỉ dùng biến, kể cả màu biểu đồ.
+- **Thêm hoặc bớt trang**: khai báo trong `js/registry.js` (endpoint, mapper, view).
+
+## Kiểm thử
+
+```bash
+node tools/check-routes.mjs
+```
+
+Script mở từng trang bằng Chrome hoặc Edge headless (đặt biến `CHROME` nếu trình duyệt không ở vị trí mặc định) và báo lỗi nếu chữ hiển thị, tooltip hay `aria-label` chứa `[object`, `undefined`, `NaN`. Đồng thời chạy kiểm tra chéo dữ liệu mẫu (`js/api/mock/validate.js`): tổng lượt, theo nhóm, theo ngày, heatmap, SOS, trạng thái, số lỗi và phần trăm phải khớp nhau. Kiểm tra này cũng tự chạy khi `USE_MOCK = true` và báo lỗi ra console.
+
+## Bảo mật và quyền riêng tư
+
+- Admin Web chỉ đọc số liệu tổng hợp; email luôn do backend **che sẵn** (ví dụ `ng***@gmail.com`).
+- Phiên đăng nhập lưu trong bộ nhớ và `sessionStorage`, mật khẩu không bao giờ được lưu; hết hạn hoặc nhận 401 thì về `#login`.
+- Không có khóa bí mật trong mã nguồn; địa chỉ máy chủ chỉ đọc từ `js/config.js`.
+
+## Công nghệ
+
+HTML, CSS, JavaScript ES module thuần (không framework, không bước build). Biểu đồ là SVG tự vẽ. Font Be Vietnam Pro.

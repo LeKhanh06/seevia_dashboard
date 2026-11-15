@@ -45,8 +45,6 @@ export function validateMock() {
   }
   const week = PERIODS.week, community = get("/admin/stats/community", week);
   eq("tổng tài khoản (Cộng đồng) = số tài khoản trong danh sách", community.total_accounts, ACCOUNTS.length);
-  const pcts = get("/admin/stats/overview", week).groups;
-  eq("phần trăm các nhóm tuần mẫu: 49/24/19/7", pcts.map(g => Math.round(g.uses / 301 * 100)).join("/"), "49/24/19/7");
   return problems;
 }
 

@@ -130,17 +130,17 @@ Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và me
 ```
 
 ### `GET /admin/stats/community`
-`install_attempts` int, `install_successes` int, `install_success_rate` %, `install_errors[]` (`{code, count}`, mã (đúng 3 mã S25): `wifi_5ghz` (mạng 5 GHz), `glasses_not_found` (không tìm thấy kính), `link_request_expired` (yêu cầu liên kết hết hạn), `timeout`), `install_p50_seconds` giây, `emergency_contact_accounts` int, `total_accounts` int, `disconnects_per_device_per_day` number, `battery_to_20_p50_seconds` giây, `glasses_sessions` int, `glasses_session_seconds` giây, `glasses_active_days` int (số ngày có hoạt động).
+`install_attempts` int, `install_successes` int, `install_success_rate` %, `install_errors[]` (`{code, count}`, mã (đúng 3 mã S25): `wifi_5ghz` (mạng 5 GHz), `glasses_not_found` (không tìm thấy kính), `link_request_expired` (yêu cầu liên kết hết hạn), `timeout`), `install_p50_seconds` giây, `emergency_contact_accounts` int, `total_accounts` int, `disconnects_per_day` int (số sự kiện "Mất kết nối mạng" trung bình mỗi ngày của cả hệ thống), `battery_to_20_p50_seconds` giây, `glasses_sessions` int, `glasses_session_seconds` giây, `glasses_active_days` int (số ngày có hoạt động).
 ```json
 { "install_attempts": 5, "install_successes": 4, "install_success_rate": 80, "install_errors": [ { "code": "wifi_5ghz", "count": 1 } ], "install_p50_seconds": 720,
-  "emergency_contact_accounts": 2, "total_accounts": 3, "disconnects_per_device_per_day": 1.4, "battery_to_20_p50_seconds": 13800, "glasses_sessions": 27, "glasses_session_seconds": 112500, "glasses_active_days": 6 }
+  "emergency_contact_accounts": 2, "total_accounts": 3, "disconnects_per_day": 23, "battery_to_20_p50_seconds": 13800, "glasses_sessions": 27, "glasses_session_seconds": 112500, "glasses_active_days": 6 }
 ```
 
 ### `GET /admin/stats/time`
-`peak_hours` `{start_hour, end_hour, secondary_start_hour, secondary_end_hour}` (0–23, null được), `busiest_weekday` `{weekday (1=Thứ Hai…7=Chủ Nhật), uses}`, `weekend_uses` int, `by_day[]` `{date, weekday, uses}`, `heatmap` `{weekdays:[1..7], hours:[0..23], cells: int[7][24]}` (hàng = thứ, cột = giờ bắt đầu).
+`peak_hours` `{start_hour, end_hour, secondary_start_hour, secondary_end_hour}` (0–23, null được), `busiest_day` `{date, uses}` (ngày có nhiều lượt nhất trong kỳ; null khi kỳ là một ngày), `weekend_uses` int, `by_day[]` `{date, weekday, uses}`, `heatmap` `{weekdays:[1..7], hours:[0..23], cells: int[7][24]}` (hàng = thứ, cột = giờ bắt đầu).
 ```json
 { "peak_hours": { "start_hour": 7, "end_hour": 9, "secondary_start_hour": 17, "secondary_end_hour": 20 },
-  "busiest_weekday": { "weekday": 4, "uses": 60 }, "weekend_uses": 47,
+  "busiest_day": { "date": "2026-11-12", "uses": 60 }, "weekend_uses": 47,
   "by_day": [ { "date": "2026-11-09", "weekday": 1, "uses": 40 } ],
   "heatmap": { "weekdays": [1,2,3,4,5,6,7], "hours": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23], "cells": [[0,0,0,0,0,0,1,4,7,6,3,3,2,2,3,4,6,8,7,5,3,2,1,0]] } }
 ```

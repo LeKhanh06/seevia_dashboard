@@ -22,15 +22,15 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Lỗi | `features[].errors` | lượt | Số lượt gặp lỗi kỹ thuật có mã lỗi, đếm trên lượt ghi nhận. | Phát hiện chức năng hay lỗi. | 4 trang chức năng |
 | Ảnh bị từ chối | `features[].details.rejected_images` | lượt | Số ảnh bị từ chối vì quá mờ hoặc quá tối, kính nhắc chụp lại. | Cho biết chất lượng ảnh người dùng chụp. | Chi tiết từng chức năng (4 trang chức năng) |
 | Thử lại TB | `features[].details.avg_retries` | lần | Trung bình số lần thử lại một tác vụ, đếm trên lượt ghi nhận. | Cho biết mức khó dùng. | Chi tiết từng chức năng (4 trang chức năng) |
-| Xử lý thường mất | `features[].details.processing_p50_seconds` | giây | p50: thời gian xử lý ảnh mà 50% lượt không vượt quá. | Đo tốc độ xử lý. | Chi tiết từng chức năng (4 trang chức năng) |
-| Căn khung thường mất | `features[].details.framing_p50_seconds` | giây | p50: thời gian căn khung chữ vào đúng vị trí mà 50% phiên không vượt quá. | Đo độ khó khi căn khung. | Chi tiết từng chức năng (4 trang chức năng) |
+| Thời gian xử lý | `features[].details.processing_p50_seconds` | giây | p50: thời gian xử lý ảnh mà 50% lượt không vượt quá. | Đo tốc độ xử lý. | Chi tiết từng chức năng (4 trang chức năng) |
+| Thời gian căn khung | `features[].details.framing_p50_seconds` | giây | p50: thời gian căn khung chữ vào đúng vị trí mà 50% phiên không vượt quá. | Đo độ khó khi căn khung. | Chi tiết từng chức năng (4 trang chức năng) |
 | Phiên TB | `features[].details.avg_session_seconds` | giây | Thời lượng trung bình của một phiên đọc chữ live. | Cho biết người dùng đọc live bao lâu. | Chi tiết từng chức năng (4 trang chức năng) |
 | Chưa chắc chắn | `features[].details.uncertain_rate_pct` | % | Số lần kính chưa chắc chắn về mệnh giá (uncertain) chia số lượt nhận tiền. | Cho biết độ tin cậy khi nhận tiền. | Chi tiết từng chức năng (4 trang chức năng) |
-| Thường kéo dài | `features[].details.duration_p50_seconds` | giây | p50: thời lượng một lượt mà 50% lượt không vượt quá. | Cho biết một lượt mất bao lâu. | Chi tiết từng chức năng (4 trang chức năng) |
+| Thời lượng | `features[].details.duration_p50_seconds` | giây | p50: thời lượng một lượt mà 50% lượt không vượt quá. | Cho biết một lượt mất bao lâu. | Chi tiết từng chức năng (4 trang chức năng) |
 | Tỷ lệ cần tra web | `features[].details.web_lookup_rate_pct` | % | Số lượt trò chuyện cần tra web chia tổng số lượt trò chuyện. | Cho biết nhu cầu thông tin ngoài. | Chi tiết từng chức năng (4 trang chức năng) |
 | Hủy trong cửa sổ | `features[].details.cancel_in_window_pct` | % | Số lượt bị hủy trong thời gian cho phép hủy chia tổng số lượt. | Phát hiện gọi hoặc nhắn nhầm. | Chi tiết từng chức năng (4 trang chức năng) |
 | Hỏi lại | `features[].details.reask_pct` | % | Số lượt kính phải hỏi lại người dùng chia tổng số lượt. | Cho biết kính nghe rõ đến đâu. | Chi tiết từng chức năng (4 trang chức năng) |
-| Đến khi xác nhận (thường) | `features[].details.confirm_p50_seconds` | giây | p50: thời gian từ lúc yêu cầu đến khi người dùng xác nhận. | Đo độ nhanh của bước xác nhận. | Chi tiết từng chức năng (4 trang chức năng) |
+| Đến khi xác nhận | `features[].details.confirm_p50_seconds` | giây | p50: thời gian từ lúc yêu cầu đến khi người dùng xác nhận. | Đo độ nhanh của bước xác nhận. | Chi tiết từng chức năng (4 trang chức năng) |
 | Nghe máy | `features[].details.answer_rate_pct` | % | Số cuộc gọi Internet được nghe máy chia tổng số cuộc gọi (đi và đến). | Cho biết cuộc gọi có kết nối được không. | Chi tiết từng chức năng (4 trang chức năng) |
 | Thời lượng TB | `features[].details.avg_call_seconds` | giây | Thời lượng trung bình của một cuộc gọi Internet. | Cho biết cuộc gọi kéo dài bao lâu. | Chi tiết từng chức năng (4 trang chức năng) |
 | Lỗi kết nối | `features[].details.connection_errors` | lượt | Số cuộc gọi bị lỗi kết nối. | Phát hiện vấn đề mạng khi gọi. | Chi tiết từng chức năng (4 trang chức năng) |
@@ -43,18 +43,18 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Tỷ lệ cài đặt kính thành công | `install_success_rate (+ install_attempts, install_successes, install_errors[])` | % | Số lần cài đặt đến khi kính báo “Glasses Online” chia số lần bắt đầu cài đặt. Lỗi theo mã: mạng 5 GHz, không tìm thấy kính, yêu cầu liên kết hết hạn. | Cho biết bước cài đặt kính có khó với người dùng không. | Cộng đồng & Thiết bị |
 | Thời gian cài đặt kính | `install_p50_seconds` | giây | Số phút từ lúc bắt đầu cài đặt đến khi kính báo “SeeVia đã sẵn sàng”. p50 là mức mà 50% lượt cài đặt không vượt quá. | Cho biết cài đặt mất bao lâu. | Cộng đồng & Thiết bị |
 | Tài khoản có liên hệ khẩn cấp | `emergency_contact_accounts, total_accounts` | tài khoản | Số tài khoản có ít nhất 1 liên hệ khẩn cấp chia TỔNG SỐ TÀI KHOẢN. Chỉ đếm có hoặc không, không hiển thị tên hay số điện thoại. | Đánh giá mức sẵn sàng của luồng SOS. | Cộng đồng & Thiết bị |
-| Mất kết nối / ngày | `disconnects_per_device_per_day` | sự kiện / ngày | Số sự kiện “Mất kết nối mạng” mỗi ngày (không phải trung bình mỗi kính). | Phản ánh độ ổn định kết nối. | Cộng đồng & Thiết bị |
+| Mất kết nối / ngày | `disconnects_per_day` | sự kiện / ngày | Số sự kiện “Mất kết nối mạng” mỗi ngày (không phải trung bình mỗi kính). | Phản ánh độ ổn định kết nối. | Cộng đồng & Thiết bị |
 | Dùng đến khi pin còn 20% | `battery_to_20_p50_seconds` | giây | Số phút từ lúc bật kính đến lúc kính báo pin còn 20%. p50 là mức mà 50% lần không vượt quá. | Cho biết thời lượng pin thực tế. | Cộng đồng & Thiết bị |
 | Kết nối kính | `glasses_sessions, glasses_session_seconds, glasses_active_days` | phiên, giây, ngày | Số phiên kính kết nối với server, tổng thời gian kết nối và số ngày có hoạt động. Không phải thời gian đeo kính. | Cho biết mức kết nối của thiết bị. | Cộng đồng & Thiết bị |
 | Giờ cao điểm | `peak_hours.*` | giờ (0–23) | Khung giờ có nhiều lượt nhất. 24 khung 0h–23h theo giờ Việt Nam (UTC+7); lượt tính vào khung giờ lúc bắt đầu. | Giúp lên lịch bảo trì và hỗ trợ. | Thời điểm |
-| Ngày dùng nhiều nhất | `busiest_weekday.*` | thứ (1–7), lượt | Ngày trong tuần có nhiều lượt nhất. Ngày tính 00:00–23:59 giờ Việt Nam, tuần từ Thứ Hai đến Chủ Nhật; lượt vắt qua nửa đêm tính vào ngày bắt đầu. | Cho biết nhịp dùng theo tuần. | Thời điểm |
-| Cuối tuần | `weekend_uses` | lượt | Tổng lượt vào Thứ Bảy và Chủ Nhật. | So sánh mức dùng cuối tuần với ngày thường. | Thời điểm |
+| Ngày dùng nhiều nhất | `busiest_day.date, busiest_day.uses` | ngày, lượt | Ngày có nhiều lượt sử dụng nhất trong kỳ (ngày tính từ 00:00 đến 23:59 giờ Việt Nam; lượt vắt qua nửa đêm tính vào ngày bắt đầu). Chỉ xét các ngày đã diễn ra | Cho biết nhịp dùng theo tuần. | Thời điểm |
+| Cuối tuần | `weekend_uses` | lượt | Tổng lượt vào Thứ Bảy và Chủ Nhật. | So sánh mức dùng cuối tuần với các ngày trong tuần. | Thời điểm |
 | Hoàn thành ngay lần đầu | `completion.first_try_rate` | % | Số tác vụ hoàn thành ngay lần đầu chia tổng số tác vụ. | Cho biết người dùng có phải thử lại không. | Chất lượng & tốc độ |
 | Số lần thử lại TB | `completion.avg_retries` | lần | Trung bình số lần thử lại mỗi tác vụ; đếm trên lượt ghi nhận. | Cho biết mức khó dùng. | Chất lượng & tốc độ |
 | Tỷ lệ bỏ cuộc | `completion.abandon_rate` | % | Số tác vụ bỏ cuộc chia tổng số tác vụ: kính hỏi lại hoặc từ chối ảnh rồi người dùng không thử lại. | Phát hiện chỗ người dùng bị kẹt. | Chất lượng & tốc độ |
-| Chờ nghe tiếng đầu (thường, p50) | `speed.first_audio_p50_ms` | mili giây | p50 là mức chờ mà 50% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên. | Đo độ trễ của một lượt bình thường. | Chất lượng & tốc độ |
+| Chờ nghe tiếng đầu (p50) | `speed.first_audio_p50_ms` | mili giây | p50 là mức chờ mà 50% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên. | Đo độ trễ ở mức giữa của các lượt. | Chất lượng & tốc độ |
 | Chờ nghe tiếng đầu (chậm, p90) | `speed.first_audio_p90_ms` | mili giây | p90 là mức chờ mà 90% lượt không vượt quá, tính từ lúc nhả nút đến tiếng đầu tiên: 9 trong 10 lượt không chờ lâu hơn mức này. | Đo độ trễ ở những lượt chậm. | Chất lượng & tốc độ |
-| Chờ đến kết quả cuối (thường, p50) | `speed.final_result_p50_ms` | mili giây | p50 là thời gian mà 50% lượt không vượt quá, từ lúc nhả nút đến kết quả cuối. | Đo tổng thời gian chờ của người dùng. | Chất lượng & tốc độ |
+| Chờ đến kết quả cuối (p50) | `speed.final_result_p50_ms` | mili giây | p50 là thời gian mà 50% lượt không vượt quá, từ lúc nhả nút đến kết quả cuối. | Đo tổng thời gian chờ của người dùng. | Chất lượng & tốc độ |
 | Hoạt động hôm nay | `active_owners (kỳ = hôm nay)` | chủ kính | DAU: số chủ kính hoạt động hôm nay. “Hoạt động” là có ít nhất 1 lượt sử dụng; kính chỉ kết nối thì không tính. | Đo mức duy trì theo ngày. | Gắn bó |
 | Hoạt động tuần này | `active_owners (kỳ = tuần này)` | chủ kính | WAU: số chủ kính hoạt động trong tuần này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tuần. | Gắn bó |
 | Hoạt động tháng này | `active_owners (kỳ = tháng này)` | chủ kính | MAU: số chủ kính hoạt động trong tháng này (ít nhất 1 lượt sử dụng; chỉ kết nối kính thì không tính). | Đo mức duy trì theo tháng. | Gắn bó |
@@ -64,7 +64,7 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Số ngày sử dụng TB | `avg_active_days, period_days` | ngày | Trung bình số ngày có hoạt động của mỗi chủ kính trong kỳ. | Cho biết mức đều đặn khi dùng. | Gắn bó |
 | Số lần | `sos.count` | lần | Tổng mọi lần kích hoạt Khẩn cấp (SOS) trong kỳ, gồm cả lần bị hủy trong 5 giây. | Theo dõi mức dùng SOS. | An toàn |
 | Thành công / thất bại | `sos.success, sos.failed` | lần | Số lần SOS gửi thành công và thất bại. Tỷ lệ tính trên các lần không bị hủy trong 5 giây. | Đánh giá độ tin cậy luồng SOS. | An toàn |
-| Thời gian đến khi xác nhận (thường) | `sos.confirm_p50_seconds` | giây | p50 là thời gian từ lúc kích hoạt đến khi có người nghe hoặc xác nhận. | Đo SOS được tiếp nhận nhanh đến đâu. | An toàn |
+| Thời gian đến khi xác nhận | `sos.confirm_p50_seconds` | giây | p50 là thời gian từ lúc kích hoạt đến khi có người nghe hoặc xác nhận. | Đo SOS được tiếp nhận nhanh đến đâu. | An toàn |
 | Bị hủy trong 5 giây | `sos.cancelled_within_5s` | lần | Số lần SOS bị hủy ngay trong 5 giây đầu. | Phát hiện bấm nhầm. | An toàn |
 | Số phiên | `alert_live.sessions` | phiên | Số lần chế độ cảnh báo vật cản được bật. | Theo dõi mức dùng cảnh báo vật cản live. | An toàn |
 | Tổng phút bật | `alert_live.total_on_seconds` | giây | Tổng số phút chế độ cảnh báo vật cản được bật. | Cho biết chế độ này được dùng bao lâu. | An toàn |

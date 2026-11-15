@@ -35,11 +35,11 @@ function periodOf(query) {
   const nowVn = new Date(Date.now() + 7 * 3600000);
   const elapsed = clamp(Math.round((utc(today) - utc(from)) / MS_DAY) + 1, 0, days);
   const nowHour = nowVn.getUTCHours();
-  const exactWeek = days === 7 && weekdayOf(from) === 1 && elapsed === 7;
+  const exactWeek = false;   // số liệu luôn được phân bổ theo quy mô VOLUME, không dùng mảng cố định của tuần thiết kế
   // Hôm nay: chỉ tính phần trăm số lượt đã diễn ra tới giờ hiện tại (theo hình dạng trong ngày).
   const shape = D.HOUR_SHAPE, dayShare = from === to && from === today ? shape.slice(0, nowHour + 1).reduce((x, y) => x + y, 0) / shape.reduce((x, y) => x + y, 0) : 1;
   return {
-    period: query.period || "week", from, to, days, dates, exactWeek, elapsed, today, nowHour, K: (from === to ? dayShare : elapsed) / 7,
+    period: query.period || "week", from, to, days, dates, exactWeek, elapsed, today, nowHour, K: ((from === to ? dayShare : elapsed) / 7) * D.VOLUME,
     compare_from: addDays(from, -days), compare_to: addDays(from, -1),
   };
 }
@@ -59,8 +59,8 @@ function seriesFor(p) {
     buckets = Array.from({ length: 24 }, (_, h) => `${p.from}T${String(h).padStart(2, "0")}:00:00+07:00`);
     const live = p.from === p.today ? D.HOUR_SHAPE.map((w, h) => (h <= p.nowHour ? w : 0)) : D.HOUR_SHAPE;   // giờ chưa tới: chưa có dữ liệu
     uses = distribute(total, live);
-    prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * 0.93), D.HOUR_SHAPE.map((w, i) => w * (0.8 + 0.4 * jit(i, 3))));
-    owners = uses.map(u => (u ? Math.min(3, Math.ceil(u / 6)) : 0));
+    prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * D.VOLUME * 0.93), D.HOUR_SHAPE.map((w, i) => w * (0.8 + 0.4 * jit(i, 3))));
+    owners = uses.map(u => (u ? Math.min(D.DAILY_OWNERS, Math.ceil(u / 12)) : 0));
     prevOwners = prev.map(u => (u ? Math.min(3, Math.ceil(u / 6)) : 0));
   } else {
     buckets = p.dates;
@@ -68,13 +68,14 @@ function seriesFor(p) {
     else {
       const w = p.dates.map((d, i) => (i < p.elapsed ? D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 1)) : 0));
       uses = distribute(total, w);
-      prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * 0.93), p.dates.map((d, i) => D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 2))));
-      owners = uses.map(u => (u ? clamp(Math.round((u / Math.max(...uses, 1)) * 3), 1, 3) : 0));
+      prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * D.VOLUME * 0.93), p.dates.map((d, i) => D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 2))));
+      const top = Math.max(...uses, 1);
+      owners = uses.map(u => (u ? clamp(Math.round(D.DAILY_OWNERS * (0.55 + 0.45 * (u / top))), 1, D.ACCOUNTS.length) : 0));
     }
-    prevOwners = owners.map((o, i) => clamp(o + ((i % 3) - 1), 0, 3));
+    prevOwners = owners.map((o, i) => clamp(o + ((i % 5) - 2), 0, D.ACCOUNTS.length));
   }
   const usage = distribute(Math.round(D.BASE_USAGE_SECONDS * p.K), uses);
-  const usagePrev = distribute(Math.round(D.BASE_USAGE_SECONDS * (p.days / 7) * 0.89), prev);
+  const usagePrev = distribute(Math.round(D.BASE_USAGE_SECONDS * (p.days / 7) * D.VOLUME * 0.89), prev);
   const comp = uses.map((u, i) => (u ? Math.round(87 + (jit(i, 4) - 0.5) * 8) : null));
   const compPrev = prev.map((u, i) => (u ? Math.round(86 + (jit(i, 5) - 0.5) * 8) : null));
   // Mốc chưa tới: phía "kỳ này" là null (chưa có dữ liệu); phía "kỳ trước" giữ nguyên.
@@ -100,6 +101,14 @@ function errorRows(p) {
   return D.ERROR_ROWS.map(e => ({ ...e, count: scale(e.count, p.K), change: scale(e.change, p.K) })).filter(e => e.count > 0);
 }
 
+// Số chủ kính không trùng trong cả kỳ (tuần/tháng lớn hơn số trong một ngày, tối đa ~92% tổng tài khoản).
+function uniqueOwners(s, p) {
+  const day = Math.max(0, ...s.owners);
+  if (s.hourly || p.elapsed <= 1) return day;
+  const grow = 1 + 0.4 * Math.min(1, (p.elapsed - 1) / 6) + 0.2 * Math.min(1, Math.max(0, p.elapsed - 7) / 23);
+  return Math.min(Math.round(D.ACCOUNTS.length * 0.92), Math.round(day * grow));
+}
+
 function overview(p) {
   const s = seriesFor(p), al = allocation(p);
   const usesTotal = sum(s.uses), prevTotal = sum(s.prev.filter((_, i) => s.uses[i] !== null));   // so sánh với cùng khoảng thời gian đã diễn ra của kỳ trước
@@ -109,8 +118,8 @@ function overview(p) {
   return {
     range: { ...rangeOf(p), compare_from: p.compare_from, compare_to: p.compare_to },
     totals: {
-      usage_seconds_per_owner: Math.round(sum(s.usage) / Math.max(1, Math.max(...s.owners))),
-      uses: usesTotal, active_owners: Math.max(0, ...s.owners), completion_rate: usesTotal ? 87 : null, usage_seconds: sum(s.usage),
+      usage_seconds_per_owner: Math.round(sum(s.usage) / Math.max(1, uniqueOwners(s, p))),
+      uses: usesTotal, active_owners: uniqueOwners(s, p), completion_rate: usesTotal ? 87 : null, usage_seconds: sum(s.usage),
       uses_change_pct: pct(usesTotal, prevTotal), active_owners_change: 0, completion_rate_change_points: usesTotal ? 2 : null, usage_seconds_change_pct: usesTotal ? 12 : null,
     },
     series: {
@@ -152,12 +161,20 @@ function community(p) {
   const c = D.COMMUNITY, K = p.K;
   const sessions = scale(c.glasses_sessions, K), attempts = Math.round(c.install_attempts * K), ok = Math.min(attempts, Math.round(c.install_successes * K));
   return {
-    range: rangeOf(p), ...c, total_accounts: D.ACCOUNTS.length,
+    range: rangeOf(p), ...c, total_accounts: D.ACCOUNTS.length, emergency_contact_accounts: Math.round(D.ACCOUNTS.length * 0.5),
     install_attempts: attempts, install_successes: ok, install_success_rate: attempts ? Math.round((ok / attempts) * 100) : null,
     install_errors: attempts - ok > 0 ? [{ code: "wifi_5ghz", count: attempts - ok }] : [],
     glasses_sessions: sessions, glasses_session_seconds: sessions ? scale(c.glasses_session_seconds, K) : 0,
     glasses_active_days: sessions ? Math.min(p.elapsed || 1, c.glasses_active_days) : 0,
   };
+}
+
+// Ngày (hoặc giờ khi kỳ là một ngày) có nhiều lượt nhất trong kỳ; chỉ xét phần đã diễn ra. Hòa thì lấy ngày sớm nhất.
+function peakDay(s, p) {
+  if (s.hourly) return null;
+  let best = -1;
+  s.uses.forEach((u, i) => { if (u !== null && (best < 0 || u > s.uses[best])) best = i; });
+  return best < 0 ? null : { date: p.dates[best], uses: s.uses[best] };
 }
 
 function time(p) {
@@ -170,7 +187,7 @@ function time(p) {
   return {
     range: rangeOf(p),
     peak_hours: { start_hour: 7, end_hour: 9, secondary_start_hour: 17, secondary_end_hour: 20 },
-    busiest_weekday: { weekday: best + 1, uses: totals[best] },
+    busiest_day: peakDay(s, p),
     weekend_uses: totals[5] + totals[6],
     by_day: s.hourly ? [{ date: p.from, weekday: weekdayOf(p.from), uses: sum(s.uses) }] : p.dates.map((date, i) => ({ date, weekday: weekdayOf(date), uses: s.uses[i] })),
     heatmap: { weekdays: [1, 2, 3, 4, 5, 6, 7], hours: Array.from({ length: 24 }, (_, h) => h), cells: heat },
@@ -197,8 +214,8 @@ function engagement(p) {
   const s = seriesFor(p);
   return {
     range: rangeOf(p),
-    active_owners: Math.max(0, ...s.owners),   // chủ kính hoạt động trong KỲ đang chọn (hôm nay → DAU, tuần → WAU, tháng → MAU)
-    new_users: Math.round((p.elapsed || 0) / 7), active_glasses: Math.min(3, Math.max(0, ...s.owners)), total_glasses: 3,
+    active_owners: uniqueOwners(s, p),   // chủ kính hoạt động trong KỲ đang chọn (hôm nay → DAU, tuần → WAU, tháng → MAU)
+    new_users: Math.round((p.elapsed || 0) * 1.6), active_glasses: Math.min(D.DEVICES.length, uniqueOwners(s, p)), total_glasses: D.DEVICES.length,
     avg_active_days: Math.round((5.3 / 7) * (p.elapsed || 0) * 10) / 10, period_days: p.elapsed || 0,   // chỉ tính các ngày đã diễn ra
     granularity: s.hourly ? "hour" : "day",
     daily: s.buckets.map((date, i) => ({ date, active_owners: s.owners[i] })),

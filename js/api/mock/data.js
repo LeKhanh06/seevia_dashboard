@@ -66,7 +66,7 @@ export const COUNT_KEYS = new Set(["uses", "errors", "rejected_images", "connect
 
 export const COMMUNITY = {
   install_attempts: 5, install_successes: 4, install_success_rate: 80, install_errors: [{ code: "wifi_5ghz", count: 1 }], install_p50_seconds: 720,
-  emergency_contact_accounts: 2, disconnects_per_device_per_day: 1.4, battery_to_20_p50_seconds: 13800,
+  emergency_contact_accounts: 2, disconnects_per_day: 23, battery_to_20_p50_seconds: 13800,
   glasses_sessions: 27, glasses_session_seconds: 112500, glasses_active_days: 6,
 };
 
@@ -95,18 +95,31 @@ export const ERROR_ROWS = [
   { code: "nav_route_fail", feature: "directions", group: "Go", count: 1, change: -1, last_seen: "2026-11-12T17:40:00+07:00", firmware_version: "v0" },
 ];
 
-export const ACCOUNTS = [
-  { id: "TK-0001", email_masked: "ng***@gmail.com", created_at: "2026-11-02", status: "active", glasses_count: 1 },
-  { id: "TK-0002", email_masked: "mi***@gmail.com", created_at: "2026-11-05", status: "active", glasses_count: 1 },
-  { id: "TK-0003", email_masked: "tr***@gmail.com", created_at: "2026-11-09", status: "active", glasses_count: 1 },
-  { id: "TK-0004", email_masked: "ha***@gmail.com", created_at: "2026-11-12", status: "active", glasses_count: 0 },
-];
+// Quy mô mẫu: gấp VOLUME lần tuần thiết kế (≈3.000 lượt/tuần), 72 tài khoản chủ kính, 66 kính.
+export const VOLUME = 10;
+export const DAILY_OWNERS = 44;   // chủ kính hoạt động trong ngày cao nhất
 
-export const DEVICES = [
-  { id: "KINH-01", firmware_version: "v0", status: "online", last_seen_at: "2026-11-15T08:42:00+07:00", account_id: "TK-0001" },
-  { id: "KINH-02", firmware_version: "v0", status: "offline", last_seen_at: "2026-11-14T21:10:00+07:00", account_id: "TK-0002" },
-  { id: "KINH-03", firmware_version: "v0", status: "online", last_seen_at: "2026-11-15T08:15:00+07:00", account_id: "TK-0003" },
-];
+const PREFIX = ["ng", "tr", "le", "ph", "va", "ho", "hu", "bu", "da", "do", "mi", "ha", "ly", "vo", "dg", "ta", "an", "lu", "ki", "th"];
+const pseudo = (i, k) => Math.abs(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1;
+const day = n => `2026-${n < 31 ? "10" : "11"}-${String(n < 31 ? n + 1 : n - 30).padStart(2, "0")}`;
+export const ACCOUNTS = Array.from({ length: 72 }, (_, i) => {
+  const n = i + 1;
+  return {
+    id: `TK-${String(n).padStart(4, "0")}`, email_masked: `${PREFIX[i % PREFIX.length]}${["", "a", "o", "n"][Math.floor(pseudo(n, 1) * 4)]}***@gmail.com`,
+    created_at: day(Math.min(45, Math.floor(n * 0.62))), status: n % 17 === 0 ? "suspended" : "active", glasses_count: n % 12 === 0 ? 0 : 1,
+  };
+});
+// Mỗi tài khoản có kính (glasses_count = 1) sở hữu một kính; KINH-02 cố ý offline từ tối qua.
+export const DEVICES = ACCOUNTS.filter(a => a.glasses_count > 0).map((a, i) => {
+  const n = i + 1, offline = n === 2 || n % 11 === 0;
+  const hours = offline ? 14 + Math.floor(pseudo(n, 2) * 40) : Math.floor(pseudo(n, 3) * 6);
+  const t = new Date(Date.UTC(2026, 10, 15, 1, 42) - hours * 3600000 - Math.floor(pseudo(n, 4) * 50) * 60000);
+  const pad = x => String(x).padStart(2, "0"), v = new Date(t.getTime() + 7 * 3600000);
+  return {
+    id: `KINH-${pad(n)}`, firmware_version: "v0", status: offline ? "offline" : "online", account_id: a.id,
+    last_seen_at: n === 2 ? "2026-11-14T21:10:00+07:00" : `${v.getUTCFullYear()}-${pad(v.getUTCMonth() + 1)}-${pad(v.getUTCDate())}T${pad(v.getUTCHours())}:${pad(v.getUTCMinutes())}:00+07:00`,
+  };
+});
 export const DEVICE_ERRORS = {
   "KINH-01": [{ code: "net_timeout", feature: "ocr", occurred_at: "2026-11-15T08:31:00+07:00" }],
   "KINH-02": [{ code: "phone_no_callback", feature: "Gọi người thân", occurred_at: "2026-11-14T19:05:00+07:00" }],

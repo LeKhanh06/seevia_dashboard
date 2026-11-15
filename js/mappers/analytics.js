@@ -1,6 +1,6 @@
 /* Các trang: Cộng đồng & Thiết bị, Thời điểm, Chất lượng & tốc độ, Gắn bó, An toàn. */
 import { vi, fill } from "../i18n/vi.js";
-import { fmtInt, fmtPct, fmtDec, fmtDuration, fmtMs, fmtMinutes, fmtFraction, ratio, toNum, DASH } from "../lib/format.js";
+import { fmtDate, fmtInt, fmtPct, fmtDec, fmtDuration, fmtMs, fmtMinutes, fmtFraction, ratio, toNum, DASH } from "../lib/format.js";
 import { compareName } from "../core/period.js";
 import { arr, obj, metric, delta, bucketLabel, bucketTitle } from "./util.js";
 import { weekdayOf } from "../core/period.js";
@@ -20,27 +20,27 @@ export function mapCommunity(raw) {
       metric(m.install_success, fmtPct(rate), installFoot, { estimate: Boolean(r.install_success_rate_is_estimate) }),
       metric(m.install_time, fmtDuration(r.install_p50_seconds), c.installTimeFoot),
       metric(m.emergency_contact, fmtFraction(r.emergency_contact_accounts, r.total_accounts), ratio(r.emergency_contact_accounts, r.total_accounts) === null ? null : fill(c.emergencyFoot, { pct: fmtPct(Math.round(ratio(r.emergency_contact_accounts, r.total_accounts) * 100)) })),
-      metric(m.disconnects, fmtDec(r.disconnects_per_device_per_day), c.disconnectsFoot),
+      metric(m.disconnects, fmtInt(r.disconnects_per_day), c.disconnectsFoot),
       metric(m.battery20, fmtDuration(r.battery_to_20_p50_seconds), c.batteryFoot),
       metric(m.glasses_sessions, sessions === null ? DASH : fill(c.sessionsValue, { count: fmtInt(sessions) }), toNum(r.glasses_session_seconds) === null ? null : fill(c.sessionsFoot, { duration: fmtDuration(r.glasses_session_seconds) }) + (toNum(r.glasses_active_days) === null ? "" : fill(c.sessionsDays, { days: fmtInt(r.glasses_active_days) }))),
     ],
     csv: {
       headers: ["Chỉ số", "Giá trị"],
       rows: [["Tỷ lệ cài đặt kính thành công (%)", rate ?? ""], ["Thời gian cài đặt kính (giây)", r.install_p50_seconds ?? ""], ["Tài khoản có liên hệ khẩn cấp", r.emergency_contact_accounts ?? ""], ["Tổng tài khoản", r.total_accounts ?? ""],
-        ["Mất kết nối / ngày", r.disconnects_per_device_per_day ?? ""], ["Dùng đến khi pin còn 20% (giây)", r.battery_to_20_p50_seconds ?? ""], ["Số phiên kết nối kính", r.glasses_sessions ?? ""], ["Tổng thời gian kết nối kính (giây)", r.glasses_session_seconds ?? ""]],
+        ["Mất kết nối / ngày", r.disconnects_per_day ?? ""], ["Dùng đến khi pin còn 20% (giây)", r.battery_to_20_p50_seconds ?? ""], ["Số phiên kết nối kính", r.glasses_sessions ?? ""], ["Tổng thời gian kết nối kính (giây)", r.glasses_session_seconds ?? ""]],
     },
   };
 }
 
 // ---- Thời điểm ----------------------------------------------------------------------------
 export function mapTime(raw, ctx) {
-  const t = vi.time, r = obj(raw), peak = obj(r.peak_hours), best = obj(r.busiest_weekday);
+  const t = vi.time, r = obj(raw), peak = obj(r.peak_hours), best = obj(r.busiest_day);
   const range = (a, b) => (toNum(a) === null || toNum(b) === null ? null : `${a}–${b}`);
   const primary = range(peak.start_hour, peak.end_hour), secondary = range(peak.secondary_start_hour, peak.secondary_end_hour);
   const single = ctx.period.from === ctx.period.to;   // kỳ một ngày: "ngày nhiều nhất" và "cuối tuần" không có nghĩa
   const cards = [metric(vi.metrics.peak_hours, primary ? `${primary} ${t.hoursUnit}` : DASH, secondary ? fill(t.peakFoot, { range: secondary }) : null)];
   if (!single) cards.push(
-    metric(vi.metrics.busiest_day, vi.weekdayLong[best.weekday] || DASH, toNum(best.uses) === null ? null : fill(t.usesFoot, { value: fmtInt(best.uses) })),
+    metric(vi.metrics.busiest_day, fmtDate(best.date), toNum(best.uses) === null ? null : fill(t.usesFoot, { value: fmtInt(best.uses) })),
     metric(vi.metrics.weekend, toNum(r.weekend_uses) === null ? DASH : fill(t.usesWord, { value: fmtInt(r.weekend_uses) }), t.weekendFoot));
   const hm = obj(r.heatmap), cells = arr(hm.cells);
   const weekdays = arr(hm.weekdays).length ? hm.weekdays : cells.map((_, i) => i + 1);

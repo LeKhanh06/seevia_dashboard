@@ -212,13 +212,15 @@ body.is-login .main-content { padding: 0; }
 /* Ô tiêu đề của hàng (cột đầu): trông như ô dữ liệu, không mang nền của hàng tiêu đề cột */
 .data-table tbody th[scope="row"] { background: transparent; color: var(--deep); font-size: inherit; font-weight: 600; border-top: 1px solid var(--line); transition: background-color var(--dur-fast, 150ms); }
 .data-table tbody tr:hover th[scope="row"] { background: var(--row-hover); }
-/* Bảng số liệu của biểu đồ: các khối bảng chia đều chiều ngang */
-.chart-tables { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
-.chart-tables .table-scroll { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
-.chart-data .data-table thead th { border-bottom: 1px solid var(--line); }
+/* Bảng số liệu của biểu đồ: một bảng đầy đủ chiều ngang, có thanh tỷ lệ ở giữa */
+.chart-table { border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 380px; overflow: auto; }
+.chart-data .data-table thead th { position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--line); }
 .chart-data .data-table tbody tr:first-child th, .chart-data .data-table tbody tr:first-child td { border-top: 0; }
-.chart-data .data-table th.num, .chart-data .data-table td.num { text-align: right; }
-@media (max-width: 899px) { .chart-tables { grid-template-columns: minmax(0, 1fr); } }
+.chart-data .data-table th[scope="row"] { width: 160px; white-space: nowrap; font-weight: 500; }
+.chart-data .data-table .num { width: 96px; text-align: right; font-weight: 600; color: var(--deep); }
+.chart-data .data-table .bar-col { padding-block: 0; }
+.mini-track { display: block; height: 8px; border-radius: var(--radius-pill); background: var(--soft); overflow: hidden; }
+.mini-fill { display: block; width: var(--w); height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--chart-peak-from), var(--chart-peak-to)); }
 .sort-button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 4px; margin: 0 -4px; border: 0; background: none; font-size: inherit; font-weight: 600; color: inherit; border-radius: 6px; }
 .sort-button:hover, th.is-sorted .sort-button { color: var(--deep); }
 .table-link { font-weight: 600; }

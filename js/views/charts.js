@@ -38,19 +38,23 @@ function niceScale(max) {
   return { max: Math.ceil(max / step) * step, step };
 }
 
-// Bảng số liệu: thu vào nút "Xem bảng số liệu". Bảng dài được chia thành các khối cạnh nhau (tối đa 3) để trải đều chiều ngang.
+// Bảng số liệu: thu vào nút "Xem bảng số liệu". Bảng hai cột (nhãn, giá trị) có thêm thanh tỷ lệ ở giữa
+// để lấp đầy chiều ngang và đọc nhanh; các bảng nhiều cột giữ nguyên dạng bảng.
 export function tableToggle({ caption, headers, rows }) {
-  const parts = rows.length > 12 ? Math.min(3, Math.ceil(rows.length / 10)) : 1;
-  const size = Math.ceil(rows.length / parts);
-  const chunks = Array.from({ length: parts }, (_, i) => rows.slice(i * size, (i + 1) * size)).filter(c => c.length);
-  const table = (chunk, i) => h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": parts > 1 ? `${caption} (${i + 1}/${chunks.length})` : caption },
-    h("table", { class: "data-table compact" },
-      h("caption", { class: "sr-only" }, caption),
-      h("thead", null, h("tr", null, headers.map((t, k) => h("th", { scope: "col", class: k ? "num" : "" }, t)))),
-      h("tbody", null, chunk.map(r => h("tr", null, r.map((c, k) => (k ? h("td", { class: "num" }, c) : h("th", { scope: "row" }, c))))))));
+  const withBar = headers.length === 2;
+  const max = withBar ? Math.max(0, ...rows.map(r => Number(r[1]) || 0)) : 0;
+  const head = withBar
+    ? [h("th", { scope: "col" }, headers[0]), h("th", { scope: "col", class: "bar-col", "aria-hidden": "true" }), h("th", { scope: "col", class: "num" }, headers[1])]
+    : headers.map((t, k) => h("th", { scope: "col", class: k ? "num" : "" }, t));
+  const body = rows.map(r => h("tr", null, withBar
+    ? [h("th", { scope: "row" }, r[0]),
+      h("td", { class: "bar-col", "aria-hidden": "true" }, h("span", { class: "mini-track" }, h("i", { class: "mini-fill", style: { "--w": max ? `${Math.round(((Number(r[1]) || 0) / max) * 100)}%` : "0%" } }))),
+      h("td", { class: "num" }, r[1])]
+    : r.map((c, k) => (k ? h("td", { class: "num" }, c) : h("th", { scope: "row" }, c)))));
   return h("details", { class: "chart-data" },
     h("summary", { class: "button button-ghost" }, vi.chart.viewTable),
-    h("div", { class: "chart-tables", style: { "--cols": chunks.length } }, chunks.map(table)));
+    h("div", { class: "table-scroll chart-table", tabindex: "0", role: "region", "aria-label": caption },
+      h("table", { class: "data-table compact" }, h("caption", { class: "sr-only" }, caption), h("thead", null, h("tr", null, head)), h("tbody", null, body))));
 }
 
 // ---- Biểu đồ đường (Tổng quan): kỳ này + kỳ trước (nét đứt) -------------------------------

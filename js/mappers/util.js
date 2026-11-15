@@ -34,5 +34,6 @@ export function bucketLabel(bucket, granularity, count) {
 export const bucketTitle = (bucket, granularity, count) => {
   if (granularity === "hour") return bucketLabel(bucket, granularity, count);
   const date = String(bucket).slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${vi.weekdayShort[weekdayOf(date)]} ${date.slice(8)}/${date.slice(5, 7)}` : DASH;
+  // Ngày đầy đủ dd/mm/yyyy, không ghi thứ.
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : DASH;
 };

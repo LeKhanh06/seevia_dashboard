@@ -33,36 +33,37 @@ export function mapCommunity(raw) {
 }
 
 // ---- Thời điểm ----------------------------------------------------------------------------
-export function mapTime(raw) {
+export function mapTime(raw, ctx) {
   const t = vi.time, r = obj(raw), peak = obj(r.peak_hours), best = obj(r.busiest_weekday);
   const range = (a, b) => (toNum(a) === null || toNum(b) === null ? null : `${a}–${b}`);
   const primary = range(peak.start_hour, peak.end_hour), secondary = range(peak.secondary_start_hour, peak.secondary_end_hour);
-  const cards = [
-    metric(vi.metrics.peak_hours, primary ? `${primary} ${t.hoursUnit}` : DASH, secondary ? fill(t.peakFoot, { range: secondary }) : null),
+  const single = ctx.period.from === ctx.period.to;   // kỳ một ngày: "ngày nhiều nhất" và "cuối tuần" không có nghĩa
+  const cards = [metric(vi.metrics.peak_hours, primary ? `${primary} ${t.hoursUnit}` : DASH, secondary ? fill(t.peakFoot, { range: secondary }) : null)];
+  if (!single) cards.push(
     metric(vi.metrics.busiest_day, vi.weekdayLong[best.weekday] || DASH, toNum(best.uses) === null ? null : fill(t.usesFoot, { value: fmtInt(best.uses) })),
-    metric(vi.metrics.weekend, toNum(r.weekend_uses) === null ? DASH : fill(t.usesWord, { value: fmtInt(r.weekend_uses) }), t.weekendFoot),
-  ];
+    metric(vi.metrics.weekend, toNum(r.weekend_uses) === null ? DASH : fill(t.usesWord, { value: fmtInt(r.weekend_uses) }), t.weekendFoot));
   const hm = obj(r.heatmap), cells = arr(hm.cells);
   const weekdays = arr(hm.weekdays).length ? hm.weekdays : cells.map((_, i) => i + 1);
   const hours = arr(hm.hours).length ? hm.hours : Array.from({ length: 24 }, (_, i) => i);
   const max = Math.max(0, ...cells.flat().map(v => toNum(v) ?? 0));
   const heat = {
     hours, max,
-    rows: cells.map((row, i) => ({
-      label: vi.weekdayShort[weekdays[i]] || DASH,
+    rows: cells.map((row, i) => ({ wd: weekdays[i], row })).filter(x => !single || x.wd === weekdayOf(ctx.period.from)).map(({ row, wd }) => ({
+      label: vi.weekdayShort[wd] || DASH,
       cells: arr(row).map((v, h) => {
         const value = toNum(v) ?? 0;
-        return { value, level: max ? value / max : 0, tip: fill(t.heatCell, { weekday: vi.weekdayShort[weekdays[i]] || "", hour: hours[h], value: fmtInt(value) }) };
+        return { value, level: max ? value / max : 0, tip: fill(t.heatCell, { weekday: vi.weekdayShort[wd] || "", hour: hours[h], value: fmtInt(value) }) };
       }),
     })),
   };
   const days = arr(r.by_day);
   const bars = days.map(d => ({
     label: days.length <= 7 ? vi.weekdayShort[d.weekday ?? weekdayOf(d.date)] || DASH : String(Number(String(d.date).slice(8))),
-    title: bucketTitle(d.date, "day", 1), value: toNum(d.uses) ?? 0, tip: fill(t.dayCell, { label: bucketTitle(d.date, "day", 1), value: fmtInt(d.uses) }),
+    title: bucketTitle(d.date, "day", 1), value: toNum(d.uses) ?? 0, empty: toNum(d.uses) === null,
+    tip: toNum(d.uses) === null ? "" : fill(t.dayCell, { label: bucketTitle(d.date, "day", 1), value: fmtInt(d.uses) }),
   }));
   return {
-    cards, heat, hasHeat: heat.rows.length > 0 && max > 0, bars, hasBars: bars.length > 0 && bars.some(b => b.value > 0),
+    cards, heat, hasHeat: heat.rows.length > 0 && max > 0, bars, hasBars: bars.length > 1 && bars.some(b => b.value > 0),
     csv: { headers: ["Ngày", "Thứ", "Lượt"], rows: days.map(d => [d.date, d.weekday ?? "", d.uses ?? ""]) },
   };
 }
@@ -102,8 +103,8 @@ export function mapEngagement(raw, ctx) {
   const hourly = r.granularity === "hour", days = arr(r.daily);
   const gran = hourly ? "hour" : "day";
   const bars = days.map(d => ({
-    label: bucketLabel(d.date, gran, days.length), title: bucketTitle(d.date, gran, 1), value: toNum(d.active_owners) ?? 0,
-    tip: fill(e.cell, { label: bucketTitle(d.date, gran, 1), value: fmtInt(d.active_owners) }),
+    label: bucketLabel(d.date, gran, days.length), title: bucketTitle(d.date, gran, 1), value: toNum(d.active_owners) ?? 0, empty: toNum(d.active_owners) === null,
+    tip: toNum(d.active_owners) === null ? "" : fill(e.cell, { label: bucketTitle(d.date, gran, 1), value: fmtInt(d.active_owners) }),
   }));
   const key = `active_${ctx.period.period}`;   // chỉ hiện chỉ số hoạt động của kỳ đang chọn
   const cards = [

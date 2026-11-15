@@ -86,9 +86,9 @@ export const viewCommunity = vm => h("div", { class: "stack-y" }, kpiGrid(vm.car
 export function viewTime(vm) {
   const t = vi.time;
   return h("div", { class: "stack-y" },
-    kpiGrid(vm.cards, 3),
+    kpiGrid(vm.cards, vm.cards.length),
     section({ title: t.heatTitle, tip: vi.sectionTips.heat, id: "tm-heat" }, vm.hasHeat ? heatmap({ heat: vm.heat, ariaLabel: t.heatTitle }) : emptyState()),
-    section({ title: t.dayTitle, tip: vi.sectionTips.byDay, id: "tm-day" }, vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: t.dayTitle, valueHeader: t.dayTable.uses }) : emptyState()));
+    vm.bars.length > 1 ? section({ title: t.dayTitle, tip: vi.sectionTips.byDay, id: "tm-day" }, vm.hasBars ? barChart({ bars: vm.bars, ariaLabel: t.dayTitle, valueHeader: t.dayTable.uses }) : emptyState()) : null);
 }
 
 // ---- Chất lượng & tốc độ --------------------------------------------------------------------

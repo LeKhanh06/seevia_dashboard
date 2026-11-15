@@ -222,7 +222,7 @@ export const vi = {
   },
 
   time: {
-    peakFoot: "Và {range} giờ các ngày trong tuần", hoursUnit: "giờ", usesFoot: "{value} lượt", weekendFoot: "T7 + CN", usesWord: "{value} lượt",
+    peakFoot: "Và {range} giờ", hoursUnit: "giờ", usesFoot: "{value} lượt", weekendFoot: "T7 + CN", usesWord: "{value} lượt",
     heatTitle: "Lượt theo khung giờ × thứ",
     heatCell: "{weekday}, {hour}h: {value} lượt", dayTitle: "Lượt theo ngày", dayTable: { day: "Ngày", uses: "Lượt" }, hourColumn: "Giờ",
     dayCell: "{label}: {value} lượt",

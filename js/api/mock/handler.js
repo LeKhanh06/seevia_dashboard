@@ -31,9 +31,15 @@ function periodOf(query) {
   const to = /^\d{4}-\d{2}-\d{2}$/.test(query.to || "") ? query.to : addDays(from, 6);
   const days = Math.max(1, Math.round((utc(to) - utc(from)) / MS_DAY) + 1);
   const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
-  const exactWeek = days === 7 && weekdayOf(from) === 1;
+  // Chỉ các ngày/giờ ĐÃ QUA mới có số liệu: kỳ chưa kết thúc (tuần này, tháng này, hôm nay) không có dữ liệu tương lai.
+  const nowVn = new Date(Date.now() + 7 * 3600000);
+  const elapsed = clamp(Math.round((utc(today) - utc(from)) / MS_DAY) + 1, 0, days);
+  const nowHour = nowVn.getUTCHours();
+  const exactWeek = days === 7 && weekdayOf(from) === 1 && elapsed === 7;
+  // Hôm nay: chỉ tính phần trăm số lượt đã diễn ra tới giờ hiện tại (theo hình dạng trong ngày).
+  const shape = D.HOUR_SHAPE, dayShare = from === to && from === today ? shape.slice(0, nowHour + 1).reduce((x, y) => x + y, 0) / shape.reduce((x, y) => x + y, 0) : 1;
   return {
-    period: query.period || "week", from, to, days, dates, exactWeek, K: days / 7,
+    period: query.period || "week", from, to, days, dates, exactWeek, elapsed, today, nowHour, K: (from === to ? dayShare : elapsed) / 7,
     compare_from: addDays(from, -days), compare_to: addDays(from, -1),
   };
 }
@@ -51,26 +57,30 @@ function seriesFor(p) {
   let buckets, uses, prev, owners, prevOwners;
   if (hourly) {
     buckets = Array.from({ length: 24 }, (_, h) => `${p.from}T${String(h).padStart(2, "0")}:00:00+07:00`);
-    uses = distribute(total, D.HOUR_SHAPE);
-    prev = distribute(Math.round(total * 0.93), D.HOUR_SHAPE.map((w, i) => w * (0.8 + 0.4 * jit(i, 3))));
+    const live = p.from === p.today ? D.HOUR_SHAPE.map((w, h) => (h <= p.nowHour ? w : 0)) : D.HOUR_SHAPE;   // giờ chưa tới: chưa có dữ liệu
+    uses = distribute(total, live);
+    prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * 0.93), D.HOUR_SHAPE.map((w, i) => w * (0.8 + 0.4 * jit(i, 3))));
     owners = uses.map(u => (u ? Math.min(3, Math.ceil(u / 6)) : 0));
     prevOwners = prev.map(u => (u ? Math.min(3, Math.ceil(u / 6)) : 0));
   } else {
     buckets = p.dates;
     if (p.exactWeek) { uses = [...D.WEEK_USES]; prev = [...D.WEEK_PREV]; owners = [...D.WEEK_OWNERS]; }
     else {
-      const w = p.dates.map((d, i) => D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 1)));
+      const w = p.dates.map((d, i) => (i < p.elapsed ? D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 1)) : 0));
       uses = distribute(total, w);
-      prev = distribute(Math.round(total * 0.93), w.map((x, i) => x * (0.85 + 0.3 * jit(i, 2))));
-      owners = uses.map(u => clamp(Math.round((u / Math.max(...uses, 1)) * 3), 1, 3));
+      prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * 0.93), p.dates.map((d, i) => D.WEEK_USES[weekdayOf(d) - 1] * (0.85 + 0.3 * jit(i, 2))));
+      owners = uses.map(u => (u ? clamp(Math.round((u / Math.max(...uses, 1)) * 3), 1, 3) : 0));
     }
     prevOwners = owners.map((o, i) => clamp(o + ((i % 3) - 1), 0, 3));
   }
   const usage = distribute(Math.round(D.BASE_USAGE_SECONDS * p.K), uses);
-  const usagePrev = distribute(Math.round(D.BASE_USAGE_SECONDS * p.K * 0.89), prev);
+  const usagePrev = distribute(Math.round(D.BASE_USAGE_SECONDS * (p.days / 7) * 0.89), prev);
   const comp = uses.map((u, i) => (u ? Math.round(87 + (jit(i, 4) - 0.5) * 8) : null));
   const compPrev = prev.map((u, i) => (u ? Math.round(86 + (jit(i, 5) - 0.5) * 8) : null));
-  return { hourly, buckets, uses, prev, owners, prevOwners, usage, usagePrev, comp, compPrev };
+  // Mốc chưa tới: phía "kỳ này" là null (chưa có dữ liệu); phía "kỳ trước" giữ nguyên.
+  const future = i => (hourly ? p.from === p.today && i > p.nowHour : i >= p.elapsed);
+  const mask = a => a.map((v, i) => (future(i) ? null : v));
+  return { hourly, buckets, uses: mask(uses), prev, owners: mask(owners), prevOwners, usage: mask(usage), usagePrev, comp: mask(comp), compPrev };
 }
 
 // Phân bổ lượt: tổng kỳ = các nhóm + SOS; mỗi nhóm = tổng lượt các chức năng của nhóm.
@@ -92,7 +102,7 @@ function errorRows(p) {
 
 function overview(p) {
   const s = seriesFor(p), al = allocation(p);
-  const usesTotal = sum(s.uses), prevTotal = sum(s.prev);
+  const usesTotal = sum(s.uses), prevTotal = sum(s.prev.filter((_, i) => s.uses[i] !== null));   // so sánh với cùng khoảng thời gian đã diễn ra của kỳ trước
   const attention = [{ type: "error_increase", error_code: "net_timeout", feature: "ocr", delta: 3 }];
   if (al.sos > 0) attention.push({ type: "sos", count: al.sos, cancelled: scale(D.SAFETY.sos.cancelled_within_5s, p.K) });
   attention.push({ type: "device_offline", device_id: "KINH-02", since: "2026-11-14T21:10:00+07:00" });
@@ -100,8 +110,8 @@ function overview(p) {
     range: { ...rangeOf(p), compare_from: p.compare_from, compare_to: p.compare_to },
     totals: {
       usage_seconds_per_owner: Math.round(sum(s.usage) / Math.max(1, Math.max(...s.owners))),
-      uses: usesTotal, active_owners: Math.max(...s.owners), completion_rate: 87, usage_seconds: sum(s.usage),
-      uses_change_pct: pct(usesTotal, prevTotal), active_owners_change: 0, completion_rate_change_points: 2, usage_seconds_change_pct: 12,
+      uses: usesTotal, active_owners: Math.max(0, ...s.owners), completion_rate: usesTotal ? 87 : null, usage_seconds: sum(s.usage),
+      uses_change_pct: pct(usesTotal, prevTotal), active_owners_change: 0, completion_rate_change_points: usesTotal ? 2 : null, usage_seconds_change_pct: usesTotal ? 12 : null,
     },
     series: {
       granularity: s.hourly ? "hour" : "day",
@@ -122,6 +132,7 @@ function report(name, p) {
   const summary = {};
   for (const [k, v] of Object.entries(src.summary)) summary[k] = D.COUNT_KEYS.has(k) ? scale(v, p.K) : v;
   summary.uses = groupUses;
+  if (!groupUses) { summary.completion_rate = null; summary.usage_seconds = 0; if ("alert_mode_seconds" in summary) summary.alert_mode_seconds = 0; }
   summary.share_of_total_pct = al.total ? Math.round((groupUses / al.total) * 100) : null;
   return {
     range: rangeOf(p), summary,
@@ -130,6 +141,7 @@ function report(name, p) {
       for (const [k, v] of Object.entries(f.details)) details[k] = D.COUNT_KEYS.has(k) ? scale(v, p.K) : v;
       const mine = rows.filter(r => r.feature === f.key).sort((a, b) => b.count - a.count);
       const out = { ...f, uses: al.featUses[f.key], errors: mine.reduce((a, r) => a + r.count, 0), details };
+      if (!out.uses) { out.completion_rate = null; out.first_audio_p50_ms = null; }
       if (mine.length) out.top_error = { code: mine[0].code, count: mine[0].count };
       return out;
     }),
@@ -138,7 +150,14 @@ function report(name, p) {
 
 function community(p) {
   const c = D.COMMUNITY, K = p.K;
-  return { range: rangeOf(p), ...c, total_accounts: D.ACCOUNTS.length, glasses_sessions: scale(c.glasses_sessions, K), glasses_session_seconds: scale(c.glasses_session_seconds, K), glasses_active_days: Math.min(p.days, c.glasses_active_days) };
+  const sessions = scale(c.glasses_sessions, K), attempts = Math.round(c.install_attempts * K), ok = Math.min(attempts, Math.round(c.install_successes * K));
+  return {
+    range: rangeOf(p), ...c, total_accounts: D.ACCOUNTS.length,
+    install_attempts: attempts, install_successes: ok, install_success_rate: attempts ? Math.round((ok / attempts) * 100) : null,
+    install_errors: attempts - ok > 0 ? [{ code: "wifi_5ghz", count: attempts - ok }] : [],
+    glasses_sessions: sessions, glasses_session_seconds: sessions ? scale(c.glasses_session_seconds, K) : 0,
+    glasses_active_days: sessions ? Math.min(p.elapsed || 1, c.glasses_active_days) : 0,
+  };
 }
 
 function time(p) {
@@ -165,7 +184,9 @@ function quality(p) {
   const attempts = distribute(attemptsTotal, q.attempts.map(o => o[1]));
   const share = (v, t) => (t ? Math.round((v / t) * 100) : null);
   return {
-    range: rangeOf(p), completion: q.completion, speed: q.speed, total_uses: total,
+    range: rangeOf(p), total_uses: total,
+    completion: total ? q.completion : { rate: null, rate_change_points: null, first_try_rate: null, first_try_change_points: null, avg_retries: null, abandon_rate: null },
+    speed: total ? q.speed : { first_audio_p50_ms: null, first_audio_p90_ms: null, final_result_p50_ms: null },
     outcomes: q.outcomes.map(([key], i) => ({ key, uses: outcomes[i], share_pct: share(outcomes[i], total) })),
     attempts_total: attemptsTotal,
     attempts: q.attempts.map(([key], i) => ({ key, count: attempts[i], share_pct: share(attempts[i], attemptsTotal) })),
@@ -176,9 +197,9 @@ function engagement(p) {
   const s = seriesFor(p);
   return {
     range: rangeOf(p),
-    active_owners: p.from === p.to ? 2 : 3,   // chủ kính hoạt động trong KỲ đang chọn (hôm nay → DAU, tuần → WAU, tháng → MAU)
-    new_users: Math.round(p.days / 7), active_glasses: 3, total_glasses: 3,
-    avg_active_days: p.days <= 7 ? Math.round(5.3 * (p.days / 7) * 10) / 10 : Math.round(p.days * 0.7 * 10) / 10, period_days: p.days,
+    active_owners: Math.max(0, ...s.owners),   // chủ kính hoạt động trong KỲ đang chọn (hôm nay → DAU, tuần → WAU, tháng → MAU)
+    new_users: Math.round((p.elapsed || 0) / 7), active_glasses: Math.min(3, Math.max(0, ...s.owners)), total_glasses: 3,
+    avg_active_days: Math.round((5.3 / 7) * (p.elapsed || 0) * 10) / 10, period_days: p.elapsed || 0,   // chỉ tính các ngày đã diễn ra
     granularity: s.hourly ? "hour" : "day",
     daily: s.buckets.map((date, i) => ({ date, active_owners: s.owners[i] })),
   };

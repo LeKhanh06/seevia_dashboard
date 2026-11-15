@@ -114,25 +114,36 @@ export function lineChart({ series, names, ariaLabel }) {
 // ---- Biểu đồ cột (Gắn bó, Thời điểm) -----------------------------------------------------
 export function barChart({ bars, ariaLabel, valueHeader, dayHeader = vi.time.dayTable.day }) {
   if (!bars.length) return emptyState(vi.chart.noData);
-  const peak = bars.reduce((best, b, i) => (b.value > bars[best].value ? i : best), 0);
+  const top = Math.max(...bars.map(b => b.value), 1);
+  const maxima = bars.filter(b => b.value === top).length;
   const box = responsive((W, H) => {
-    const L = 8, R = 8, T = 30, B = 30, plotW = W - L - R, base = H - B, plotH = base - T;
-    const max = Math.max(...bars.map(b => b.value), 1);
-    const slot = plotW / bars.length, bw = Math.max(4, Math.min(56, slot * 0.46));
-    const grid = [0, 1, 2, 3].map(k => s("line", { class: "grid-line", x1: L, x2: W - R, y1: base - (plotH * k) / 3 + (k === 0 ? 0 : 0), y2: base - (plotH * k) / 3 }));
+    // Trục giá trị có nhãn số nguyên; nhãn trên đầu cột chỉ hiện khi đủ chỗ.
+    const L = 36, R = 8, T = 34, B = 30, plotW = W - L - R, base = H - B, plotH = base - T;
+    const allInt = bars.every(b => Number.isInteger(b.value));
+    let { max, step } = niceScale(top);
+    if (allInt) { step = Math.max(1, Math.ceil(step)); max = Math.max(step, Math.ceil(top / step) * step); }
+    const slot = plotW / bars.length, bw = Math.max(5, Math.min(44, slot * 0.58));
+    const y = v => base - (v / max) * plotH;
+    const grid = [], ticks = [];
+    for (let v = 0; v <= max + 1e-9; v += step) {
+      grid.push(s("line", { class: "grid-line", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      ticks.push(s("text", { class: "axis-text", x: L - 10, y: y(v) + 4, "text-anchor": "end" }, String(v)));
+    }
     const every = Math.max(1, Math.ceil(bars.length / Math.max(1, Math.floor(plotW / 30))));
     const showValues = slot >= 26;
     const items = bars.map((b, i) => {
       const bh = b.value > 0 ? Math.max(3, (b.value / max) * plotH) : 0, cx = L + slot * i + slot / 2;
+      // Chỉ tô nổi bật khi có một (tối đa hai) cột cao nhất, tránh nhấn mạnh ngẫu nhiên một cột trong nhiều cột bằng nhau.
+      const peak = b.value === top && maxima <= 2;
       return s("g", null,
-        bh ? s("rect", { class: ["chart-bar", i === peak ? "is-peak" : ""], x: cx - bw / 2, y: base - bh, width: bw, height: bh, rx: Math.min(10, bw / 2), tabindex: 0, role: "img", "aria-label": b.tip, dataset: { tooltip: b.tip }, style: { "--i": i } }) : null,
-        showValues ? s("text", { class: "bar-value", x: cx, y: base - bh - 8, "text-anchor": "middle" }, String(b.value)) : null,
+        bh && !b.empty ? s("rect", { class: ["chart-bar", peak ? "is-peak" : ""], x: cx - bw / 2, y: base - bh, width: bw, height: bh, rx: Math.min(8, bw / 2), tabindex: 0, role: "img", "aria-label": b.tip, dataset: { tooltip: b.tip }, style: { "--i": i } }) : null,
+        showValues && !b.empty ? s("text", { class: "bar-value", x: cx, y: base - bh - 8, "text-anchor": "middle" }, String(b.value)) : null,
         i % every === 0 ? s("text", { class: "axis-text", x: cx, y: H - 8, "text-anchor": "middle" }, b.label) : null);
     });
     const defs = s("defs", null, s("linearGradient", { id: "bar-peak", x1: 0, y1: 1, x2: 0, y2: 0 }, s("stop", { offset: "0%", class: "bar-stop-from" }), s("stop", { offset: "100%", class: "bar-stop-to" })));
-    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, defs, grid, items);
+    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, defs, grid, ticks, items);
   });
-  const table = tableToggle({ caption: ariaLabel, headers: [dayHeader, valueHeader], rows: bars.map(b => [b.title, b.value]) });
+  const table = tableToggle({ caption: ariaLabel, headers: [dayHeader, valueHeader], rows: bars.map(b => [b.title, b.empty ? "—" : b.value]) });
   return h("div", { class: "chart-wrap" }, box, table);
 }
 

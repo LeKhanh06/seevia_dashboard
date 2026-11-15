@@ -212,12 +212,13 @@ body.is-login .main-content { padding: 0; }
 /* Ô tiêu đề của hàng (cột đầu): trông như ô dữ liệu, không mang nền của hàng tiêu đề cột */
 .data-table tbody th[scope="row"] { background: transparent; color: var(--deep); font-size: inherit; font-weight: 600; border-top: 1px solid var(--line); transition: background-color var(--dur-fast, 150ms); }
 .data-table tbody tr:hover th[scope="row"] { background: var(--row-hover); }
-/* Bảng số liệu của biểu đồ: gọn, không kéo giãn hai cột ra xa nhau */
-.chart-data .table-scroll { max-width: 460px; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: auto; max-height: 360px; }
-.chart-data .data-table { min-width: 100%; }
-.chart-data .data-table thead th { position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--line); }
+/* Bảng số liệu của biểu đồ: các khối bảng chia đều chiều ngang */
+.chart-tables { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
+.chart-tables .table-scroll { border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+.chart-data .data-table thead th { border-bottom: 1px solid var(--line); }
 .chart-data .data-table tbody tr:first-child th, .chart-data .data-table tbody tr:first-child td { border-top: 0; }
-.chart-data .data-table td.num, .chart-data .data-table th.num { width: 1%; white-space: nowrap; padding-left: var(--sp-6); }
+.chart-data .data-table th.num, .chart-data .data-table td.num { text-align: right; }
+@media (max-width: 899px) { .chart-tables { grid-template-columns: minmax(0, 1fr); } }
 .sort-button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 4px; margin: 0 -4px; border: 0; background: none; font-size: inherit; font-weight: 600; color: inherit; border-radius: 6px; }
 .sort-button:hover, th.is-sorted .sort-button { color: var(--deep); }
 .table-link { font-weight: 600; }

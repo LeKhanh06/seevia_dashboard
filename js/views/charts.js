@@ -38,14 +38,19 @@ function niceScale(max) {
   return { max: Math.ceil(max / step) * step, step };
 }
 
-// Bảng số liệu: thu vào nút "Xem bảng số liệu" (trình đọc màn hình vẫn đọc được).
+// Bảng số liệu: thu vào nút "Xem bảng số liệu". Bảng dài được chia thành các khối cạnh nhau (tối đa 3) để trải đều chiều ngang.
 export function tableToggle({ caption, headers, rows }) {
+  const parts = rows.length > 12 ? Math.min(3, Math.ceil(rows.length / 10)) : 1;
+  const size = Math.ceil(rows.length / parts);
+  const chunks = Array.from({ length: parts }, (_, i) => rows.slice(i * size, (i + 1) * size)).filter(c => c.length);
+  const table = (chunk, i) => h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": parts > 1 ? `${caption} (${i + 1}/${chunks.length})` : caption },
+    h("table", { class: "data-table compact" },
+      h("caption", { class: "sr-only" }, caption),
+      h("thead", null, h("tr", null, headers.map((t, k) => h("th", { scope: "col", class: k ? "num" : "" }, t)))),
+      h("tbody", null, chunk.map(r => h("tr", null, r.map((c, k) => (k ? h("td", { class: "num" }, c) : h("th", { scope: "row" }, c))))))));
   return h("details", { class: "chart-data" },
     h("summary", { class: "button button-ghost" }, vi.chart.viewTable),
-    h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": caption }, h("table", { class: "data-table compact" },
-      h("caption", { class: "sr-only" }, caption),
-      h("thead", null, h("tr", null, headers.map((t, i) => h("th", { scope: "col", class: i ? "num" : "" }, t)))),
-      h("tbody", null, rows.map(r => h("tr", null, r.map((c, i) => (i ? h("td", { class: "num" }, c) : h("th", { scope: "row" }, c)))))))));
+    h("div", { class: "chart-tables", style: { "--cols": chunks.length } }, chunks.map(table)));
 }
 
 // ---- Biểu đồ đường (Tổng quan): kỳ này + kỳ trước (nét đứt) -------------------------------

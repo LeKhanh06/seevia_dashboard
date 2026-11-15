@@ -64,7 +64,7 @@ export function viewReport(vm, ctx) {
     dataTable({
       caption: vi.routes[ctx.def.id].title,
       columns: [
-        { key: "f", label: vi.metrics.col_feature.label, tip: vi.metrics.col_feature.tip }, { key: "u", label: vi.metrics.col_uses.label, tip: vi.metrics.col_uses.tip },
+        { key: "f", label: vi.report.colFeature }, { key: "u", label: vi.metrics.col_uses.label, tip: vi.metrics.col_uses.tip },
         { key: "c", label: vi.metrics.col_completion.label, tip: vi.metrics.col_completion.tip }, { key: "a", label: vi.metrics.col_first_audio.label, tip: vi.metrics.col_first_audio.tip },
         { key: "e", label: vi.metrics.col_errors.label, tip: vi.metrics.col_errors.tip },
       ],

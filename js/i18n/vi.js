@@ -105,7 +105,6 @@ export const vi = {
     alert_time: m("Thời gian bật cảnh báo vật cản", "Tổng thời gian chế độ cảnh báo vật cản được bật, cộng dồn các lần bật.", "Cho biết chế độ này được dùng bao lâu."),
     alerts_per_hour: m("Số cảnh báo mỗi giờ", "Tổng số cảnh báo chia tổng số giờ bật.", "Chỉ cho biết tần suất, không cho biết cảnh báo đúng hay sai."),
     // Bảng chức năng
-    col_feature: m("Chức năng", "Tên chức năng.", "Xác định dòng số liệu."),
     col_uses: m("Lượt sử dụng", "Số lượt dùng chức năng trong kỳ; phiên, cuộc gọi hoặc lần bật được ghi kèm đơn vị.", "So sánh mức dùng giữa các chức năng."),
     col_completion: m("Hoàn thành", "Số tác vụ hoàn thành chia tổng số tác vụ. Dấu — nghĩa là chức năng không tính hoàn thành theo lượt.", "Phát hiện chức năng hay dở dang."),
     col_first_audio: m("Chờ nghe tiếng đầu", "Mức chờ mà 50% lượt không vượt quá (p50), từ lúc nhả nút đến tiếng đầu tiên.", "Đo tốc độ phản hồi."),
@@ -182,7 +181,7 @@ export const vi = {
   groups: { see_read: "Đọc & Nhận diện", find: "Tìm & Hiểu", connect: "Kết nối", go: "Di chuyển", community: "Cộng đồng & Thiết bị", sos: "Khẩn cấp (SOS)" },
 
   report: {
-    detailsTitle: "Chi tiết từng chức năng",
+    detailsTitle: "Chi tiết từng chức năng", colFeature: "Chức năng",
     experimentalMark: "†",
     experimentalNote: "† An toàn · thử nghiệm có kiểm soát: chức năng liên quan an toàn, đang thử nghiệm.",
     estimate: "Chưa chắc", estimateTip: "Con số này là ước tính, chưa đủ dữ liệu để chắc chắn.",

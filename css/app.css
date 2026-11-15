@@ -145,7 +145,6 @@ body.is-login .main-content { padding: 0; }
 .card { background-image: var(--card-sheen); }
 #main[data-cat="1"] { --page-accent: var(--cat-1); } #main[data-cat="2"] { --page-accent: var(--cat-2); } #main[data-cat="3"] { --page-accent: var(--cat-3); }
 #main[data-cat="4"] { --page-accent: var(--cat-4); } #main[data-cat="5"] { --page-accent: var(--cat-5); }
-.kpi-card, .detail-card { background-image: linear-gradient(90deg, var(--card-accent), transparent 88%), var(--card-sheen); background-size: 100% 2px, 100% 100%; background-repeat: no-repeat; }
 .kpi-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; }
 .kpi-label, .metric-label { display: block; font-size: 0.9375rem; color: var(--sub); }
 .kpi-label .info-tip, .metric-label .info-tip { display: inline-grid; vertical-align: middle; margin-left: 2px; }
@@ -209,7 +208,16 @@ body.is-login .main-content { padding: 0; }
 .data-table td.tone-bad { color: var(--bad); font-weight: 600; } .data-table td.tone-good { color: var(--good); font-weight: 600; } .data-table td.tone-neutral { color: var(--sub); }
 .panel.flush .data-table th:first-child, .panel.flush .data-table td:first-child { padding-left: var(--sp-6); }
 .panel.flush .data-table th:last-child, .panel.flush .data-table td:last-child { padding-right: var(--sp-6); }
-.data-table.compact th, .data-table.compact td { padding: 8px var(--sp-3); font-size: var(--fs-sm); }
+.data-table.compact th, .data-table.compact td { padding: 9px var(--sp-4); font-size: var(--fs-sm); }
+/* Ô tiêu đề của hàng (cột đầu): trông như ô dữ liệu, không mang nền của hàng tiêu đề cột */
+.data-table tbody th[scope="row"] { background: transparent; color: var(--deep); font-size: inherit; font-weight: 600; border-top: 1px solid var(--line); transition: background-color var(--dur-fast, 150ms); }
+.data-table tbody tr:hover th[scope="row"] { background: var(--row-hover); }
+/* Bảng số liệu của biểu đồ: gọn, không kéo giãn hai cột ra xa nhau */
+.chart-data .table-scroll { max-width: 460px; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: auto; max-height: 360px; }
+.chart-data .data-table { min-width: 100%; }
+.chart-data .data-table thead th { position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--line); }
+.chart-data .data-table tbody tr:first-child th, .chart-data .data-table tbody tr:first-child td { border-top: 0; }
+.chart-data .data-table td.num, .chart-data .data-table th.num { width: 1%; white-space: nowrap; padding-left: var(--sp-6); }
 .sort-button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 4px; margin: 0 -4px; border: 0; background: none; font-size: inherit; font-weight: 600; color: inherit; border-radius: 6px; }
 .sort-button:hover, th.is-sorted .sort-button { color: var(--deep); }
 .table-link { font-weight: 600; }

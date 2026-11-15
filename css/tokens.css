@@ -27,6 +27,7 @@
   --th-ink: #6E6A91;
   --chip-accent-ink: #2A55EC;
   --card-accent: transparent;
+  --card-sheen: linear-gradient(transparent, transparent);
   --section-bar: #305FFA;
   --row-hover: #EEF1FC;
   --input-bg: #FFFFFF;
@@ -93,7 +94,8 @@
   --th-bg: #2F2C72;
   --th-ink: #8BA6FF;
   --chip-accent-ink: #C9D6FF;              /* chữ tiêu đề cột: màu nhấn */
-  --card-accent: #5B7CFF;         /* viền trên thẻ KPI / chi tiết */
+  --card-accent: #5B7CFF;         /* đường nhấn mép trên thẻ KPI / chi tiết (mờ dần sang phải) */
+  --card-sheen: linear-gradient(180deg, rgba(139, 166, 255, 0.08), rgba(139, 166, 255, 0) 60%);   /* chiều sâu nhẹ, thay cho đổ bóng */
   --section-bar: #8BA6FF;         /* thanh nhấn trước tiêu đề mục */
   --row-hover: #343080;
   --input-bg: #232155;

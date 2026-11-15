@@ -143,6 +143,8 @@ body.is-login .main-content { padding: 0; }
 .kpi-grid { display: grid; gap: var(--sp-5); grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; }
 .kpi-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .card { background-image: var(--card-sheen); }
+#main[data-cat="1"] { --page-accent: var(--cat-1); } #main[data-cat="2"] { --page-accent: var(--cat-2); } #main[data-cat="3"] { --page-accent: var(--cat-3); }
+#main[data-cat="4"] { --page-accent: var(--cat-4); } #main[data-cat="5"] { --page-accent: var(--cat-5); }
 .kpi-card, .detail-card { background-image: linear-gradient(90deg, var(--card-accent), transparent 88%), var(--card-sheen); background-size: 100% 2px, 100% 100%; background-repeat: no-repeat; }
 .kpi-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; }
 .kpi-label, .metric-label { display: block; font-size: 0.9375rem; color: var(--sub); }
@@ -290,12 +292,15 @@ body.is-login .main-content { padding: 0; }
 .grid-line { stroke: var(--chart-grid); stroke-width: 1; }
 .chart-line { fill: none; stroke: var(--chart-main); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .chart-line-prev { fill: none; stroke: var(--chart-prev); stroke-width: 2; stroke-dasharray: 5 5; }
-.chart-area { fill: var(--chart-main); opacity: .1; }
+.chart-area { opacity: 1; }
+.area-stop-top { stop-color: var(--chart-main); stop-opacity: .28; }
+.area-stop-bottom { stop-color: var(--chart-main); stop-opacity: 0; }
 .chart-dot { fill: var(--card); stroke: var(--chart-main); stroke-width: 2; cursor: pointer; transition: r .12s; }
 .chart-dot:hover, .chart-dot:focus-visible { r: 7; }
 .chart-bar { fill: var(--chart-light); }
-.chart-bar.is-peak { fill: var(--chart-main); }
-.chart-bar:hover { filter: brightness(.95); }
+.chart-bar.is-peak { fill: url(#bar-peak); }
+.bar-stop-from { stop-color: var(--chart-peak-from); } .bar-stop-to { stop-color: var(--chart-peak-to); }
+.chart-bar:hover { filter: brightness(1.12); }
 .bar-value { fill: var(--deep); font-size: 14px; font-weight: 700; }
 .legend { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--sub); }
 .legend-item { display: inline-flex; align-items: center; gap: 8px; }

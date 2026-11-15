@@ -26,9 +26,10 @@
   --th-bg: #F6F8FF;               /* tiêu đề cột bảng */
   --th-ink: #6E6A91;
   --chip-accent-ink: #2A55EC;
-  --card-accent: transparent;
-  --card-sheen: linear-gradient(transparent, transparent);
-  --section-bar: #305FFA;
+  --page-accent: var(--accent-text);
+  --card-accent: var(--page-accent);
+  --card-sheen: linear-gradient(180deg, color-mix(in srgb, var(--page-accent) 7%, transparent), transparent 62%);
+  --section-bar: var(--page-accent);
   --row-hover: #EEF1FC;
   --input-bg: #FFFFFF;
   --ink-dim: #6E6A91;
@@ -36,7 +37,7 @@
   --skeleton-a: #EEF1FC; --skeleton-b: #E8EDFF;
   --nav-active-bg: #E8EDFF; --nav-active-ink: #2A55EC;
   --avatar-bg: linear-gradient(115deg, #6A5CF2 0%, #305FFA 100%);
-  --shadow-card: 0 8px 24px rgba(48, 50, 120, 0.07);
+  --shadow-card: 0 1px 2px rgba(48, 50, 120, 0.05), 0 12px 30px rgba(48, 50, 120, 0.09);
   --scrim: rgba(27, 25, 55, 0.45);
   --tooltip-bg: #1B1937;
   --tooltip-text: #FFFFFF;
@@ -76,7 +77,8 @@
   --cat-1-ink: #0A7480; --cat-2-ink: #5240C8; --cat-3-ink: #5240C8; --cat-4-ink: #5240C8; --cat-5-ink: #6E3FC4;
   --chart-main: #305FFA; --chart-light: #C9D4FB; --chart-grid: var(--line-card);
   --chart-prev: var(--sub);
-  --chart-heat: 48 95 250;           /* rgb dùng với alpha: rgb(var(--chart-heat) / a) */
+  --chart-heat: 48 95 250;
+  --chart-peak-from: #305FFA; --chart-peak-to: #6A5CF2;   /* cột nổi bật: chuyển nhẹ sang tím của palette */           /* rgb dùng với alpha: rgb(var(--chart-heat) / a) */
 }
 
 /* Giao diện tối: ba lớp nền rõ ràng — nền trang < thẻ < thẻ nổi (ô chọn, menu, tooltip); không đổ bóng, tách thẻ bằng viền mảnh. */
@@ -94,9 +96,9 @@
   --th-bg: #2F2C72;
   --th-ink: #8BA6FF;
   --chip-accent-ink: #C9D6FF;              /* chữ tiêu đề cột: màu nhấn */
-  --card-accent: #5B7CFF;         /* đường nhấn mép trên thẻ KPI / chi tiết (mờ dần sang phải) */
-  --card-sheen: linear-gradient(180deg, rgba(139, 166, 255, 0.08), rgba(139, 166, 255, 0) 60%);   /* chiều sâu nhẹ, thay cho đổ bóng */
-  --section-bar: #8BA6FF;         /* thanh nhấn trước tiêu đề mục */
+  --card-accent: var(--page-accent);   /* đường nhấn mép trên thẻ (mờ dần sang phải) */
+  --card-sheen: linear-gradient(180deg, color-mix(in srgb, var(--page-accent) 13%, transparent), transparent 62%);   /* chiều sâu nhẹ, thay cho đổ bóng */
+  --section-bar: var(--page-accent);
   --row-hover: #343080;
   --input-bg: #232155;
   --skeleton-a: #2A2866; --skeleton-b: #38357F;
@@ -139,4 +141,5 @@
   --chart-main: #7C9BFF; --chart-light: #3B4BB5;
   --chart-grid: rgba(72, 68, 154, 0.6);
   --chart-heat: 124 155 255;
+  --chart-peak-from: #7C9BFF; --chart-peak-to: #9A8CFF;
 }

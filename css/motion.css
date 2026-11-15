@@ -14,18 +14,28 @@
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes rise { from { transform: scaleY(0); } }
 @keyframes spin-in { from { opacity: 0; transform: rotate(-70deg) scale(0.9); } }
+@keyframes reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes dot-pop { from { opacity: 0; transform: scale(0); } }
+@keyframes seg-draw { from { stroke-dasharray: 0 100; } }
+@keyframes seg-grow { from { transform: scaleX(0); } }
+@keyframes cell-in { from { opacity: 0; transform: scale(0.4); } }
+@keyframes rise-back { 0% { transform: scaleY(0); } 70% { transform: scaleY(1.06); } 100% { transform: scaleY(1); } }
 
 /* Vào trang */
 .enter-item { animation: enter var(--dur-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
 .page-body > .state { animation: fade var(--dur-base) var(--ease) both; }
 
 /* Biểu đồ (chỉ lần vẽ đầu, không chạy lại khi đổi kích thước) */
-.is-entering .chart-line { stroke-dasharray: 1; animation: draw var(--dur-slow) var(--ease) both; }
-.is-entering .chart-area, .is-entering .chart-line-prev, .is-entering .chart-dot { animation: fade var(--dur-slow) var(--ease) both; animation-delay: 150ms; }
-.is-entering .chart-bar { transform-box: fill-box; transform-origin: bottom; animation: rise var(--dur-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.is-entering .chart-line { stroke-dasharray: 1; animation: draw 1000ms var(--ease) both; }
+.is-entering .chart-area { animation: reveal 1000ms var(--ease) both; animation-delay: 80ms; }
+.is-entering .chart-line-prev { animation: fade var(--dur-slow) var(--ease) both; animation-delay: 250ms; }
+.is-entering .chart-dot { transform-box: fill-box; transform-origin: center; animation: dot-pop var(--dur-base) cubic-bezier(0.2, 0.9, 0.3, 1.4) both; animation-delay: calc(450ms + var(--i, 0) * 32ms); }
+.is-entering .chart-bar { transform-box: fill-box; transform-origin: bottom; animation: rise-back 800ms var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
 .is-entering .bar-value { animation: fade var(--dur-slow) var(--ease) both; animation-delay: 250ms; }
-.donut-svg { animation: spin-in var(--dur-slow) var(--ease) both; }
-.heatmap { animation: fade var(--dur-slow) var(--ease) both; }
+.donut-seg { animation: seg-draw 900ms var(--ease) both; animation-delay: calc(var(--i, 0) * 130ms); }
+.donut-total, .donut-unit { animation: fade var(--dur-slow) var(--ease) both; animation-delay: 300ms; }
+.heat-cell { animation: cell-in 420ms var(--ease) both; animation-delay: calc(var(--c, 0) * 14ms + var(--r, 0) * 40ms); }
+.stack-seg { transform-origin: left; animation: seg-grow 800ms var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms); }
 .tooltip { animation: fade 120ms var(--ease); }
 
 /* Hover, focus, chuyển màu */
@@ -49,7 +59,7 @@ html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .enter-item, .page-body > .state, .donut-svg, .heatmap, .tooltip, .is-entering * { animation: none !important; }
+  .enter-item, .page-body > .state, .donut-seg, .donut-total, .donut-unit, .heat-cell, .stack-seg, .tooltip, .is-entering * { animation: none !important; }
   .is-entering .chart-line { stroke-dasharray: none; }
   .kpi-card:hover, .detail-card:hover { transform: none; }
   .menu { transform: none; transition: none; }

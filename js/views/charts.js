@@ -7,6 +7,7 @@ import { vi, fill } from "../i18n/vi.js";
 import { emptyState } from "./components.js";
 
 export const CHART_HEIGHT = 240;
+let areaId = 0;
 
 // Khung biểu đồ tự vẽ lại theo bề rộng; dừng quan sát khi bị gỡ khỏi trang.
 function responsive(draw, height = CHART_HEIGHT) {
@@ -49,22 +50,27 @@ export function tableToggle({ caption, headers, rows }) {
 
 // ---- Biểu đồ đường (Tổng quan): kỳ này + kỳ trước (nét đứt) -------------------------------
 export function lineChart({ series, names, ariaLabel }) {
-  const pts = series.points;
-  if (!pts.length || !pts.some(p => p.current !== null)) return emptyState(vi.chart.noData);
+  // Bỏ các mốc đầu/cuối chưa có dữ liệu để đường không bị hụt ở hai đầu trục.
+  const all = series.points;
+  const hasData = p => p.current !== null || p.previous !== null;
+  const from = all.findIndex(hasData), to = all.length - 1 - [...all].reverse().findIndex(hasData);
+  if (from < 0 || !all.some(p => p.current !== null)) return emptyState(vi.chart.noData);
+  const pts = all.slice(from, to + 1);
 
   const legend = h("div", { class: "legend" },
     h("span", { class: "legend-item" }, h("i", { class: "legend-line current" }), names.current),
     h("span", { class: "legend-item" }, h("i", { class: "legend-line previous" }), names.previous));
 
   const box = responsive((W, H) => {
-    const L = 48, R = 14, T = 14, B = 30, plotW = W - L - R, plotH = H - T - B;
+    const L = 48, R = 28, T = 14, B = 30, plotW = W - L - R, plotH = H - T - B;
     const values = pts.flatMap(p => [p.current, p.previous]).filter(v => v !== null);
     const { max, step } = niceScale(Math.max(...values, 0));
     const x = i => (pts.length === 1 ? L + plotW / 2 : L + (plotW * i) / (pts.length - 1));
     const y = v => T + plotH * (1 - v / max);
     const path = key => {
-      let d = "", pen = false;
-      pts.forEach((p, i) => { const v = p[key]; if (v === null) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)} `; pen = true; });
+      // Đường liền mạch: mốc trống ở giữa được nối thẳng giữa hai mốc có dữ liệu gần nhất.
+      let d = "";
+      pts.forEach((p, i) => { const v = p[key]; if (v === null) return; d += `${d ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)} `; });
       return d.trim();
     };
     const grid = [], ticks = [];
@@ -77,13 +83,15 @@ export function lineChart({ series, names, ariaLabel }) {
     const dots = pts.map((p, i) => {
       if (p.current === null) return null;
       const tip = `${p.title}: ${series.fmtValue(p.current)}${p.previous !== null ? ` · ${names.previous}: ${series.fmtValue(p.previous)}` : ""}`;
-      return s("circle", { class: "chart-dot", cx: x(i), cy: y(p.current), r: pts.length > 14 ? 3.5 : 5, tabindex: 0, role: "img", "aria-label": tip, dataset: { tooltip: tip } });
+      return s("circle", { class: "chart-dot", style: { "--i": i }, cx: x(i), cy: y(p.current), r: pts.length > 14 ? 3.5 : 5, tabindex: 0, role: "img", "aria-label": tip, dataset: { tooltip: tip } });
     });
-    const first = pts.findIndex(p => p.current !== null);
-    const lastIdx = pts.length - 1 - [...pts].reverse().findIndex(p => p.current !== null);
-    const area = `${path("current")} L${x(lastIdx).toFixed(1)} ${y(0)} L${x(first).toFixed(1)} ${y(0)} Z`;
+    // Vùng tô theo đường liền mạch, mờ dần xuống trục.
+    const segments = [pts.map((p, i) => i).filter(i => pts[i].current !== null)];
+    const base = y(0), gid = `area-${++areaId}`;
+    const areas = segments.map(seg => `M${x(seg[0]).toFixed(1)} ${base} ${seg.map(i => `L${x(i).toFixed(1)} ${y(pts[i].current).toFixed(1)}`).join(" ")} L${x(seg[seg.length - 1]).toFixed(1)} ${base} Z`);
+    const defs = s("defs", null, s("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 }, s("stop", { offset: "0%", class: "area-stop-top" }), s("stop", { offset: "100%", class: "area-stop-bottom" })));
     return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel },
-      grid, ticks, s("path", { class: "chart-area", d: area }), pts.some(p => p.previous !== null) ? s("path", { class: "chart-line-prev", d: path("previous") }) : null,
+      defs, grid, ticks, areas.map(d => s("path", { class: "chart-area", d, fill: `url(#${gid})` })), pts.some(p => p.previous !== null) ? s("path", { class: "chart-line-prev", d: path("previous") }) : null,
       s("path", { class: "chart-line", d: path("current"), pathLength: 1 }), dots, xlabels);
   });
 
@@ -112,7 +120,8 @@ export function barChart({ bars, ariaLabel, valueHeader, dayHeader = vi.time.day
         showValues ? s("text", { class: "bar-value", x: cx, y: base - bh - 8, "text-anchor": "middle" }, String(b.value)) : null,
         i % every === 0 ? s("text", { class: "axis-text", x: cx, y: H - 8, "text-anchor": "middle" }, b.label) : null);
     });
-    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, grid, items);
+    const defs = s("defs", null, s("linearGradient", { id: "bar-peak", x1: 0, y1: 1, x2: 0, y2: 0 }, s("stop", { offset: "0%", class: "bar-stop-from" }), s("stop", { offset: "100%", class: "bar-stop-to" })));
+    return s("svg", { class: "chart-svg", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": ariaLabel }, defs, grid, items);
   });
   const table = tableToggle({ caption: ariaLabel, headers: [dayHeader, valueHeader], rows: bars.map(b => [b.title, b.value]) });
   return h("div", { class: "chart-wrap" }, box, table);
@@ -123,8 +132,9 @@ export function heatmap({ heat, ariaLabel }) {
   const axis = new Set([0, 6, 12, 18, 23]);
   const head = h("div", { class: "heat-row heat-head" }, h("span", { class: "heat-label" }),
     heat.hours.map(hr => h("span", { class: "heat-hour" }, axis.has(hr) ? `${hr}h` : "")));
+  const rowIndex = r => heat.rows.indexOf(r);
   const rows = heat.rows.map(r => h("div", { class: "heat-row" }, h("span", { class: "heat-label" }, r.label),
-    r.cells.map(c => h("span", { class: "heat-cell", style: { "--a": (0.07 + c.level * 0.93).toFixed(3) }, dataset: { tooltip: c.tip }, "aria-label": c.tip }))));
+    r.cells.map((c, ci) => h("span", { class: "heat-cell", style: { "--a": (0.07 + c.level * 0.93).toFixed(3), "--c": ci, "--r": rowIndex(r) }, dataset: { tooltip: c.tip }, "aria-label": c.tip }))));
   const grid = h("div", { class: "heat-scroll" }, h("div", { class: "heatmap", role: "img", "aria-label": ariaLabel }, head, rows));
   const scale = h("div", { class: "heat-scale", "aria-hidden": "true" }, h("span", null, "0"), h("i", { class: "heat-ramp" }), h("span", null, String(heat.max)));
   const table = tableToggle({
@@ -142,7 +152,7 @@ export function donut({ items, total, centerUnit, ariaLabel }) {
   const segs = sum ? items.map((it, idx) => {
     const len = (it.uses / sum) * 100;
     const el = s("circle", {
-      class: `donut-seg cat-${idx + 1}`, cx: C, cy: C, r: R, pathLength: 100, "stroke-dasharray": `${len} ${100 - len}`, "stroke-dashoffset": -offset,
+      class: `donut-seg cat-${idx + 1}`, style: { "--i": idx }, cx: C, cy: C, r: R, pathLength: 100, "stroke-dasharray": `${len} ${100 - len}`, "stroke-dashoffset": -offset,
       tabindex: 0, role: "img", "aria-label": `${it.label}: ${it.pct}`, dataset: { tooltip: `${it.label}: ${it.uses} ${vi.chart.uses} (${it.pct})` },
     });
     offset += len;
@@ -159,7 +169,7 @@ export function donut({ items, total, centerUnit, ariaLabel }) {
 // ---- Thanh xếp chồng (An toàn: phân bố mức cảnh báo) --------------------------------------
 export function stackedBar({ levels, ariaLabel }) {
   const bar = h("div", { class: "stack-bar", role: "img", "aria-label": `${ariaLabel}: ${levels.map(l => l.text).join(", ")}` },
-    levels.filter(l => l.share > 0).map(l => h("span", { class: `stack-seg lvl-${l.level}`, style: { "--w": `${l.share}%` }, dataset: { tooltip: l.text } })));
+    levels.filter(l => l.share > 0).map((l, i) => h("span", { class: `stack-seg lvl-${l.level}`, style: { "--w": `${l.share}%`, "--i": i }, dataset: { tooltip: l.text } })));
   const legend = h("ul", { class: "stack-legend" }, levels.map(l => h("li", { class: "legend-item" }, h("i", { class: `swatch lvl-${l.level}` }), l.text)));
   return h("div", { class: "stack" }, bar, legend);
 }

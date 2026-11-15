@@ -128,6 +128,7 @@ async function renderPage({ soft = false } = {}) {
   }
   route = normalizeUrl(route, def);
   const ctx = makeCtx(route, def);
+  main.dataset.cat = def.dot || "";   // màu nhấn theo nhóm chức năng của trang
   document.title = `${vi.app.name} · ${def.detail ? ctx.params[0] || vi.routes[def.id].title : vi.routes[def.id].title}`;
   setActiveNav(sidebarHost, def.id);
   openMenu(false);

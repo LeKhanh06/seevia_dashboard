@@ -48,6 +48,13 @@ export const vi = {
     infoTitle: "Thông tin tài khoản", name: "Họ tên", email: "Email", role: "Vai trò", created: "Ngày tạo tài khoản", lastLogin: "Đăng nhập gần nhất", timezone: "Múi giờ",
     roles: { admin_readonly: "Quản trị viên (chỉ xem)" }, roleChip: "Quản trị viên", readOnlyChip: "Chỉ xem",
     timezones: { "Asia/Ho_Chi_Minh": "Việt Nam (UTC+7)" }, logout: "Đăng xuất", seeProfile: "Xem hồ sơ quản trị viên", breadcrumb: "Đường dẫn",
+    changeAvatar: "Đổi ảnh đại diện", removeAvatar: "Xóa ảnh", avatarHint: "JPG, PNG hoặc WebP, tối đa 5 MB. Ảnh được cắt vuông ở giữa.", avatarBusy: "Đang tải ảnh…", avatarDone: "Đã cập nhật ảnh đại diện.", avatarRemoved: "Đã xóa ảnh đại diện.",
+    avatarErrors: { type: "Chỉ nhận ảnh JPG, PNG hoặc WebP.", size: "Ảnh lớn hơn 5 MB.", read: "Không đọc được ảnh này.", invalid_image: "Ảnh không hợp lệ.", image_too_large: "Ảnh quá lớn.", generic: "Không cập nhật được ảnh. Vui lòng thử lại." },
+    password: {
+      title: "Đổi mật khẩu", current: "Mật khẩu hiện tại", next: "Mật khẩu mới", confirm: "Nhập lại mật khẩu mới", rule: "Tối thiểu 8 ký tự, gồm cả chữ và số.",
+      submit: "Cập nhật mật khẩu", saving: "Đang cập nhật…", success: "Đã đổi mật khẩu.", show: "Hiện mật khẩu", hide: "Ẩn mật khẩu",
+      errors: { required: "Vui lòng nhập mật khẩu hiện tại.", weak: "Mật khẩu mới cần tối thiểu 8 ký tự, gồm cả chữ và số.", mismatch: "Mật khẩu nhập lại chưa khớp.", same: "Mật khẩu mới phải khác mật khẩu hiện tại.", currentWrong: "Mật khẩu hiện tại không đúng.", generic: "Không đổi được mật khẩu. Vui lòng thử lại." },
+    },
   },
   sectionTips: {
     heat: m("Lượt theo khung giờ × thứ", "24 khung giờ 0h–23h theo giờ Việt Nam (UTC+7); một lượt tính vào khung giờ lúc bắt đầu. Ngày 00:00–23:59, tuần từ Thứ Hai đến Chủ Nhật; lượt vắt qua nửa đêm tính vào ngày bắt đầu.", "Ô đậm hơn là nhiều lượt hơn.").tip,
@@ -115,7 +122,7 @@ export const vi = {
     install_success: m("Tỷ lệ cài đặt kính thành công", "Số lần cài đặt đến khi kính báo “Glasses Online” chia số lần bắt đầu cài đặt. Lỗi theo mã: mạng 5 GHz, không tìm thấy kính, yêu cầu liên kết hết hạn.", "Cho biết bước cài đặt kính có khó với người dùng không."),
     install_time: m("Thời gian cài đặt kính", "Số phút từ lúc bắt đầu cài đặt đến khi kính báo “SeeVia đã sẵn sàng”. p50 là mức mà 50% lượt cài đặt không vượt quá.", "Cho biết cài đặt mất bao lâu."),
     emergency_contact: m("Tài khoản có liên hệ khẩn cấp", "Số tài khoản có ít nhất 1 liên hệ khẩn cấp chia TỔNG SỐ TÀI KHOẢN. Chỉ đếm có hoặc không, không hiển thị tên hay số điện thoại.", "Đánh giá mức sẵn sàng của luồng SOS."),
-    disconnects: m("Mất kết nối / ngày", "Số sự kiện “Mất kết nối mạng” mỗi ngày (không phải trung bình mỗi kính).", "Phản ánh độ ổn định kết nối."),
+    disconnects: m("Mất kết nối / ngày", "Số sự kiện “Mất kết nối mạng” trung bình mỗi ngày của cả hệ thống (không phải trung bình mỗi kính).", "Phản ánh độ ổn định kết nối."),
     battery20: m("Dùng đến khi pin còn 20%", "Số phút từ lúc bật kính đến lúc kính báo pin còn 20%. p50 là mức mà 50% lần không vượt quá.", "Cho biết thời lượng pin thực tế."),
     glasses_sessions: m("Kết nối kính", "Số phiên kính kết nối với server, tổng thời gian kết nối và số ngày có hoạt động. Không phải thời gian đeo kính.", "Cho biết mức kết nối của thiết bị."),
     // Thời điểm

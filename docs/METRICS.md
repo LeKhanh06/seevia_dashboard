@@ -43,7 +43,7 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Tỷ lệ cài đặt kính thành công | `install_success_rate (+ install_attempts, install_successes, install_errors[])` | % | Số lần cài đặt đến khi kính báo “Glasses Online” chia số lần bắt đầu cài đặt. Lỗi theo mã: mạng 5 GHz, không tìm thấy kính, yêu cầu liên kết hết hạn. | Cho biết bước cài đặt kính có khó với người dùng không. | Cộng đồng & Thiết bị |
 | Thời gian cài đặt kính | `install_p50_seconds` | giây | Số phút từ lúc bắt đầu cài đặt đến khi kính báo “SeeVia đã sẵn sàng”. p50 là mức mà 50% lượt cài đặt không vượt quá. | Cho biết cài đặt mất bao lâu. | Cộng đồng & Thiết bị |
 | Tài khoản có liên hệ khẩn cấp | `emergency_contact_accounts, total_accounts` | tài khoản | Số tài khoản có ít nhất 1 liên hệ khẩn cấp chia TỔNG SỐ TÀI KHOẢN. Chỉ đếm có hoặc không, không hiển thị tên hay số điện thoại. | Đánh giá mức sẵn sàng của luồng SOS. | Cộng đồng & Thiết bị |
-| Mất kết nối / ngày | `disconnects_per_day` | sự kiện / ngày | Số sự kiện “Mất kết nối mạng” mỗi ngày (không phải trung bình mỗi kính). | Phản ánh độ ổn định kết nối. | Cộng đồng & Thiết bị |
+| Mất kết nối / ngày | `disconnects_per_day` | sự kiện / ngày | Số sự kiện “Mất kết nối mạng” trung bình mỗi ngày của cả hệ thống (không phải trung bình mỗi kính). | Phản ánh độ ổn định kết nối. | Cộng đồng & Thiết bị |
 | Dùng đến khi pin còn 20% | `battery_to_20_p50_seconds` | giây | Số phút từ lúc bật kính đến lúc kính báo pin còn 20%. p50 là mức mà 50% lần không vượt quá. | Cho biết thời lượng pin thực tế. | Cộng đồng & Thiết bị |
 | Kết nối kính | `glasses_sessions, glasses_session_seconds, glasses_active_days` | phiên, giây, ngày | Số phiên kính kết nối với server, tổng thời gian kết nối và số ngày có hoạt động. Không phải thời gian đeo kính. | Cho biết mức kết nối của thiết bị. | Cộng đồng & Thiết bị |
 | Giờ cao điểm | `peak_hours.*` | giờ (0–23) | Khung giờ có nhiều lượt nhất. 24 khung 0h–23h theo giờ Việt Nam (UTC+7); lượt tính vào khung giờ lúc bắt đầu. | Giúp lên lịch bảo trì và hỗ trợ. | Thời điểm |
@@ -71,6 +71,9 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Cảnh báo / giờ | `alert_live.alerts_per_hour` | số cảnh báo / giờ | Tổng số cảnh báo chia tổng số giờ bật. | Chỉ cho biết tần suất, không cho biết cảnh báo đúng hay sai. | An toàn |
 
 ## Mục không phải chỉ số
+- Lượt theo giờ: Số lượt trong từng khung giờ 0h–23h theo giờ Việt Nam (UTC+7); mỗi lượt tính vào khung giờ lúc bắt đầu.
+- Lượt theo tuần: Tổng lượt mỗi tuần, tuần tính từ Thứ Hai đến Chủ Nhật; tuần ở đầu hoặc cuối kỳ có thể chưa đủ 7 ngày. Lượt vắt qua nửa đêm tính vào ngày bắt đầu.
+- Lượt theo ngày: Tổng lượt mỗi ngày, ngày tính theo giờ Việt Nam.
 - Phân bố theo giờ × thứ: 24 khung giờ 0h–23h theo giờ Việt Nam (UTC+7); một lượt tính vào khung giờ lúc bắt đầu. Ngày 00:00–23:59, tuần từ Thứ Hai đến Chủ Nhật; lượt vắt qua nửa đêm tính vào ngày bắt đầu.
 - Số lượt theo trạng thái / mã lỗi: Số lượt lỗi đếm trên lượt ghi nhận, gồm cả hỏi lại, ảnh bị từ chối, bị ngắt.
 - Phân bố mức cảnh báo: Bốn mức: 0 Safe, 1 Danger, 2 High Danger, 3 Critical; tỷ lệ trên tổng số cảnh báo.
@@ -84,8 +87,8 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Thời gian sử dụng (+ trung bình mỗi chủ kính) | Tổng quan; trang nhóm | Đã sửa: thêm "TB mỗi chủ kính" |
 | Thời gian kết nối kính (số phụ) | Cộng đồng & Thiết bị | Khớp (kèm "không phải thời gian đeo") |
 | Số chủ kính đã dùng | Tổng quan ("Chủ kính hoạt động") | Khớp (tooltip theo S25) |
-| Gắn bó: DAU / WAU / MAU, người dùng mới, kính hoạt động, số ngày sử dụng | Gắn bó | Đã sửa: hiện đủ DAU, WAU, MAU |
-| Phân bố theo giờ và thứ | Thời điểm | Khớp; tổng ô heatmap = tổng lượt |
+| Gắn bó: DAU / WAU / MAU, người dùng mới, kính hoạt động, số ngày sử dụng | Gắn bó | Khớp: hiện đúng một chỉ số hoạt động theo kỳ đang chọn (hôm nay → DAU, tuần này → WAU, tháng này → MAU); kỳ một ngày ẩn "số ngày sử dụng" |
+| Phân bố theo giờ và thứ; cộng theo ngày, tuần, tháng | Thời điểm | Khớp: hôm nay theo giờ; tuần theo ngày rồi giờ × thứ; tháng theo tuần, theo ngày rồi giờ × thứ. Tổng mọi biểu đồ = tổng lượt của kỳ |
 | Tỷ lệ hoàn thành, ngay lần đầu, thử lại TB, bỏ cuộc | Chất lượng & tốc độ | Đã sửa: ghi rõ "tính trên tác vụ" / "trên lượt ghi nhận" |
 | Số lượt theo trạng thái và mã lỗi | Chất lượng; Lỗi hệ thống | Đã sửa: tổng lỗi bảng Lỗi hệ thống = tổng cột Lỗi các trang nhóm (13) |
 | Độ trễ tiếng đầu p50 / p90; thời gian đến kết quả cuối | Chất lượng; cột "Chờ nghe tiếng đầu" | Đã sửa: nhãn "(thường, p50)", "(chậm, p90)" |

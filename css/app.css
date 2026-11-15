@@ -440,3 +440,22 @@ body.is-login .main-content { padding: 0; }
 @media (max-width: 768px) { .info-grid { grid-template-columns: minmax(0, 1fr); } }
 
 :root[data-theme="dark"] .button-outline:hover:not(:disabled) { background: var(--card-raised); }
+
+/* Ảnh đại diện và đổi mật khẩu (hồ sơ) */
+.avatar { overflow: hidden; }
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.avatar-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); }
+.field-hint { margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--sub); }
+.profile-status { min-height: 1.4em; margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--good); }
+.profile-status.is-error { color: var(--bad); }
+.pw-form { display: grid; gap: var(--sp-4); max-width: 460px; padding-bottom: var(--sp-4); }
+.pw-form .field { display: grid; gap: 6px; }
+.pw-form label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.input-wrap { position: relative; }
+.input-wrap input { width: 100%; height: 48px; padding: 0 52px 0 var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--input-bg); color: var(--deep); font-size: var(--fs-md); }
+.input-wrap input[aria-invalid="true"] { border-color: var(--bad); }
+.input-wrap input:focus-visible { outline: var(--focus-ring) solid var(--accent); outline-offset: 2px; border-color: var(--accent-text); }
+.input-wrap .reveal { position: absolute; right: 2px; top: 2px; width: 44px; height: 44px; color: var(--sub); }
+.field-error { font-size: var(--fs-sm); font-weight: 600; color: var(--bad); }
+.pw-actions { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.pw-actions .profile-status { margin-top: 0; }

@@ -1,11 +1,11 @@
 # Hợp đồng API — SeeVia Admin Dashboard
 
-Dashboard chỉ **đọc**. Backend chỉ cần trả JSON đúng hợp đồng này; frontend lo toàn bộ định dạng hiển thị (locale `vi-VN`).
+Dashboard **chỉ đọc dữ liệu hệ thống**; quản trị viên chỉ tự cập nhật hồ sơ của chính mình (đổi mật khẩu, đổi ảnh đại diện). Backend chỉ cần trả JSON đúng hợp đồng này; frontend lo toàn bộ định dạng hiển thị (locale `vi-VN`).
 Chuyển sang backend thật: `js/config.js` → `USE_MOCK = false`, `API_BASE_URL = "<gốc API>"`.
 
 ## Quy ước chung
 
-- Mọi đường dẫn bắt đầu bằng `/admin`; mọi endpoint thống kê là `GET`, không ghi dữ liệu.
+- Mọi đường dẫn bắt đầu bằng `/admin`; mọi endpoint thống kê, danh sách và chi tiết là `GET`, không ghi dữ liệu. Chỉ có ba thao tác ghi, đều là hồ sơ cá nhân của quản trị viên đang đăng nhập: đổi mật khẩu, tải và xóa ảnh đại diện (mục "Xác thực").
 - Xác thực: header `Authorization: Bearer <token>` (trừ `POST /admin/auth/login`). Token hết hạn/sai → `401`.
 - Tên trường `snake_case`. **Một chỉ số = một trường**, trả **giá trị thô**, không trả chuỗi đã định dạng.
 - Đơn vị: thời lượng **giây** (`*_seconds`), độ trễ **mili giây** (`*_ms`), tỷ lệ **phần trăm 0–100** (`*_rate`, `*_pct`), số đếm là số nguyên.
@@ -35,8 +35,11 @@ Kỳ so sánh (kỳ trước) có cùng số ngày, liền ngay trước `from`.
 ```
 `401` (frontend xóa phiên và về `#login`), `403`, `404`, `5xx` đều được xử lý; `GET` được thử lại 1 lần khi lỗi mạng/timeout/5xx.
 
-### Xuất CSV
-`CSV_SERVER_EXPORT = true`: frontend gọi cùng endpoint kèm `format=csv` (`Accept: text/csv`, UTF-8 có BOM). `false` (mặc định): frontend tự tạo từ dữ liệu đang hiển thị. Tên file `seevia-{trang}-{from}-{to}.csv`.
+### Xuất file
+Nút xuất (cấu hình `EXPORT_FORMAT` trong `js/config.js`):
+- `"xlsx"` (mặc định): dashboard tự tạo file Excel từ dữ liệu đang hiển thị (tiếng Việt đúng ở Excel, WPS, LibreOffice; số là số). Tên file `seevia-{trang}-{from}-{to}.xlsx`. Với danh sách phân trang, dashboard gọi lần lượt từng trang (`page_size=100`) rồi ghép.
+- `"csv"`: tự tạo CSV UTF-8 có BOM (một số phần mềm như WPS không nhận BOM nên có thể lỗi font).
+- `CSV_SERVER_EXPORT = true`: dashboard gọi cùng endpoint kèm `format=csv` (`Accept: text/csv`, UTF-8 có BOM) và tải nguyên file backend trả về.
 
 ---
 
@@ -51,12 +54,13 @@ Body: `{ "email": "string", "password": "string" }`
 
 ### `POST /admin/auth/logout` → `{ "ok": true }`
 ### `GET /admin/auth/me`
-Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và menu ở header). Chỉ đọc; không có đổi mật khẩu. Đăng xuất: `POST /admin/auth/logout`; frontend xóa phiên và về `#login` kể cả khi API trả lỗi.
+Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và menu ở header). Đăng xuất: `POST /admin/auth/logout`; frontend xóa phiên và về `#login` kể cả khi API trả lỗi.
 | Trường | Kiểu | Ghi chú |
 |---|---|---|
 | `user.id` | string | Mã quản trị viên |
 | `user.display_name` | string | Tên hiển thị; chữ cái đầu dùng cho avatar |
 | `user.email_masked` | string | Đã che sẵn |
+| `user.avatar_url` | string \| null | Ảnh đại diện (URL `https://…`, đường dẫn tương đối hoặc `data:image/…`); null thì giao diện hiện chữ cái đầu của tên |
 | `user.role` | string | `admin_readonly` → "Quản trị viên (chỉ xem)" |
 | `user.timezone` | string | IANA, ví dụ `Asia/Ho_Chi_Minh` → "Việt Nam (UTC+7)" |
 | `user.created_at` | ngày | |
@@ -64,6 +68,23 @@ Hồ sơ quản trị viên đang đăng nhập (trang `#profile`, avatar và me
 ```json
 { "user": { "id": "AD-0001", "display_name": "Khánh Hà", "email_masked": "kh***@gmail.com", "role": "admin_readonly", "timezone": "Asia/Ho_Chi_Minh", "created_at": "2026-11-01", "last_login_at": "2026-11-15T08:02:00+07:00" } }
 ```
+
+### `POST /admin/auth/password` — đổi mật khẩu của chính mình
+Body: `{ "current_password": "string", "new_password": "string" }` → `200 { "ok": true }`.
+
+| Lỗi | Mã HTTP | `error.code` |
+|---|---|---|
+| Mật khẩu hiện tại sai | `400` | `invalid_current_password` |
+| Mật khẩu mới yếu (dưới 8 ký tự, hoặc thiếu chữ, hoặc thiếu số) | `422` | `weak_password` |
+| Mật khẩu mới trùng mật khẩu cũ | `422` | `same_password` |
+
+Lưu ý: sai mật khẩu hiện tại **không** trả `401` (frontend coi `401` là hết phiên và đăng xuất). Frontend kiểm tra trước cùng quy tắc (tối thiểu 8 ký tự, có cả chữ và số, nhập lại phải khớp) nhưng backend vẫn phải kiểm tra. Backend được phép thu hồi các token khác sau khi đổi; token đang dùng nên còn hiệu lực để người dùng ở lại trang.
+
+### `PUT /admin/auth/avatar` — tải ảnh đại diện
+`multipart/form-data`, trường `file`: ảnh JPEG đã được trình duyệt cắt vuông ở giữa và thu về 256×256 (nhẹ, thường dưới 50 KB). Backend vẫn phải kiểm tra loại tệp (JPEG/PNG/WebP) và dung lượng, và nên tự xử lý lại ảnh. Trả `200 { "user": { …, "avatar_url": "…" } }`. Lỗi: `422 invalid_image`, `413 image_too_large`.
+
+### `DELETE /admin/auth/avatar` — xóa ảnh đại diện
+Trả `200 { "user": { …, "avatar_url": null } }`.
 
 ---
 

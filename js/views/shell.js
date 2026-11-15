@@ -3,7 +3,7 @@ import { h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
 import { vi } from "../i18n/vi.js";
 import { rangeText, rangeFor } from "../core/period.js";
-import { dropdown } from "./components.js";
+import { dropdown, fillAvatar } from "./components.js";
 import { NAV_ORDER, ROUTES } from "../registry.js";
 import { currentTheme, onThemeChange } from "../core/theme.js";
 import { CONFIG } from "../config.js";
@@ -37,7 +37,7 @@ function accountMenu({ user, onLogout }) {
   const menu = h("div", { class: "menu", id: "account-menu", role: "menu", hidden: true, "aria-label": vi.menu.open }, h("div", { class: "menu-head" }, menuAvatar, h("div", { class: "menu-who" }, name, email)), h("div", { class: "menu-sep", role: "separator" }), ...items);
   const wrap = h("div", { class: "menu-wrap" }, button, menu);
 
-  const setUser = u => { name.textContent = u?.display_name || vi.app.admin; email.textContent = u?.email_masked || ""; avatar.textContent = menuAvatar.textContent = initialOf(u); };
+  const setUser = u => { name.textContent = u?.display_name || vi.app.admin; email.textContent = u?.email_masked || ""; fillAvatar(avatar, u, initialOf(u)); fillAvatar(menuAvatar, u, initialOf(u)); };
   const isOpen = () => !menu.hidden;
   function open() { menu.hidden = false; void menu.offsetWidth; menu.classList.add("is-open"); button.setAttribute("aria-expanded", "true"); items[0].focus(); }
   function close(restore = true) {

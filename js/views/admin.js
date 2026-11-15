@@ -2,7 +2,7 @@
 import { h } from "../lib/dom.js";
 import { icon } from "../lib/icons.js";
 import { vi } from "../i18n/vi.js";
-import { dataTable, pager, searchBox, selectChip, section, statusDot, emptyState } from "./components.js";
+import { dataTable, pager, searchBox, selectChip, section, statusDot, emptyState, fillAvatar } from "./components.js";
 import { CONFIG } from "../config.js";
 
 const link = (href, label) => h("a", { class: "table-link", href }, label);
@@ -126,15 +126,78 @@ export async function viewLogin({ onSubmit }) {
 
 // ---- Hồ sơ quản trị viên (chỉ xem) ----------------------------------------------------------
 export function viewProfile(vm, ctx) {
-  const p = vi.profile;
+  const p = vi.profile, pw = p.password, act = ctx.profile;
   if (!vm.found) return emptyState();
+
+  // ---- Ảnh đại diện ----
+  const avatar = h("span", { class: "avatar avatar-xl", "aria-hidden": "true" });
+  fillAvatar(avatar, vm.user, vm.initial);
+  const status = h("p", { class: "profile-status", role: "status", "aria-live": "polite" });
+  const say = (text, bad = false) => { status.textContent = text; status.classList.toggle("is-error", bad); };
+  const file = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", class: "sr-only", tabindex: "-1", id: "avatar-file" });
+  const removeBtn = h("button", { class: "button button-ghost button-sm", type: "button", hidden: !vm.user?.avatar_url }, p.removeAvatar);
+  const changeBtn = h("button", { class: "button button-outline button-sm", type: "button", onClick: () => file.click() }, icon("camera", { size: 16 }), p.changeAvatar);
+  const busy = on => { changeBtn.disabled = removeBtn.disabled = on; };
+  const applyUser = user => { fillAvatar(avatar, user, vm.initial); removeBtn.hidden = !user?.avatar_url; };
+  file.addEventListener("change", async () => {
+    const chosen = file.files[0]; file.value = "";
+    if (!chosen) return;
+    busy(true); say(p.avatarBusy);
+    const res = await act.setAvatar(chosen);
+    busy(false);
+    if (res.error) return say(res.error, true);
+    applyUser(res.user); say(p.avatarDone);
+  });
+  removeBtn.addEventListener("click", async () => {
+    busy(true);
+    const res = await act.removeAvatar();
+    busy(false);
+    if (res.error) return say(res.error, true);
+    applyUser(res.user); say(p.avatarRemoved);
+  });
+
+  // ---- Đổi mật khẩu ----
+  const field = (id, label, autocomplete) => {
+    const input = h("input", { id, type: "password", autocomplete, required: true, "aria-describedby": `${id}-err` });
+    const err = h("p", { class: "field-error", id: `${id}-err`, hidden: true });
+    const toggle = h("button", { class: "icon-button reveal", type: "button", "aria-label": pw.show, "aria-pressed": "false", onClick: () => {
+      const show = input.type === "password"; input.type = show ? "text" : "password";
+      toggle.setAttribute("aria-pressed", String(show)); toggle.setAttribute("aria-label", show ? pw.hide : pw.show);
+      toggle.replaceChildren(icon(show ? "eye-off" : "eye", { size: 18 }));
+    } }, icon("eye", { size: 18 }));
+    return { input, err, node: h("div", { class: "field" }, h("label", { for: id }, label), h("div", { class: "input-wrap" }, input, toggle), err) };
+  };
+  const cur = field("pw-current", pw.current, "current-password"), next = field("pw-new", pw.next, "new-password"), again = field("pw-confirm", pw.confirm, "new-password");
+  const formStatus = h("p", { class: "profile-status", role: "status", "aria-live": "polite" });
+  const submit = h("button", { class: "button button-primary", type: "submit" }, pw.submit);
+  const mark = (f, message) => { f.err.textContent = message || ""; f.err.hidden = !message; f.input.setAttribute("aria-invalid", String(Boolean(message))); };
+  const form = h("form", { class: "pw-form", novalidate: true, onSubmit: async e => {
+    e.preventDefault();
+    formStatus.textContent = ""; formStatus.classList.remove("is-error");
+    const strong = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(next.input.value);
+    mark(cur, cur.input.value ? "" : pw.errors.required);
+    mark(next, !strong ? pw.errors.weak : next.input.value === cur.input.value ? pw.errors.same : "");
+    mark(again, again.input.value === next.input.value ? "" : pw.errors.mismatch);
+    const firstBad = [cur, next, again].find(f => !f.err.hidden);
+    if (firstBad) return firstBad.input.focus();
+    submit.disabled = true; submit.textContent = pw.saving;
+    const res = await act.changePassword(cur.input.value, next.input.value);
+    submit.disabled = false; submit.textContent = pw.submit;
+    if (res.fieldError) { const f = res.fieldError.field === "current" ? cur : next; mark(f, res.fieldError.message); return f.input.focus(); }
+    if (res.error) { formStatus.textContent = res.error; formStatus.classList.add("is-error"); return; }
+    form.reset(); formStatus.textContent = pw.success;
+  } }, cur.node, next.node, h("p", { class: "field-hint" }, pw.rule), again.node, h("div", { class: "pw-actions" }, submit, formStatus));
+
   return h("div", { class: "profile-page stack-y" },
     h("section", { class: "card profile-header" },
-      h("span", { class: "avatar avatar-xl", "aria-hidden": "true" }, vm.initial),
+      avatar,
       h("div", { class: "profile-id" }, h("h2", null, vm.name), h("p", { class: "profile-email" }, vm.email),
-        h("div", { class: "chips" }, vm.chips.map(c => h("span", { class: ["chip", `chip-${c.tone}`] }, c.label)))),
+        h("div", { class: "chips" }, vm.chips.map(c => h("span", { class: ["chip", `chip-${c.tone}`] }, c.label))),
+        h("div", { class: "avatar-actions" }, changeBtn, removeBtn, file), h("p", { class: "field-hint" }, p.avatarHint), status),
       h("button", { class: "button button-outline button-sm", type: "button", onClick: ctx.logout }, icon("logout", { size: 16 }), p.logout)),
     h("section", { class: "card panel profile-info", "aria-labelledby": "pf-info" },
       h("h2", { id: "pf-info", class: "profile-info-title" }, p.infoTitle),
-      h("dl", { class: "info-rows" }, vm.rows.map(r => h("div", { class: "info-row" }, h("dt", null, r.label), h("dd", null, r.value))))));
+      h("dl", { class: "info-rows" }, vm.rows.map(r => h("div", { class: "info-row" }, h("dt", null, r.label), h("dd", null, r.value))))),
+    h("section", { class: "card panel", "aria-labelledby": "pf-pass" },
+      h("h2", { id: "pf-pass", class: "profile-info-title" }, pw.title), form));
 }

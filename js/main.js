@@ -14,6 +14,8 @@ import { initTooltips } from "./core/tooltip.js";
 import { downloadCsv, downloadBlob } from "./core/csv.js";
 import { buildXlsx } from "./core/xlsx.js";
 import { stagger, countUp } from "./core/motion.js";
+import { changePassword, uploadAvatar, removeAvatar } from "./api/profile.js";
+import { prepareAvatar } from "./core/image.js";
 import { ROUTES, apiQuery } from "./registry.js";
 import { buildTopbar, buildSidebar, setActiveNav, pageHead } from "./views/shell.js";
 import { skeletonPage, errorState } from "./views/components.js";
@@ -63,6 +65,31 @@ function makeCtx(route, def) {
   const period = def.period ? resolvePeriod(route.query) : null;
   const ctx = {
     logout,
+    // Hành động cá nhân của quản trị viên: trả về { user } hoặc { error } / { fieldError } (view chỉ hiển thị).
+    profile: {
+      async changePassword(current, next) {
+        const E = vi.profile.password.errors;
+        try { await changePassword(current, next); return { ok: true }; }
+        catch (e) {
+          if (e instanceof ApiError && e.code === "invalid_current_password") return { fieldError: { field: "current", message: E.currentWrong } };
+          if (e instanceof ApiError && e.code === "weak_password") return { fieldError: { field: "next", message: E.weak } };
+          if (e instanceof ApiError && e.code === "same_password") return { fieldError: { field: "next", message: E.same } };
+          return { error: e instanceof ApiError && (e.kind === "network" || e.kind === "timeout") ? errorMessage(e) : E.generic };
+        }
+      },
+      async setAvatar(file) {
+        const E = vi.profile.avatarErrors;
+        try {
+          const res = await uploadAvatar(await prepareAvatar(file));
+          updateUser(res.user); topbar?.setUser(res.user);
+          return { user: res.user };
+        } catch (e) { return { error: E[e.code] || (e instanceof ApiError && e.kind !== "http" ? errorMessage(e) : E.generic) }; }
+      },
+      async removeAvatar() {
+        try { const res = await removeAvatar(); updateUser(res.user); topbar?.setUser(res.user); return { user: res.user }; }
+        catch (e) { return { error: e instanceof ApiError && e.kind !== "http" ? errorMessage(e) : vi.profile.avatarErrors.generic }; }
+      },
+    },
     id: route.id, def, params: route.params, query: route.query, period, yesterday: addDays(todayISO(), -1),
     periodLabel: period ? { period: periodName(period), compare: compareName(period) } : null,
     // Đổi một phần tham số trong URL (lọc, sắp xếp, trang…). null = xóa tham số.

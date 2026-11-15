@@ -160,3 +160,11 @@ export function selectChip({ id, label, value, options, onChange }) {
     trigger: sel => h("span", { class: "dd-value" }, h("span", { class: "dd-prefix" }, `${label}:`), " ", h("strong", null, sel.label)),
   });
 }
+
+// Avatar: ảnh đại diện nếu có (chỉ nhận http(s), đường dẫn tương đối hoặc data:image), không thì chữ cái đầu của tên.
+const SAFE_IMG = /^(https?:\/\/|\/|data:image\/(png|jpe?g|webp);base64,)/i;
+export function fillAvatar(el, user, initial) {
+  const url = user?.avatar_url;
+  el.classList.toggle("has-img", Boolean(url && SAFE_IMG.test(url)));
+  el.replaceChildren(url && SAFE_IMG.test(url) ? h("img", { src: url, alt: "", draggable: "false" }) : initial);
+}

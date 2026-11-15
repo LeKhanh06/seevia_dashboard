@@ -282,19 +282,45 @@ function errorsList(p, query) {
 
 export function rawRoute(method, path, query, body, token) { return route(method, path, query, body, token); }
 
+// Trạng thái tạm của quản trị viên mẫu (mật khẩu, ảnh đại diện); lưu localStorage nếu có để giữ qua lần tải lại.
+const STATE_KEY = "seevia-mock-admin";
+const state = (() => {
+  const base = { password: D.MOCK_CREDENTIALS.password, avatar_url: null };
+  try { return { ...base, ...JSON.parse(globalThis.localStorage?.getItem(STATE_KEY) || "{}") }; } catch { return base; }
+})();
+const save = () => { try { globalThis.localStorage?.setItem(STATE_KEY, JSON.stringify(state)); } catch { /* bỏ qua */ } };
+const meUser = () => ({ ...D.MOCK_ADMIN, avatar_url: state.avatar_url });
+
 function route(method, path, query, body, token) {
   const clean = path.replace(/\/+$/, "") || "/";
   if (method === "POST" && clean === "/admin/auth/login") {
     const c = D.MOCK_CREDENTIALS;
-    if (String(body?.email || "").trim().toLowerCase() === c.email && body?.password === c.password) {
-      return ok({ token: c.token, expires_in: 3600, user: D.MOCK_ADMIN });
+    if (String(body?.email || "").trim().toLowerCase() === c.email && body?.password === state.password) {
+      return ok({ token: c.token, expires_in: 3600, user: meUser() });
     }
     return fail(401, "invalid_credentials", "Email hoặc mật khẩu không đúng.");
   }
   if (!token || token !== D.MOCK_CREDENTIALS.token) return fail(401, "unauthenticated", "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.");
   if (method === "POST" && clean === "/admin/auth/logout") return ok({ ok: true });
+  // Quản trị viên chỉ tự cập nhật hồ sơ của mình; dữ liệu hệ thống vẫn chỉ đọc. Lưu ý: lỗi sai mật khẩu hiện tại dùng 400, KHÔNG dùng 401 (401 làm đăng xuất).
+  if (method === "POST" && clean === "/admin/auth/password") {
+    const cur = String(body?.current_password ?? ""), next = String(body?.new_password ?? "");
+    if (cur !== state.password) return fail(400, "invalid_current_password", "Mật khẩu hiện tại không đúng.");
+    if (next.length < 8 || !/[A-Za-z]/.test(next) || !/\d/.test(next)) return fail(422, "weak_password", "Mật khẩu mới chưa đủ mạnh.");
+    if (next === cur) return fail(422, "same_password", "Mật khẩu mới phải khác mật khẩu hiện tại.");
+    state.password = next; save();
+    return ok({ ok: true });
+  }
+  if (method === "PUT" && clean === "/admin/auth/avatar") {
+    const url = String(body?.avatar_data_url ?? "");
+    if (!/^data:image\/(jpeg|png|webp);base64,/.test(url)) return fail(422, "invalid_image", "Ảnh không hợp lệ.");
+    if (url.length > 700000) return fail(413, "image_too_large", "Ảnh quá lớn.");
+    state.avatar_url = url; save();
+    return ok({ user: meUser() });
+  }
+  if (method === "DELETE" && clean === "/admin/auth/avatar") { state.avatar_url = null; save(); return ok({ user: meUser() }); }
   if (method !== "GET") return fail(405, "method_not_allowed", "Chỉ hỗ trợ đọc dữ liệu.");
-  if (clean === "/admin/auth/me") return ok({ user: D.MOCK_ADMIN });
+  if (clean === "/admin/auth/me") return ok({ user: meUser() });
 
   const p = periodOf(query);
   const stats = clean.match(/^\/admin\/stats\/([a-z-]+)$/)?.[1];

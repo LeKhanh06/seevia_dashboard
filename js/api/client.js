@@ -38,6 +38,8 @@ function toQuery(query = {}) {
   return s ? `?${s}` : "";
 }
 
+const blobToDataUrl = blob => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+
 async function send(method, path, { query, body, signal, timeoutMs, accept = "application/json" }) {
   const timeout = new AbortController();
   let timedOut = false;
@@ -47,15 +49,18 @@ async function send(method, path, { query, body, signal, timeoutMs, accept = "ap
   try {
     if (CONFIG.USE_MOCK) {
       await wait(CONFIG.MOCK_LATENCY_MS, timeout.signal);
-      const res = handleMock({ method, path, query: query || {}, body, token: getToken() });
+      // Mock: tệp ảnh tải lên được chuyển thành data URL (backend thật nhận multipart nguyên bản).
+      const mockBody = body instanceof FormData ? { avatar_data_url: await blobToDataUrl(body.get("file")) } : body;
+      const res = handleMock({ method, path, query: query || {}, body: mockBody, token: getToken() });
       return { status: res.status, json: res.body, blob: null };
     }
     const headers = { Accept: accept };
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const multipart = body instanceof FormData;
+    if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
     const response = await fetch(`${CONFIG.API_BASE_URL.replace(/\/$/, "")}${path}${toQuery(query)}`, {
-      method, headers, signal: timeout.signal, body: body === undefined ? undefined : JSON.stringify(body),
+      method, headers, signal: timeout.signal, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       credentials: "omit", cache: "no-store",
     });
     if (accept !== "application/json" && response.ok) return { status: response.status, json: null, blob: await response.blob() };
@@ -105,6 +110,8 @@ async function request(method, path, options = {}) {
 export const api = {
   get: (path, query, options = {}) => request("GET", path, { ...options, query }),
   post: (path, body, options = {}) => request("POST", path, { ...options, body }),
+  put: (path, body, options = {}) => request("PUT", path, { ...options, body, retry: false }),
+  delete: (path, options = {}) => request("DELETE", path, { ...options, retry: false }),
   // Tải CSV từ chính endpoint thống kê khi CONFIG.CSV_SERVER_EXPORT = true.
   getCsv: (path, query, options = {}) => request("GET", path, { ...options, query: { ...query, format: "csv" }, accept: "text/csv" }),
 };

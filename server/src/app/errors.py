@@ -10,13 +10,16 @@ import logging
 from typing import TYPE_CHECKING, Any, Final
 
 from fastapi import status
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.schemas.common import ErrorResponse, PublicError
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request
+    from starlette.responses import Response
 
 logger = logging.getLogger(__name__)
 
@@ -239,8 +242,10 @@ async def _handle_public_api_error(_request: Request, exc: Exception) -> JSONRes
     )
 
 
-async def _handle_validation_error(_request: Request, _exc: Exception) -> JSONResponse:
+async def _handle_validation_error(request: Request, _exc: Exception) -> JSONResponse:
     """Map FastAPI's 422 to ``400 INVALID_REQUEST`` without echoing input or error details."""
+    if _is_admin(request):
+        return _admin_default(status.HTTP_400_BAD_REQUEST)
     return _error_response(
         status_code=status.HTTP_400_BAD_REQUEST,
         code="INVALID_REQUEST",
@@ -258,6 +263,8 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
         exc,
     )
 
+    if _is_admin(request):
+        return _admin_default(status.HTTP_500_INTERNAL_SERVER_ERROR)
     return _error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         code="INTERNAL_ERROR",
@@ -266,8 +273,68 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
     )
 
 
+ADMIN_PREFIX: Final = "/api/v1/admin"
+_ADMIN_CODES: Final[dict[int, tuple[str, str]]] = {
+    status.HTTP_400_BAD_REQUEST: ("invalid_request", "Yêu cầu không hợp lệ."),
+    status.HTTP_401_UNAUTHORIZED: ("unauthorized", "Phiên đăng nhập đã hết hạn hoặc không hợp lệ."),
+    status.HTTP_403_FORBIDDEN: ("forbidden", "Không có quyền truy cập."),
+    status.HTTP_404_NOT_FOUND: ("not_found", "Không tìm thấy."),
+    status.HTTP_405_METHOD_NOT_ALLOWED: ("method_not_allowed", "Phương thức không được hỗ trợ."),
+    status.HTTP_500_INTERNAL_SERVER_ERROR: ("internal_error", "Lỗi máy chủ."),
+}
+
+
+def _is_admin(request: Request) -> bool:
+    path = request.url.path
+    return path == ADMIN_PREFIX or path.startswith(ADMIN_PREFIX + "/")
+
+
+def admin_error_response(status_code: int, code: str, message: str) -> JSONResponse:
+    """Dashboard envelope ``{"error": {"code", "message"}}`` (admin routes only)."""
+    return JSONResponse(
+        status_code=status_code, content={"error": {"code": code, "message": message}}
+    )
+
+
+def _admin_default(status_code: int) -> JSONResponse:
+    code, message = _ADMIN_CODES.get(status_code, ("error", "Có lỗi xảy ra."))
+    return admin_error_response(status_code, code, message)
+
+
+class AdminApiError(Exception):
+    """Admin dashboard error: HTTP status, lower-case ``code``, Vietnamese ``message``."""
+
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        """Store the response fields."""
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+async def _handle_admin_api_error(_request: Request, exc: Exception) -> JSONResponse:
+    """Render :class:`AdminApiError` (raised only by admin code)."""
+    if not isinstance(exc, AdminApiError):
+        raise exc
+    response = admin_error_response(exc.status_code, exc.code, exc.message)
+    if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        response.headers["WWW-Authenticate"] = "Bearer"
+    return response
+
+
+async def _handle_http_exception(request: Request, exc: Exception) -> Response:
+    """Admin paths get the dashboard envelope; everything else keeps FastAPI's default."""
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
+    if _is_admin(request):
+        return _admin_default(exc.status_code)
+    return await http_exception_handler(request, exc)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register validation, domain and catch-all handlers (``HTTPException`` keeps its own)."""
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
+    app.add_exception_handler(StarletteHTTPException, _handle_http_exception)
+    app.add_exception_handler(AdminApiError, _handle_admin_api_error)
     app.add_exception_handler(PublicApiError, _handle_public_api_error)
     app.add_exception_handler(Exception, _handle_unexpected_error)

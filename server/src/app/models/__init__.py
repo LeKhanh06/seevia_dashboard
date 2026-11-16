@@ -1,5 +1,6 @@
 """SQLAlchemy persistence models and logical database enums."""
 
+from app.models.admin import AdminSession, AdminUser
 from app.models.call import Call, CallCallback
 from app.models.care_link import CareLink
 from app.models.device import Device
@@ -42,6 +43,8 @@ from app.models.user import User
 
 __all__ = [
     "Action",
+    "AdminSession",
+    "AdminUser",
     "Call",
     "CallCallback",
     "CallCallbackState",

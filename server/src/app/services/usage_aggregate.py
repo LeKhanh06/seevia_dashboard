@@ -17,7 +17,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
-from app.repositories.usage_rows import DayResult, GroupKey
+from app.repositories.usage_rows import ERROR_STATUSES, DayResult, GroupKey
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -219,7 +219,7 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
         for name, count in a.signals.items():
             _bump(m["signals"], name, count)
         m["image_rejected"] += a.signals.get("image_rejected", 0)
-        if a.error_code and a.status not in (None, "success", "completed_early"):
+        if a.error_code and a.status in ERROR_STATUSES:
             _bump(m["errors"], a.error_code)
             when = (a.finished_at or a.started_at).isoformat()
             m["last_error_at"][a.error_code] = max(m["last_error_at"].get(a.error_code, when), when)

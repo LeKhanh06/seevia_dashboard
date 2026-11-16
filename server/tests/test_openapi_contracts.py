@@ -102,6 +102,16 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/service/emergency/start",
         "/api/v1/service/emergency/{emergency_id}/stop",
         "/api/v1/usage/events",
+        "/api/v1/admin/auth/login",
+        "/api/v1/admin/auth/logout",
+        "/api/v1/admin/auth/me",
+        "/api/v1/admin/auth/password",
+        "/api/v1/admin/auth/avatar",
+        "/api/v1/admin/accounts",
+        "/api/v1/admin/accounts/{account_id}",
+        "/api/v1/admin/devices",
+        "/api/v1/admin/devices/{device_id}",
+        "/api/v1/admin/config",
     }
 
 

@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     usage_rollup_lease_s: float = Field(default=60.0, gt=0)
     # Lượt/tác vụ VH không bao giờ chốt (VH chết) quá hạn này -> technical_error / UNCLOSED.
     usage_unclosed_after_s: float = Field(default=1800.0, gt=0)
+    # Dashboard admin (seevia_dashboard): phiên đăng nhập email + mật khẩu, hết hạn sau ttl giây.
+    # `admin_cors_origins`: origin của trang dashboard tĩnh (vd. ["http://127.0.0.1:5500"]);
+    # rỗng = không bật CORS (dashboard cùng origin hoặc qua proxy).
+    admin_session_ttl_s: int = Field(default=3600, gt=0, le=86400)
+    admin_cors_origins: list[str] = Field(default_factory=list)
 
     fcm_project_id: str | None = None
     # Voice server v2: transport webhook cho E2E với điện thoại giả lập.

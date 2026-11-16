@@ -10,6 +10,9 @@ if TYPE_CHECKING:
 
 GroupKey = tuple[str, str, str, str, str]  # owner_hash, device_hash, feature, component, firmware
 
+# Attempt statuses whose error_code counts as an error (cancel reasons like "superseded" do not).
+ERROR_STATUSES: frozenset[str] = frozenset({"failed", "technical_error"})
+
 
 @dataclass(frozen=True, slots=True)
 class AttemptRow:

@@ -1,8 +1,10 @@
 """FastAPI application factory."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.calls import router as calls_router
 from app.api.care import router as care_router
@@ -37,6 +39,16 @@ def create_app(settings: Settings) -> FastAPI:
 
     # Middleware
     application.add_middleware(RequestCorrelationMiddleware)
+    if settings.admin_cors_origins:
+        # Chỉ các origin dashboard đã cấu hình; token đi qua header, không dùng cookie.
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.admin_cors_origins,
+            allow_methods=["GET", "POST", "PUT", "DELETE"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            allow_credentials=False,
+            max_age=600,
+        )
 
     # Exception handlers
     register_exception_handlers(application)
@@ -54,5 +66,6 @@ def create_app(settings: Settings) -> FastAPI:
     application.include_router(calls_router)
     application.include_router(messages_router)
     application.include_router(usage_router)
+    application.include_router(admin_router)
 
     return application

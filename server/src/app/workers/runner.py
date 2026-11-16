@@ -10,6 +10,7 @@ from app.workers.callback import CallbackWorker
 from app.workers.delivery import DeliveryWorker
 from app.workers.emergency import EmergencyWorker
 from app.workers.timeout import TimeoutWorker
+from app.workers.usage_rollup import UsageRollupWorker
 from app.workers.wake import WorkerWakeSignals
 
 if TYPE_CHECKING:
@@ -60,6 +61,7 @@ class WorkerRunner:
         emergency_worker = EmergencyWorker(
             self._session_factory, self._settings, self._wake_signals
         )
+        usage_worker = UsageRollupWorker(self._session_factory, self._settings)
 
         self._tasks = [
             asyncio.create_task(
@@ -74,9 +76,12 @@ class WorkerRunner:
             asyncio.create_task(
                 emergency_worker.run_loop(self._shutdown_event), name="emergency-worker"
             ),
+            asyncio.create_task(
+                usage_worker.run_loop(self._shutdown_event), name="usage-rollup-worker"
+            ),
         ]
         self._started = True
-        logger.info("Started background worker runner with 4 worker loops")
+        logger.info("Started background worker runner with 5 worker loops")
 
     async def stop(self) -> None:
         """Signal shutdown event and wait gracefully for worker tasks to finish."""

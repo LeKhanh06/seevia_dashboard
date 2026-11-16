@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     usage_id_key: SecretStr | None = None
     # Múi giờ chốt ngày báo cáo của bảng tổng hợp (tầng 3); hỏi múi giờ khác thì tính từ tầng 2.
     usage_report_tz: str = "Asia/Ho_Chi_Minh"
+    usage_rollup_interval_s: float = Field(default=5.0, gt=0)
+    usage_rollup_lease_s: float = Field(default=60.0, gt=0)
+    # Lượt/tác vụ VH không bao giờ chốt (VH chết) quá hạn này -> technical_error / UNCLOSED.
+    usage_unclosed_after_s: float = Field(default=1800.0, gt=0)
 
     fcm_project_id: str | None = None
     # Voice server v2: transport webhook cho E2E với điện thoại giả lập.

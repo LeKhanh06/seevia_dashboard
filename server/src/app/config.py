@@ -51,6 +51,7 @@ class PublicApiScope(StrEnum):
 
 # Hex encoding of a 32-byte HMAC-SHA256 digest (see app/auth.py).
 _TOKEN_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_USAGE_ID_KEY_PATTERN = re.compile(r"^(?:[0-9a-f]{2}){32,}$")
 
 
 def _validate_token_hash_format(value: SecretStr, *, field_name: str) -> SecretStr:
@@ -110,6 +111,12 @@ class Settings(BaseSettings):
     field_encryption_key: SecretStr
     delivery_transport: DeliveryTransport
 
+    # Thống kê sử dụng: VH gửi lô sự kiện bằng token riêng (scope cố định usage:write), khác token
+    # Public API. `usage_id_key` (hex >= 32 byte) là khoá HMAC đổi device_id/public_user_id thành mã
+    # giả trong bảng thống kê. Chưa đặt -> endpoint thống kê trả 503, phần khác chạy bình thường.
+    usage_api_token_hash: SecretStr | None = None
+    usage_id_key: SecretStr | None = None
+
     fcm_project_id: str | None = None
     # Voice server v2: transport webhook cho E2E với điện thoại giả lập.
     delivery_webhook_url: HttpUrl | None = None
@@ -161,6 +168,26 @@ class Settings(BaseSettings):
     def validate_device_api_token_hash_format(cls, value: SecretStr) -> SecretStr:
         """Enforce the 64-hex-character digest format at startup, before database/worker."""
         return _validate_token_hash_format(value, field_name="DEVICE_API_TOKEN_HASH")
+
+    @field_validator("usage_api_token_hash")
+    @classmethod
+    def validate_usage_api_token_hash_format(cls, value: SecretStr | None) -> SecretStr | None:
+        """Delegate optional usage token hash validation to the shared helper."""
+        if value is None:
+            return None
+        return _validate_token_hash_format(value, field_name="USAGE_API_TOKEN_HASH")
+
+    @field_validator("usage_id_key")
+    @classmethod
+    def validate_usage_id_key(cls, value: SecretStr | None) -> SecretStr | None:
+        """Require at least 32 bytes of hex key material for usage pseudonyms."""
+        if value is None:
+            return None
+        raw = value.get_secret_value()
+        if not _USAGE_ID_KEY_PATTERN.fullmatch(raw):
+            message = "USAGE_ID_KEY must be >= 64 lowercase hexadecimal characters (32 bytes)"
+            raise ValueError(message)
+        return value
 
     @field_validator("public_api_client_id")
     @classmethod

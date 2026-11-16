@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 PUBLIC_API_DOMAIN = b"app-demo-auth/v1/public-api"
 DEVICE_API_DOMAIN = b"app-demo-auth/v1/device-api"
+USAGE_API_DOMAIN = b"app-demo-auth/v1/usage-api"
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)]
@@ -110,6 +111,34 @@ def _device_authenticator(request: Request) -> DeviceApiAuthenticator:
         cached = DeviceApiAuthenticator.from_settings(request.app.state.settings)
         request.app.state.device_api_authenticator = cached
     return cached
+
+
+def _usage_digest(request: Request) -> bytes | None:
+    cached = getattr(request.app.state, "usage_api_digest", None)
+    if cached is None:
+        configured = request.app.state.settings.usage_api_token_hash
+        if configured is None:
+            return None
+        cached = bytes.fromhex(configured.get_secret_value())
+        request.app.state.usage_api_digest = cached
+    return cached
+
+
+async def require_usage_writer(request: Request, credentials: BearerCredentials) -> None:
+    """Verify the usage-stats writer token (fixed scope ``usage:write``).
+
+    Not configured -> ``503 USAGE_NOT_CONFIGURED`` so a half-deployed server fails loudly
+    instead of silently dropping batches.
+    """
+    digest = _usage_digest(request)
+    if digest is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="USAGE_NOT_CONFIGURED"
+        )
+    if credentials is None or not hmac.compare_digest(
+        token_digest(credentials.credentials, USAGE_API_DOMAIN), digest
+    ):
+        raise _unauthorized()
 
 
 async def require_public_client_principal(

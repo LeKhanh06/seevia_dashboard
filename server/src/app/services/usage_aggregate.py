@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from zoneinfo import ZoneInfo
 
-    from app.repositories.usage_rows import Layer2Rows
+    from app.repositories.usage_rows import Layer2Rows, SosRow
 
 # Upper bounds (ms) of the latency histogram; one extra open bucket for anything above.
 BUCKETS_MS: tuple[int, ...] = (
@@ -44,6 +44,27 @@ BUCKETS_MS: tuple[int, ...] = (
     120000,
 )
 HIST_SIZE = len(BUCKETS_MS) + 1
+
+# A "use" (dashboard ``uses``) is one closed task, one alert-mode activation, one incoming internet
+# call that ended, or one finished SOS. Each lands in exactly one outcome bucket below, so totals,
+# per-day, per-hour and per-outcome sums always agree.
+OUTCOME_OF_TASK: dict[str, str] = {
+    "success": "completed",
+    "completed_early": "completed_early",
+    "failed": "failed",
+    "technical_error": "failed",
+    "cancelled": "cancelled",
+    "unconfirmed": "unconfirmed",
+    "abandoned": "abandoned",
+    "uncertain": "abandoned",
+    "rejected_image": "abandoned",
+}
+CALL_OUTCOME: dict[str, str] = {
+    "ended": "completed",
+    "failed": "failed",
+    "rejected": "cancelled",
+    "missed": "abandoned",
+}
 SOS_CANCEL_WINDOW = timedelta(seconds=5)
 # Sessions whose time counts as "using SeeVia" (connection alone is not usage).
 USAGE_SESSION_FEATURE = {
@@ -95,6 +116,8 @@ def empty_metrics() -> dict[str, Any]:
     """All additive metric keys, zeroed."""
     return {
         "attempts": 0,
+        "uses": 0,
+        "outcomes": {},
         "tasks_started": 0,
         "tasks_closed": 0,
         "tasks_pending": 0,
@@ -195,6 +218,24 @@ def _bump(counter: dict[str, int], key: str, n: int = 1) -> None:
     counter[key] = counter.get(key, 0) + n
 
 
+def _use(
+    m: dict[str, Any],
+    hourly: dict[tuple[int, str], list[int]],
+    hour: int,
+    feature: str,
+    outcome: str | None,
+) -> None:
+    """Count one dashboard "use" in its day row, its outcome and its start hour."""
+    m["uses"] += 1
+    _bump(m["outcomes"], outcome or "failed")
+    hourly[(hour, feature)][0] += 1
+
+
+def _sos_quick_cancel(sos: SosRow) -> bool:
+    """Tell whether an SOS was cancelled within the 5-second false-start window."""
+    return sos.finished_at is not None and sos.finished_at - sos.started_at <= SOS_CANCEL_WINDOW
+
+
 def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, kept together on purpose
     rows: Layer2Rows, day: date, tz: ZoneInfo
 ) -> DayResult:
@@ -205,14 +246,21 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
     active: set[tuple[str, str]] = set()
     usage_intervals: dict[tuple[str, str, str], list[tuple[datetime, datetime]]] = defaultdict(list)
 
+    # OCR that had to frame the page live is reported as its own feature ("ocr_live").
+    live_tasks = {
+        a.task_id
+        for a in rows.attempts
+        if a.feature == "ocr" and a.align_ms is not None and a.task_id is not None
+    }
     for a in rows.attempts:
         if a.started_at is None or not lo <= a.started_at < hi or a.feature is None:
             continue
+        feature = "ocr_live" if a.feature == "ocr" and a.task_id in live_tasks else a.feature
         m = daily[
-            _key(a.owner_hash, a.device_hash, a.feature, a.component_version, a.firmware_version)
+            _key(a.owner_hash, a.device_hash, feature, a.component_version, a.firmware_version)
         ]
         m["attempts"] += 1
-        hourly[(a.started_at.astimezone(tz).hour, a.feature)][1] += 1
+        hourly[(a.started_at.astimezone(tz).hour, feature)][1] += 1
         active.add((a.owner_hash or "", a.device_hash or ""))
         if a.status is not None:
             _bump(m["attempts_by_status"], a.status)
@@ -232,23 +280,24 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
         if a.align_ms is not None:
             m["align_hist"][bisect_left(BUCKETS_MS, a.align_ms)] += 1
         if a.finished_at is not None:
-            usage_intervals[(a.owner_hash or "", a.device_hash or "", a.feature)].append(
+            usage_intervals[(a.owner_hash or "", a.device_hash or "", feature)].append(
                 (a.started_at, a.finished_at)
             )
 
     for t in rows.tasks:
         if t.started_at is None or not lo <= t.started_at < hi or t.feature is None:
             continue
+        feature = "ocr_live" if t.feature == "ocr" and t.task_id in live_tasks else t.feature
         m = daily[
-            _key(t.owner_hash, t.device_hash, t.feature, t.component_version, t.firmware_version)
+            _key(t.owner_hash, t.device_hash, feature, t.component_version, t.firmware_version)
         ]
         m["tasks_started"] += 1
-        hourly[(t.started_at.astimezone(tz).hour, t.feature)][0] += 1
         if t.status is None:
             m["tasks_pending"] += 1
             continue
         m["tasks_closed"] += 1
         _bump(m["tasks_by_status"], t.status)
+        _use(m, hourly, t.started_at.astimezone(tz).hour, feature, OUTCOME_OF_TASK.get(t.status))
         attempts = t.attempts or 1
         m["extra_attempts"] += attempts - 1
         if t.status in ("success", "completed_early") and attempts == 1:
@@ -267,6 +316,9 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
         m["session_seconds"][s.kind] = m["session_seconds"].get(s.kind, 0) + seconds
         if starts_today:
             _bump(m["sessions"], s.kind)
+            if s.kind == "alert_mode":
+                outcome = "failed" if s.end_reason == "error" else "completed"
+                _use(m, hourly, s.started_at.astimezone(tz).hour, feature, outcome)
             if s.align_ms is not None:
                 m["align_hist"][bisect_left(BUCKETS_MS, s.align_ms)] += 1
             if s.ended_at is not None:
@@ -309,6 +361,9 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
                 m["calls_answered"] += 1
             if c.final_state == "failed":
                 _bump(m["call_errors"], c.end_reason or "failed")
+            if c.direction == "to_glasses" and c.final_state in CALL_OUTCOME:
+                hour = c.started_at.astimezone(tz).hour
+                _use(m, hourly, hour, "internet_call", CALL_OUTCOME[c.final_state])
         if c.answered_at is not None and talk_end is not None:
             usage_intervals[(c.owner_hash or "", c.device_hash or "", "internet_call")].append(
                 (c.answered_at, talk_end)
@@ -320,17 +375,20 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
         m = daily[_key(sos.owner_hash, sos.device_hash, "sos", None, None)]
         m["sos"] += 1
         status = sos.status or "pending"
-        if (
-            status == "cancelled"
-            and sos.finished_at is not None
-            and sos.finished_at - sos.started_at <= SOS_CANCEL_WINDOW
-        ):
+        quick_cancel = status == "cancelled" and _sos_quick_cancel(sos)
+        if quick_cancel:
             m["sos_cancelled_5s"] += 1
         _bump(m["sos_by_status"], status)
         if (wait := _ms(sos.started_at, sos.answered_at)) is not None:
             m["sos_to_answer_hist"][bisect_left(BUCKETS_MS, wait)] += 1
         if sos.error_code:
             _bump(m["errors"], sos.error_code)
+        if status != "pending":
+            sos_outcome = {"success": "completed", "failed": "failed"}.get(status)
+            if status == "cancelled":
+                # Cancelled within 5 s = a false start; cancelled later = the chain did not help.
+                sos_outcome = "cancelled" if quick_cancel else "failed"
+            _use(m, hourly, sos.started_at.astimezone(tz).hour, "sos", sos_outcome)
 
     # Usage time: union of a feature's intervals per owner/device (overlap counted once) ...
     totals: dict[tuple[str, str], list[tuple[datetime, datetime]]] = defaultdict(list)

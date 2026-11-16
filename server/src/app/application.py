@@ -5,12 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.admin import router as admin_router
+from app.api.admin_stats import router as admin_stats_router
 from app.api.auth import router as auth_router
 from app.api.calls import router as calls_router
 from app.api.care import router as care_router
 from app.api.device import router as device_router
 from app.api.glasses import router as glasses_router
 from app.api.health import router as health_router
+from app.api.me_stats import router as me_stats_router
 from app.api.messages import router as messages_router
 from app.api.preferences import router as preferences_router
 from app.api.service import router as service_router
@@ -67,5 +69,7 @@ def create_app(settings: Settings) -> FastAPI:
     application.include_router(messages_router)
     application.include_router(usage_router)
     application.include_router(admin_router)
+    application.include_router(admin_stats_router)
+    application.include_router(me_stats_router)
 
     return application

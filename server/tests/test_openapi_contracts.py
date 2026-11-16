@@ -112,6 +112,18 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/admin/devices",
         "/api/v1/admin/devices/{device_id}",
         "/api/v1/admin/config",
+        "/api/v1/admin/stats/overview",
+        "/api/v1/admin/stats/see-read",
+        "/api/v1/admin/stats/find",
+        "/api/v1/admin/stats/connect",
+        "/api/v1/admin/stats/go",
+        "/api/v1/admin/stats/community",
+        "/api/v1/admin/stats/time",
+        "/api/v1/admin/stats/quality",
+        "/api/v1/admin/stats/engagement",
+        "/api/v1/admin/stats/safety",
+        "/api/v1/admin/stats/errors",
+        "/api/v1/me/stats",
     }
 
 

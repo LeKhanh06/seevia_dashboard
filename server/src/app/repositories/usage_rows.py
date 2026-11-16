@@ -46,6 +46,7 @@ class TaskRow:
     started_at: datetime | None
     status: str | None
     attempts: int | None
+    task_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +85,7 @@ class CallRow:
     ended_at: datetime | None
     final_state: str | None
     end_reason: str | None
+    direction: str = "to_relative"
 
 
 @dataclass(frozen=True, slots=True)

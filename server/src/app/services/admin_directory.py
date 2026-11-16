@@ -71,8 +71,9 @@ def _page[T](items: Sequence[T], query: ListQuery) -> list[T]:
 
 
 def _sorted[T](items: list[T], key: Callable[[T], Any], order: str) -> list[T]:
-    # None sorts last ascending (and first descending), never raises on mixed types.
-    return sorted(items, key=lambda i: (key(i) is None, key(i)), reverse=order == "desc")
+    # Missing values always sort last, whichever the direction.
+    present = sorted((i for i in items if key(i) is not None), key=key, reverse=order == "desc")
+    return present + [i for i in items if key(i) is None]
 
 
 class AdminDirectoryService:

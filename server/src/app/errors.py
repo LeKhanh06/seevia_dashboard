@@ -218,6 +218,20 @@ class MessageNotAllowedError(PublicApiError):
     code = "MESSAGE_NOT_ALLOWED"
 
 
+class InvalidStatsPeriodError(PublicApiError):
+    """Raised when ``from``/``to`` of a statistics query are reversed or too long."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    code = "INVALID_REQUEST"
+
+
+class UsageNotConfiguredError(PublicApiError):
+    """Raised when statistics are queried before ``USAGE_ID_KEY`` is configured."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "USAGE_NOT_CONFIGURED"
+
+
 class DeviceEventForwardError(PublicApiError):
     """Raised when a spontaneous phone event cannot reach the glasses server."""
 

@@ -279,6 +279,7 @@ class UsageReadRepository:
                 t.started_at,
                 t.status,
                 t.attempts,
+                sql_cast(t.task_id, String),
             )
             .outerjoin(first, true())
             .where(t.started_at >= lo, t.started_at < hi, *mine(t))
@@ -315,6 +316,7 @@ class UsageReadRepository:
             c.ended_at,
             c.final_state,
             c.end_reason,
+            c.direction,
         ).where(
             c.emergency.is_(False),
             or_(

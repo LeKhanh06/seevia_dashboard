@@ -762,6 +762,22 @@ def _device_id(request: Request) -> str:
 
 
 @app.on_event("startup")
+def start_usage_sender() -> None:
+    """Thread nền ghi spool + gửi lô thống kê sang AB (không chặn lượt nào)."""
+    from services import usage
+
+    usage.start_sender()
+
+
+@app.on_event("shutdown")
+def stop_usage_sender() -> None:
+    """Gửi nốt sự kiện thống kê còn trong hàng đợi trước khi tắt."""
+    from services import usage
+
+    usage.stop_sender()
+
+
+@app.on_event("startup")
 async def warm_v2() -> None:
     """Bắt tay TLS tới Clef/Gemma, chọn đường Gemma nhanh nhất, nạp detector."""
     if not config.V2_WARM:

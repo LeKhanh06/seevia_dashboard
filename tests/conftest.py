@@ -112,3 +112,18 @@ def fake_turn(speech=("xin chào",), cues=(), error=None, reply=None):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "smooth_joins: bật nối mượt giữa các câu (tts._Joiner); mặc định các test tắt nó")
+
+
+@pytest.fixture(autouse=True)
+def isolated_usage_spool(tmp_path, monkeypatch):
+    """Sự kiện thống kê không bao giờ ghi vào spool thật hay gửi tới AB thật trong test."""
+    from pipeline.usage_tasks import tracker
+    from services import usage
+
+    monkeypatch.setattr(config, "USAGE_SPOOL_DIR", str(tmp_path / "usage"))
+    monkeypatch.setattr(config, "USAGE_API_TOKEN", "")
+    usage.reset_for_tests()
+    tracker.reset()
+    yield
+    usage.reset_for_tests()
+    tracker.reset()

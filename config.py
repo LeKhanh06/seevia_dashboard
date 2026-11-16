@@ -234,6 +234,24 @@ TTS_STYLE = get("TTS_STYLE", "tu_nhien")
 
 # VisionCare Host API configuration (app server running on localhost:8001)
 VISIONCARE_HOST_URL = get("VISIONCARE_HOST_URL", "http://127.0.0.1:8001")
+
+# ── Thống kê sử dụng (services/usage.py) ──
+# Sự kiện vận hành ghi spool trên đĩa rồi gửi lô sang AB bằng token RIÊNG (scope usage:write).
+# Token rỗng: vẫn ghi spool (không mất), chỉ chưa gửi.
+USAGE_ENABLED = get("USAGE_ENABLED", "1") == "1"
+USAGE_ENDPOINT = get("USAGE_ENDPOINT", VISIONCARE_HOST_URL.rstrip("/") + "/api/v1/usage/events")
+USAGE_API_TOKEN = get("USAGE_API_TOKEN", "")
+USAGE_SPOOL_DIR = get("USAGE_SPOOL_DIR", os.path.join(STORAGE_DIR, "usage"))
+USAGE_BATCH = int(get("USAGE_BATCH", "500"))
+USAGE_FLUSH_S = float(get("USAGE_FLUSH_S", "5"))
+# Tác vụ chờ người dùng (chụp lại, chọn người, xác nhận) quá hạn này không có lượt mới -> bỏ cuộc.
+USAGE_ABANDON_S = float(get("USAGE_ABANDON_S", "120"))
+# Cửa sổ ghép lượt vào tác vụ đang mở (tài liệu nghiệp vụ: <= 60 s ghép, 61 s không).
+USAGE_MERGE_WINDOW_S = float(get("USAGE_MERGE_WINDOW_S", "60"))
+# Lượt WS chờ khung `played` tối đa (độ dài audio + hạn này) rồi chốt `unconfirmed`.
+USAGE_PLAYED_GRACE_S = float(get("USAGE_PLAYED_GRACE_S", "10"))
+# Giữ nút ngắn hơn hạn này mà không có lời -> không tính là một lượt (dashboard: bỏ nhấn < 0,3 s).
+USAGE_MIN_PRESS_MS = int(get("USAGE_MIN_PRESS_MS", "300"))
 VISIONCARE_CLIENT_TOKEN = get("VISIONCARE_CLIENT_TOKEN", "")
 VISIONCARE_DEVICE_ID = get("VISIONCARE_DEVICE_ID", "glasses-123")
 # `user_id` (public_user_id) chủ kính, gửi AB ở các lệnh gọi/nhắn/khẩn cấp (AB kiểm kính có gắn user này không).

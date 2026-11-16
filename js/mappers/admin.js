@@ -43,6 +43,8 @@ export function mapErrors(raw, ctx) {
 }
 
 // ---- Tài khoản ----------------------------------------------------------------------------
+// Backend thật (AB) đăng nhập bằng số điện thoại: không có email thì hiện số điện thoại đã che.
+const contactOf = i => i?.email_masked ?? i?.phone_masked ?? null;
 const accountStatus = s => ({ label: vi.accounts.statuses[s] || text(s), tone: s === "active" ? "good" : "neutral" });
 export function mapAccounts(raw, ctx) {
   const a = vi.accounts, items = arr(raw?.items);
@@ -53,10 +55,10 @@ export function mapAccounts(raw, ctx) {
       { key: "id", label: a.cols.id, sortable: true }, { key: "email", label: a.cols.email }, { key: "created_at", label: a.cols.created, sortable: true },
       { key: "status", label: a.cols.status, sortable: true }, { key: "glasses_count", label: a.cols.glasses, sortable: true, align: "end" },
     ],
-    rows: items.map(i => ({ id: text(i.id), email: text(i.email_masked), created: fmtDate(i.created_at), status: accountStatus(i.status), glasses: fmtInt(i.glasses_count) })),
+    rows: items.map(i => ({ id: text(i.id), email: text(contactOf(i)), created: fmtDate(i.created_at), status: accountStatus(i.status), glasses: fmtInt(i.glasses_count) })),
     csv: {
-      headers: ["Mã tài khoản", "Email (ẩn một phần)", "Ngày tạo", "Trạng thái", "Số kính liên kết"],
-      rows: items.map(i => [i.id ?? "", i.email_masked ?? "", i.created_at ?? "", a.statuses[i.status] || i.status || "", i.glasses_count ?? ""]),
+      headers: ["Mã tài khoản", "Email / SĐT (ẩn một phần)", "Ngày tạo", "Trạng thái", "Số kính liên kết"],
+      rows: items.map(i => [i.id ?? "", contactOf(i) ?? "", i.created_at ?? "", a.statuses[i.status] || i.status || "", i.glasses_count ?? ""]),
     },
   };
 }
@@ -69,7 +71,7 @@ export function mapAccountDetail(raw) {
   return {
     id: text(r.id), found: Boolean(r.id),
     fields: [
-      { label: a.emailLabel, value: text(r.email_masked), ellipsis: true }, { label: a.createdLabel, value: fmtDate(r.created_at) },
+      { label: a.emailLabel, value: text(contactOf(r)), ellipsis: true }, { label: a.createdLabel, value: fmtDate(r.created_at) },
       { label: a.statusField, chip: accountStatus(r.status) }, { label: a.glassesLabel, value: fmtInt(r.glasses_count) },
     ],
     glasses: linkedGlasses(r.glasses),

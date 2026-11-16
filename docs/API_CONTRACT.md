@@ -233,3 +233,30 @@ Tham số: `q`, `status` (`online`\|`offline`), `firmware_version`, `sort` (`id|
 - `summary.uses` của từng trang nhóm = `groups[].uses` tương ứng ở Tổng quan = tổng `features[].uses` của trang đó.
 - `sos.count` (An toàn) = `sos_uses` (Tổng quan) = `success` + `failed` + `cancelled_within_5s`.
 - Bốn `levels[].share_pct` cộng lại = 100. `total_accounts` = tổng số tài khoản trong danh sách.
+
+---
+
+## Nối backend thật (SeeVia AB)
+
+AB (app server, FastAPI) phục vụ toàn bộ hợp đồng này dưới `/api/v1/admin/...`.
+
+**Bật:** `js/config.js` → `USE_MOCK = false`, `API_BASE_URL = "https://<AB>/api/v1"`. Dashboard khác origin với AB thì đặt
+`ADMIN_CORS_ORIGINS='["https://<origin dashboard>"]'` cho AB. Tạo tài khoản admin trên máy AB (mật khẩu nhập qua stdin):
+`uv run python scripts/create_admin.py --email <email> --name "<tên>"`. Phiên đăng nhập 1 giờ; sai 5 lần/15 phút → `429 too_many_attempts`.
+
+**Chỗ AB khác dữ liệu mẫu:**
+
+| Mục | AB trả |
+|---|---|
+| Tài khoản | AB đăng nhập bằng số điện thoại: `email_masked: null` và thêm `phone_masked` (`09******12`). Dashboard hiện `email_masked`, không có thì hiện `phone_masked` |
+| Mã hiển thị | `id` tài khoản = mã người dùng của AB, `id` kính = mã thiết bị kính (không phải `TK-xxxx`/`KINH-xx`) |
+| `engagement.new_users` | Tài khoản mới tạo trong kỳ (như hợp đồng); thêm `new_active_users` = chủ kính có lượt dùng đầu tiên trong kỳ |
+| Cài đặt kính, pin | `install_*`, `battery_to_20_p50_seconds` luôn `null`, `install_errors: []` (chưa có nguồn đo) |
+| Mức cảnh báo 0 | Luôn `0` (kính không phát cảnh báo "an toàn"); `share_pct` tính trên mức 1–3 vẫn cộng = 100, không có cảnh báo thì `null` |
+| Lỗi tham số | `400 invalid_request` (vd. `from > to`, kỳ > 400 ngày) |
+
+**Cách đếm "lượt" (`uses`) ở AB:** một tác vụ đã có kết cục cuối, hoặc một lần bật cảnh báo vật cản, hoặc một cuộc gọi Internet
+người thân gọi tới kính đã kết thúc, hoặc một lần SOS đã kết thúc. Mỗi lượt có đúng một trạng thái, một ngày và một giờ bắt đầu,
+nên mọi ràng buộc nhất quán ở trên đều đúng với dữ liệu thật. `ocr_live` là các lần đọc chữ phải căn khung trực tiếp (không cộng
+trùng với `ocr`). `features[].errors` và bảng lỗi chỉ đếm lượt thất bại/lỗi kỹ thuật có mã; lượt bị huỷ không phải lỗi.
+Tỷ lệ hoàn thành, hoàn thành ngay lần đầu, bỏ cuộc tính trên các lượt là tác vụ (không gồm cảnh báo, cuộc gọi đến, SOS).

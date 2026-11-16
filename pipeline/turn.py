@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import config
 from lanes import general, phone
-from pipeline import device_ctx, final_router, metrics, pending_action, vad
+from pipeline import device_ctx, final_router, metrics, pending_action, usage_turn, vad
 from pipeline.final_router import Speculation, TurnContext
 from pipeline.intent_early import Decision
 from pipeline.image_buffer import image_buffer
@@ -27,6 +27,7 @@ from pipeline.intent_early import EarlyIntent, LANE, keyword_rule
 from pipeline.prewarm import Prewarmer
 from pipeline.reply import Reply
 from pipeline.stt_stream import StreamingTranscriber
+from live.session import sessions
 
 logger = logging.getLogger("blind_assist")
 
@@ -39,6 +40,7 @@ class TurnResult:
     timings: dict = field(default_factory=dict)
     source: str = ""  # nguồn quyết định ý định (khung debug `trace`)
     confidence: float | None = None  # None: không có bộ phân loại chấm (luật từ khoá / không tiếng)
+    attempt_id: str | None = None  # lượt thống kê (pipeline/usage_turn.py); None = không đo
 
 
 def _button_stop(device_state: dict) -> bool:
@@ -156,6 +158,7 @@ async def run(
     ctx.gen = pending_action.generation(device) if gen is None else gen
     ef = _EarlyFinal() if segmenter is not None and config.VAD_EARLY_FINAL else None
     partials = loop.create_task(_partial_loop(transcriber, early, stop, ctx, ef))
+    attempt_id: str | None = None
 
     try:
         async for chunk in body:
@@ -193,6 +196,10 @@ async def run(
             if reply is not None:
                 decision = Decision(reply.intent, source="bypass")
                 logger.info("v2 turn %s: bấm nút không lời -> %s", turn_id, reply.intent)
+        attempt_id = usage_turn.begin(
+            device, decision.intent, released, transport=transport, glasses=glasses,
+            has_speech=transcriber.has_speech,
+        )
         if reply is None:
             reply = await final_router.route(ctx, decision, text)
         t_route = time.monotonic()
@@ -200,6 +207,10 @@ async def run(
     except BaseException as exc:
         if on_cancel is not None and isinstance(exc, asyncio.CancelledError):
             on_cancel()  # phiên WS biết lượt này bị huỷ giữa chừng (lượt mới/cancel/ngắt)
+        if isinstance(exc, asyncio.CancelledError):
+            usage_turn.interrupted(attempt_id)  # bị lượt mới/huỷ cắt trước khi có lời đáp
+        elif attempt_id is not None:
+            usage_turn.failed(attempt_id, "TURN_ERROR")
         stop.set()
         partials.cancel()
         if ef is not None and ef.task is not None:
@@ -213,6 +224,10 @@ async def run(
 
     prewarmer.discard(keep=reply.live_token)
     reply.intent = reply.intent or decision.intent
+    if reply.live_token and attempt_id is not None:
+        sessions.tag(reply.live_token, usage_attempt=attempt_id)  # OCR live chốt lượt khi đọc xong
+    reply.usage_attempt = attempt_id
+    usage_turn.routed(attempt_id, reply)
     timings = {
         "audio_s": transcriber.seconds,
         "upload_s": released - started,
@@ -237,4 +252,4 @@ async def run(
         **({"stt_dual": transcriber.dual_info()} if transcriber.dual_info() else {}),
     })
     confidence = decision.confidence if decision.backend and decision.confidence_known else None
-    return TurnResult(reply, text, released, timings, decision.source, confidence)
+    return TurnResult(reply, text, released, timings, decision.source, confidence, attempt_id)

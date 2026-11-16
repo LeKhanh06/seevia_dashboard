@@ -23,3 +23,10 @@ class Reply:
     # số giây audio đứng trước câu đọc lại phía transport (vd. "Đã tiếp nhận yêu cầu" + đệm của /process).
     # Lệnh chờ chỉ bắt đầu đếm ngược từ đây (`pending_action.arm`), không phải từ lúc `route()`.
     on_audio_start: Callable[[float], None] | None = None
+    # Thống kê (pipeline/usage_turn.py): kết quả DỰ KIẾN của lượt, chốt khi kính phát xong. `keeps_open`: lượt
+    # kết thúc bằng một câu hỏi/nhắc chụp lại -> tác vụ còn mở chờ người dùng thử lại (ghép lượt kế tiếp).
+    outcome: str = "success"
+    error_code: str | None = None
+    keeps_open: bool = False
+    # Lượt thống kê của lời đáp này (đường HTTP chốt `playback` khi giao xong byte cuối).
+    usage_attempt: str | None = None

@@ -41,7 +41,7 @@ from live.call_bridge import calls
 from live.observers import ANY_DEVICE, observers
 from live.session import sessions
 from live.ws_adapter import LiveSocket
-from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action, speech
+from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action, speech, usage_turn
 from pipeline import turn as turn_v2
 from pipeline.image_buffer import image_buffer
 from pipeline.reply import Reply
@@ -90,6 +90,8 @@ class _Turn:
         self.task: asyncio.Task | None = None
         self.cancelled_in_run = False
         self.glasses: dict = {}  # t_press_ms / t_release_ms từ turn_start / turn_end
+        self.attempt_id: str | None = None  # lượt thống kê (pipeline/usage_turn.py)
+        self.first_chunk_at: float | None = None  # lúc gửi khối audio đầu của lời đáp (monotonic)
 
     async def body(self):
         while True:
@@ -106,7 +108,10 @@ class DeviceSession:
         self.device = ""
         self.per_device = False  # xác thực bằng token riêng của kính (C0); chỉ khi đó mới gọi điện/nhắn tin
         self.cue_version = 0
+        self.firmware = ""  # `hello.fw` của kính, gắn vào sự kiện thống kê
         self.session_id = secrets.token_hex(6)
+        # Lượt đã gửi xong lời đáp, chờ kính báo `played` (turn id -> _Turn).
+        self._usage_playing: dict[str, _Turn] = {}
         self._send_lock = asyncio.Lock()
         self._turn: _Turn | None = None
         self._live_task: asyncio.Task | None = None
@@ -328,6 +333,8 @@ class DeviceSession:
             self.cue_version = int(hello.get("cue_version") or 0)
         except (TypeError, ValueError):
             self.cue_version = 0
+        fw = str(hello.get("fw", ""))[:40]
+        self.firmware = fw if fw.replace(".", "").replace("-", "").replace("_", "").replace("+", "").isalnum() else ""
         logger.info("v2 session %s: hello device=%s per_device=%s fw=%s accept=%s", self.session_id, device,
                     self.per_device, str(hello.get("fw", ""))[:32], str(hello.get("accept", ""))[:80])
         return True
@@ -394,6 +401,11 @@ class DeviceSession:
         self._nav_suspended = False
 
     # ---------- huỷ ----------
+    def _usage_cut_playing(self) -> None:
+        for waiting in self._usage_playing.values():
+            usage_turn.interrupted(waiting.attempt_id)
+        self._usage_playing.clear()
+
     async def _cancel_work(self, reason: str, keep_nav: bool = False, keep_results: bool = False) -> None:
         """Huỷ lượt + live đang chạy, rồi tăng thế hệ & huỷ lệnh chờ làn D.
 
@@ -523,6 +535,10 @@ class DeviceSession:
                 await self._cancel_work("kính huỷ", keep_nav=True)
         elif kind == "played":
             marks = metrics.glasses_marks(frame)
+            waiting = self._usage_playing.pop(str(frame.get("turn", "")), None)
+            if waiting is not None:  # `played` lặp / của lượt không đo: bỏ qua
+                usage_turn.played(waiting.attempt_id, waiting.first_chunk_at,
+                                  {**marks, "aborted": frame.get("aborted") is True})
             logger.info("v2 played: %s", {"turn": frame.get("turn"), **marks})
             # Dòng bổ sung (lượt đã ghi xong từ lâu); ghép với dòng chính theo turn id.
             metrics.record_turn({
@@ -581,6 +597,7 @@ class DeviceSession:
         if call is not None and call.state in (call_bridge.RINGING_OUT, call_bridge.ACTIVE):
             return  # đang gọi: nút = cúp (`call_hangup`), không mở lượt lệnh (spec §6)
         self._turn_idle.clear()  # TRƯỚC khi huỷ: việc dựng lại cảnh báo do huỷ OCR sinh ra sẽ chờ lượt này
+        self._usage_cut_playing()  # bấm nút giữa lúc kính còn đọc lời đáp trước
         await self._cancel_work("lượt mới", keep_nav=True)
         if self._shut:
             self._turn_idle.set()
@@ -593,6 +610,8 @@ class DeviceSession:
             return
         turn = _Turn(str(frame.get("turn", "")))
         turn.glasses["t_press_ms"] = frame.get("t_press_ms")
+        if self.firmware:
+            turn.glasses["fw"] = self.firmware
         self._turn = turn
         observers.text(self.device, {"t": "turn_start", "turn": turn.id})
         gen = pending_action.generation(self.device)
@@ -607,6 +626,7 @@ class DeviceSession:
                     transport="ws", glasses=turn.glasses,
                 )
                 reply, released = result.reply, result.released_at
+                turn.attempt_id = result.attempt_id
                 if self.debug or self._observed():
                     await self._send_trace(turn, result)
             except Exception:  # noqa: BLE001 - kính luôn phải nghe được gì đó
@@ -617,6 +637,7 @@ class DeviceSession:
             logger.info("v2 session turn %s: socket đứt (%r)", turn.id, exc)
         except asyncio.CancelledError:
             logger.info("v2 session turn %s: bị huỷ (trong run=%s)", turn.id, turn.cancelled_in_run)
+            usage_turn.interrupted(turn.attempt_id)  # bị cắt giữa lúc đang gửi lời đáp
             raise
         finally:
             # Task chưa xong ở đây: để vòng sau mới kiểm "kính rảnh" thì tin đang xếp hàng mới được đọc.
@@ -648,6 +669,7 @@ class DeviceSession:
             if has_audio else None,
         })
         _, body = await self._reply_audio(reply, cue_ok, RESPONSE_FORMAT, released)
+        audio_bytes = 0
         if body is not None:
             first = True
             # aclosing: bị huỷ/ngắt giữa câu thì generator được đóng NGAY trong task này, không để GC
@@ -657,11 +679,17 @@ class DeviceSession:
             ) as chunks:
                 async for chunk in chunks:
                     await self.send_bytes(protocol.audio(chunk))
+                    audio_bytes += len(chunk)
                     if first:
                         first = False
+                        turn.first_chunk_at = time.monotonic()
                         if reply.on_audio_start is not None:
                             reply.on_audio_start(0.0)  # câu đọc lại làn D: bắt đầu đếm cửa sổ huỷ
         await self.send_json({"t": "reply_end", "turn": turn.id})
+        if turn.attempt_id is not None:
+            # IMA ADPCM 4 bit mono: 2 mẫu / byte.
+            usage_turn.audio_sent(turn.attempt_id, turn.first_chunk_at, audio_bytes * 2 / adpcm.SAMPLE_RATE)
+            self._usage_playing[turn.id] = turn
 
     # ---------- kết quả hành động do server chủ động đẩy ----------
     def _enqueue_result(self, request_id: str, text: str) -> None:

@@ -39,6 +39,13 @@ class SessionManager:
             self._pending[session.token] = session
         return session
 
+    def tag(self, token: str, **params: object) -> None:
+        """Gắn thêm tham số cho phiên còn chờ claim (vd. `usage_attempt` của lượt mở phiên)."""
+        with self._lock:
+            session = self._pending.get(token)
+            if session is not None:
+                session.params.update(params)
+
     def _prune(self) -> None:
         now = time.monotonic()
         for token in [t for t, s in self._pending.items() if now - s.created_at > config.LIVE_TOKEN_TTL_S]:

@@ -134,3 +134,11 @@ def reject_reason(intent: str, image_bytes: bytes | None) -> str | None:
         f" -> từ chối: {reason}" if reason else "",
     )
     return reason
+
+
+_REASON_CODES = {_TOO_DARK: "dark", _TOO_BRIGHT: "bright", _TOO_BLURRY: "blurry", _NO_IMAGE: "no_image"}
+
+
+def reason_code(reason: str) -> str:
+    """Mã ngắn của lý do từ chối (cho thống kê, không ghi câu nói)."""
+    return _REASON_CODES.get(reason, "other")

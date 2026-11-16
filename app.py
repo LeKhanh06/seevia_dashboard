@@ -23,7 +23,7 @@ from starlette.concurrency import run_in_threadpool
 import config
 from handlers import chat
 from pipeline import adpcm, cues, device_ctx, final_router, guard, phrases, stt, tts
-from pipeline import metrics
+from pipeline import metrics, usage_turn
 from pipeline import turn as turn_v2
 from pipeline.image_buffer import image_buffer
 from pipeline.reply import Reply
@@ -655,6 +655,7 @@ async def process(
     turn_done: list[float] = []
     arm = _ProcessArm()
 
+    outer_reply = Reply()
     try:
         if audio is None:
             speech: Iterable[str] = [_MISSING_AUDIO_MESSAGE]
@@ -699,6 +700,7 @@ async def process(
                     result = done.result()
                     turn_done.append(time.monotonic())
                     reply = result.reply
+                    outer_reply.usage_attempt = reply.usage_attempt  # chốt `playback` khi giao xong
                     arm.set(reply.on_audio_start)
                     # Kính cũ không có clip cue trong flash: cue đổi thành câu nói.
                     for cue in reply.cues:
@@ -712,7 +714,8 @@ async def process(
                         loop.call_soon_threadsafe(task.cancel)
 
             speech = speech_gen()
-        reply = Reply(speech=speech)
+        outer_reply.speech = speech
+        reply = outer_reply
     except Exception:  # noqa: BLE001 - MCU must receive audio, never a JSON error.
         logger.exception("process() request%d thất bại", idx)
         reply = Reply(speech=[_ERROR_MESSAGE])
@@ -731,6 +734,7 @@ async def process(
         # giữ đều 32 KB/s hay không.
         payload = await run_in_threadpool(lambda: b"".join(body))
         arm.first_chunk()  # cả file đi một lần ngay sau đây
+        usage_turn.stream_done(reply.usage_attempt, time.monotonic(), ok=True)
         return Response(content=_pcm_to_wav(payload), media_type="audio/wav")
 
     # Kính ngắt giữa chừng -> huỷ lệnh chờ (như /v2/turn); đồng hồ làn D chạy từ byte đầu đã gửi.
@@ -914,16 +918,19 @@ async def _stream_until_disconnect(
 
     completed = False
     first = True
+    first_at: float | None = None
     try:
         async with contextlib.aclosing(_iter_in_thread(body, getattr(reply.speech, "abort", None))) as chunks:
             async for chunk in chunks:
                 yield chunk
                 if first:
                     first = False
+                    first_at = time.monotonic()
                     if on_first_chunk is not None:
                         on_first_chunk()
         completed = True
     finally:
+        usage_turn.stream_done(reply.usage_attempt, first_at, ok=completed)
         if not completed and device is not None:
             if pending_action.cancel(device, "kính ngắt"):
                 logger.info("v2 turn: kính ngắt giữa lượt, huỷ lệnh chờ của %s", device)
@@ -940,6 +947,7 @@ async def _v2_response(
         payload = await run_in_threadpool(lambda: b"".join(body))
         if reply.on_audio_start is not None:
             reply.on_audio_start(0.0)  # cả file đi một lần ngay sau đây
+        usage_turn.stream_done(reply.usage_attempt, time.monotonic(), ok=True)
         return Response(content=_pcm_to_wav(payload), media_type="audio/wav", headers=headers)
 
     audio_headers = _stream_headers(response_format)

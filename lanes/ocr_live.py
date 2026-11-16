@@ -24,7 +24,8 @@ from live import protocol, text_align
 from live.session import LiveSession, sessions
 from models import llm
 from models.ocr import prompts
-from pipeline import speech
+from pipeline import speech, usage_turn
+from pipeline.usage_tasks import tracker
 from pipeline.image_buffer import resize_jpeg
 
 logger = logging.getLogger("blind_assist")
@@ -130,6 +131,26 @@ async def read_money_frame(jpeg: bytes, min_prob: float) -> tuple[str, list[tupl
     """Đọc tiền đúng MỘT khung (cỡ ảnh như `read_image`): (câu nói, top-2 nhãn; None khi lỗi mạng/model)."""
     image = await asyncio.to_thread(resize_jpeg, jpeg, config.LLM_OCR_IMAGE_MAX_SIDE, 90)
     return await read_money.read_ranked(image, min_prob)
+
+
+def _timed_ocr(pieces, attempt_id: str | None):
+    """Đo thời gian xử lý OCR (bắt đầu đọc ảnh -> mảnh chữ đầu tiên) cho thống kê, không giữ chữ.
+
+    Không đo (không có lượt) hoặc nguồn không phải async iterator (test thay `spoken` bằng list): trả nguyên.
+    """
+    if attempt_id is None or not hasattr(pieces, "__aiter__"):
+        return pieces
+    return _timed_async(pieces, attempt_id)
+
+
+async def _timed_async(pieces: AsyncIterator[str], attempt_id: str) -> AsyncIterator[str]:
+    started = time.monotonic()
+    first = True
+    async for piece in pieces:
+        if first:
+            first = False
+            tracker.mark(attempt_id, processing_ms=int((time.monotonic() - started) * 1000))
+        yield piece
 
 
 def spoken(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
@@ -310,9 +331,12 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     deadline = started + config.OCR_ALIGN_TIMEOUT_S
     best_vga: bytes | None = None
     debug = getattr(ws, "debug", None)  # chỉ có trên LiveSocket của phiên bật debug (demo)
+    attempt_id = session.params.get("usage_attempt")
+    outcome: dict = {"status": "cancelled", "error_code": "live_closed", "align_ms": None}
     try:
         if mode == "money_retry":
             await _money_retry(ws, box, session)
+            outcome.update(status="success", error_code=None)
             return
         one_shot = session.params.get("capture_size")
         if one_shot:
@@ -322,9 +346,11 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
                 return
             if image is not None:
                 loop = asyncio.get_running_loop()
-                await speak_ws(ws, speech.sync_iter(spoken(image, mode, session.device), loop))
+                await speak_ws(ws, speech.sync_iter(_timed_ocr(spoken(image, mode, session.device), attempt_id), loop))
             if box.closed or session.closed.is_set():
                 return
+            outcome.update(status="success" if image is not None else "failed",
+                           error_code=None if image is not None else "NO_IMAGE")
             await ws.send_text(protocol.end())  # không báo "Thoát đọc chữ": đường nhanh không có câu mở chế độ
             return
         await ws.send_text(protocol.cam("vga", 5))
@@ -376,6 +402,7 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
                 await ws.send_text(protocol.cue(action.cue))
             else:
                 logger.info("OCR live: khung đạt sau %.1fs, chụp %s", time.monotonic() - started, last_size)
+                outcome["align_ms"] = int((time.monotonic() - started) * 1000)
                 capture_sent, capture_deadline = True, time.monotonic() + 3.0 + config.OCR_CAPTURE_WAIT_S
                 min_width = int(_SIZE_W[last_size] * 0.9)
                 await ws.send_text(protocol.capture(last_size))
@@ -384,12 +411,14 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
         if box.closed or session.closed.is_set():
             return
         if image is None:  # hết trần mà không có ảnh nào: đừng im lặng như bị treo
+            outcome.update(status="failed", error_code="NO_IMAGE")
             await speak_ws(ws, [EXIT_READ])
             return
         loop = asyncio.get_running_loop()
-        await speak_ws(ws, speech.sync_iter(spoken(image, mode, session.device), loop))
+        await speak_ws(ws, speech.sync_iter(_timed_ocr(spoken(image, mode, session.device), attempt_id), loop))
         if box.closed or session.closed.is_set():
             return
+        outcome.update(status="success", error_code=None)
         await speak_ws(ws, [EXIT_READ])
         await ws.send_text(protocol.end())
     except (WebSocketDisconnect, RuntimeError) as exc:
@@ -397,3 +426,4 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     finally:
         receiver.cancel()
         sessions.release(session)
+        usage_turn.live_done(attempt_id, **outcome)

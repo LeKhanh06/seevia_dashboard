@@ -18,6 +18,7 @@ from live import call_bridge, text_align
 from live.session import sessions
 from models import search
 from pipeline import device_ctx, hearfix, image_quality, pending_action, speech
+from services import usage
 from pipeline.image_buffer import image_buffer
 from pipeline.intent_early import Decision
 from pipeline.reply import Reply
@@ -151,7 +152,8 @@ async def _lane_a(ctx: TurnContext, d: Decision, text: str) -> Reply:
             return Reply(cues=["no_image"], intent=d.intent, lane="A")
         reason = await asyncio.to_thread(image_quality.reject_reason, d.intent, entry.jpeg)
         if reason is not None:
-            return Reply(speech=[reason], intent=d.intent, lane="A")
+            usage.signal("image_rejected", image_quality.reason_code(reason))
+            return Reply(speech=[reason], intent=d.intent, lane="A", outcome="rejected_image", keeps_open=True)
         image = await asyncio.to_thread(entry.llm_jpeg)
 
     if d.intent == "chat" and d.needs_web:

@@ -41,7 +41,8 @@ def srig(rig, monkeypatch):  # noqa: F811
 
 
 def _said(rig, needle):
-    return any(needle in line for line in rig.spoken)
+    # Câu lỗi hai vế ("Có nhiều người trùng tên. Bạn nói rõ…") được TTS tách thành hai dòng: so trên cả lời đã nói.
+    return needle in " ".join(rig.spoken)
 
 
 def _finish(rig, path_suffix, state="succeeded", result=None, error=None):

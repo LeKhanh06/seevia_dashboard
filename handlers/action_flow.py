@@ -29,9 +29,9 @@ logger = logging.getLogger("blind_assist")
 # chạy tiếp. Mỗi câu ở đây nói một điều CỤ THỂ hơn câu chào: đang chờ ai, chờ
 # tới đâu rồi.
 _DEFAULT_PROGRESS = (
-    "Vẫn đang chờ điện thoại phản hồi.",
+    "Vẫn đang chờ điện thoại trả lời.",
     "Sắp xong rồi, bạn chờ thêm chút nữa.",
-    "Điện thoại chưa báo về, nhưng chưa có gì bất thường.",
+    "Điện thoại chưa trả lời, mình vẫn đang chờ.",
 )
 
 # Không nối được tới app server (mạng/hết giờ): chưa lệnh nào đi tới điện thoại. Nói đúng điều đó thay vì câu lỗi
@@ -39,7 +39,7 @@ _DEFAULT_PROGRESS = (
 NO_PHONE_CONNECTION = "Không kết nối được với điện thoại."
 
 # Sau mốc SLO mà điện thoại chưa báo: nói một lần rồi vẫn chờ kết quả thật (xem `run_action`).
-_STILL_WORKING = "Điện thoại vẫn đang thực hiện, tôi sẽ cập nhật khi có kết quả."
+_STILL_WORKING = "Điện thoại vẫn đang làm, có kết quả mình sẽ báo."
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (*_DEFAULT_PROGRESS, NO_PHONE_CONNECTION, _STILL_WORKING)

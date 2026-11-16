@@ -112,7 +112,7 @@ def test_navigation_stop_refuses_when_nothing_is_running(monkeypatch):
 
     # The old code hardcoded "nav-123", which the host always rejected.
     assert calls == []
-    assert "không có lộ trình" in out.lower()
+    assert "không có chỉ đường" in out.lower()
 
 
 def test_contact_call_speaks_the_name_the_phone_resolved(monkeypatch):
@@ -327,7 +327,8 @@ def test_music_play_reports_silence_as_a_failure(monkeypatch):
     # The whole point of polling: "sent the request" used to be the only thing
     # the user ever heard, whether or not a single note came out.
     assert "chưa phát được" in out
-    assert "nhấn vào thông báo" in out
+    assert "thông báo" not in out  # người nghe không bấm được thông báo
+    assert "nói lại tên bài" in out
 
 
 def test_music_stop_and_volume_speak_the_confirmed_state(monkeypatch):
@@ -351,4 +352,4 @@ def test_no_result_at_slo_keeps_phone_action_running(monkeypatch):
 
     out = "".join(music.handle_stop(b"", "", {}))
 
-    assert "vẫn đang thực hiện" in out.lower()
+    assert "vẫn đang làm" in out.lower()

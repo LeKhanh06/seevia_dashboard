@@ -19,7 +19,7 @@ import unicodedata
 from collections.abc import Iterator
 
 import config
-from pipeline import device_ctx
+from pipeline import device_ctx, hearfix
 from handlers import music, navigation, phone, result_speech, ride
 from models import llm
 
@@ -307,21 +307,27 @@ def readback(intent: str, params: dict) -> str:
 
 
 def ask_confirm(intent: str, params: dict) -> str:
+    """Câu hỏi "... phải không?". Thiếu tên / địa điểm / bài hát (đoán từ câu nghe sai) thì hỏi chung: "Bạn muốn gọi điện phải không?"."""
+    name = params.get("contact_name")
     if intent == "contact_call":
-        return f"Gọi cho {params.get('contact_name', '')} phải không?"
+        return f"Gọi cho {name} phải không?" if name else hearfix.generic_confirm(intent)
     if intent == "message_send":
-        return f"Nhắn cho {params.get('contact_name', '')} phải không?"
+        return f"Nhắn cho {name} phải không?" if name else hearfix.generic_confirm(intent)
+    if intent == "message_read":
+        return "Đọc tin nhắn mới phải không?"
     if intent == "emergency_call":
         return "Gọi người thân khẩn cấp phải không?"
     if intent == "ride_quote":
-        return f"Đặt xe đi {params.get('destination', '')} phải không?"
+        dest = params.get("destination")
+        return f"Đặt xe đi {dest} phải không?" if dest else hearfix.generic_confirm(intent)
     if intent == "ride_confirm":
         return "Xác nhận chuyến xe phải không?"
     if intent == "music_play":
         song = params.get("song")
         return f"Mở {song} phải không?" if song else "Mở nhạc phải không?"
     if intent == "nav_start":
-        return f"Chỉ đường tới {params.get('destination', '')} phải không?"
+        dest = params.get("destination")
+        return f"Chỉ đường tới {dest} phải không?" if dest else hearfix.generic_confirm(intent)
     if intent in STOP_QUESTIONS:
         return STOP_QUESTIONS[intent]
     raise KeyError(intent)

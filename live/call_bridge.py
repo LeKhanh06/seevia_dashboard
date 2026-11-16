@@ -41,9 +41,9 @@ from pipeline import adpcm, device_ctx
 logger = logging.getLogger("blind_assist")
 
 # Câu cố định (đưa vào `pipeline/phrases.py` để dựng sẵn audio). Câu có tên người thì tổng hợp lúc chạy.
-NEED_OWN_TOKEN = "Kính cần token riêng để gọi điện."
+NEED_OWN_TOKEN = "Kính chưa sẵn sàng để gọi điện, cần được cài đặt lại."
 EMERGENCY_NONE_REACHED = "Chưa liên lạc được người thân nào."  # hết 3 vòng (callback `emergency_exhausted`)
-NEED_UPDATE = "Kính cần cập nhật để gọi điện."  # kính chỉ dùng POST (không có phiên WS): không có kênh âm thanh
+NEED_UPDATE = "Kính cần cập nhật phần mềm để gọi điện."  # kính chỉ dùng POST (không có phiên WS): không có kênh âm thanh
 STATIC_SPEECH: tuple[str, ...] = (NEED_OWN_TOKEN, EMERGENCY_NONE_REACHED, NEED_UPDATE)
 
 

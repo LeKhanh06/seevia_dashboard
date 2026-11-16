@@ -32,10 +32,10 @@ from schemas import Intent
 
 logger = logging.getLogger("blind_assist")
 
-_TOO_DARK = "Ảnh quá tối, vui lòng ra chỗ đủ sáng và chụp lại."
-_TOO_BRIGHT = "Ảnh quá sáng, tránh để đèn chiếu thẳng vào ống kính rồi chụp lại."
-_TOO_BLURRY = "Ảnh không rõ, vui lòng đưa máy lại gần rồi chụp lại."
-_NO_IMAGE = "Không nhận được ảnh từ kính, vui lòng thử lại."
+_TOO_DARK = "Quá tối. Bạn ra chỗ sáng hơn rồi nói lại nhé."
+_TOO_BRIGHT = "Quá sáng. Bạn tránh đèn chiếu thẳng vào kính rồi nói lại nhé."
+_TOO_BLURRY = "Ảnh bị mờ. Bạn giữ yên đầu rồi nói lại nhé."
+_NO_IMAGE = "Chưa nhận được ảnh từ kính. Bạn nói lại nhé."
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio.
 STATIC_SPEECH: tuple[str, ...] = (_TOO_DARK, _TOO_BRIGHT, _TOO_BLURRY, _NO_IMAGE)

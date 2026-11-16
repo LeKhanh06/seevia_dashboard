@@ -9,10 +9,7 @@ from handlers.action_flow import recall, remember, run_action
 # không quay về đây được: lệnh không bao giờ được gửi. Sai bài thì câu kết quả đọc tên + ca sĩ thật, người dùng nói
 # lại kèm ca sĩ là xong.
 
-# Nhắc bấm thông báo ngay từ câu đầu: ứng dụng nhạc mở qua notification, màn
-# hình đang bật thì Android chỉ hiện heads-up chứ không tự mở, nên người dùng
-# cần biết ngay chứ không phải chờ hết câu kết quả.
-_TAP_TO_OPEN = "Nếu màn hình đang bật, hãy nhấn vào thông báo trên điện thoại."
+
 
 # "mở nhạc đi" / "bật nhạc lên" / "đổi bài khác" là ý muốn nghe nhạc, chưa phải một bài cụ thể. Bộ phân loại trả
 # 'song': 'nhạc' hoặc không trả gì (đo thật). Không đem nguyên câu đi tìm (ra bài tên "Nhạc"), cũng không hỏi lại:
@@ -37,23 +34,23 @@ _PLAY_PROGRESS = (
     "Vẫn đang tìm bài hát trên ứng dụng nhạc.",
     "Đã mở ứng dụng nhạc, đang chờ bài hát bắt đầu phát.",
     "Vẫn đang chờ nhạc, bạn chờ thêm chút nữa.",
-    "Ứng dụng nhạc đang tải bài, chưa có gì bất thường.",
+    "Ứng dụng nhạc đang tải bài.",
     "Sắp xong rồi, bạn chờ một chút.",
 )
 
 _STOP_ACK = "Đang dừng nhạc."
-_STOP_FAILURE = "Không thể dừng nhạc, vui lòng thử lại."
+_STOP_FAILURE = "Chưa dừng được nhạc. Bạn thử lại nhé."
 _STOP_PROGRESS = ("Vẫn đang dừng nhạc, bạn chờ một chút.",)
 
 _VOLUME_ACK = "Đang chỉnh âm lượng."
-_VOLUME_FAILURE = "Không thể thay đổi âm lượng, vui lòng thử lại."
+_VOLUME_FAILURE = "Chưa chỉnh được âm lượng. Bạn thử lại nhé."
 _VOLUME_PROGRESS = ("Vẫn đang chỉnh âm lượng, bạn chờ một chút.",)
 
 # Câu cố định của module này, để `pipeline/phrases.py` dựng sẵn audio. Câu ack
 # của `music_play` có tên bài nên không dựng sẵn được cả câu — chỉ nửa sau là cố
 # định, và `_sentences()` cắt ở dấu chấm nên đúng nửa đó vẫn trúng cache.
 STATIC_SPEECH: tuple[str, ...] = (
-    _TAP_TO_OPEN,
+
     _ASK_VOLUME,
     *_PLAY_PROGRESS,
     _STOP_ACK,
@@ -92,8 +89,8 @@ def handle_play(image: bytes, command_text: str, params: dict | None = None) -> 
         "music_play",
         "api/v1/service/music/play",
         payload,
-        ack=f"Đang mở nhạc, tìm bài {song}. {_TAP_TO_OPEN}",
-        failure=f"Không thể phát bài hát {song}, vui lòng thử lại.",
+        ack=f"Đang mở nhạc, tìm bài {song}.",
+        failure=f"Chưa phát được bài {song}. Bạn thử lại nhé.",
         result_timeout=config.VISIONCARE_MUSIC_RESULT_TIMEOUT_SECONDS,
         progress=_PLAY_PROGRESS,
     )

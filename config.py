@@ -528,6 +528,18 @@ INTENT_LLM_TIMEOUT_S = float(get("INTENT_LLM_TIMEOUT_S", "0.8"))
 # Trần chờ intent cuối (cả lượt dự phòng); quá trần thì luật từ khoá / làn chat.
 INTENT_DECIDE_TIMEOUT_S = float(get("INTENT_DECIDE_TIMEOUT_S", "1.5"))
 
+# ── Cứu lệnh STT nghe sai (pipeline/hearfix.py, V2) ──
+# Chỉ chạy khi bộ phân loại cho `chat`. Ngưỡng xác suất của mô hình gần âm: >= STRONG chạy luôn (lệnh không tác dụng phụ /
+# dừng-tắt) hoặc hỏi xác nhận (lệnh có tác dụng phụ); >= WEAK đọc lại điều nghe được kèm tối đa MAX_OPTIONS lựa chọn
+# (mỗi lựa chọn có xác suất >= OPTION_MIN). Số đo và cách chọn: docs/2026-10-21-ux-khiem-thi/report-V.md.
+HEARFIX_ENABLED = get("HEARFIX_ENABLED", "1") != "0"
+HEARFIX_STRONG = float(get("HEARFIX_STRONG", "0.7"))
+HEARFIX_WEAK = float(get("HEARFIX_WEAK", "0.55"))
+HEARFIX_OPTION_MIN = float(get("HEARFIX_OPTION_MIN", "0.12"))
+HEARFIX_MAX_OPTIONS = int(get("HEARFIX_MAX_OPTIONS", "3"))
+# Câu dài hơn thế (số từ) là lời nói thường, không phải lệnh bị nghe sai: không can thiệp (VietMed: câu y khoa 25-30 từ).
+HEARFIX_MAX_WORDS = int(get("HEARFIX_MAX_WORDS", "16"))
+
 # ── Gọi điện qua kính (docs/superpowers/specs/2026-10-19-glasses-calls-messages-design.md, §5.3) ──
 # Chuông tối đa (AB cũng dùng số này để đánh `missed`); hạn token media = chuông + CALL_TOKEN_GRACE_S.
 CALL_RING_TIMEOUT_S = float(get("CALL_RING_TIMEOUT_S", "30"))

@@ -10,7 +10,7 @@ import threading
 import pytest
 
 import config
-from handlers import action_flow, music
+from handlers import action_flow, music, result_speech
 from lanes import phone
 from pipeline import cues, final_router, pending_action
 from pipeline.intent_early import Decision
@@ -174,7 +174,7 @@ def test_late_phone_failure_is_spoken(monkeypatch):
 
     out = list(music.handle_stop(b"", "", {}))
 
-    assert "Không kết nối được với điện thoại" in out[-1]
+    assert out[-1] == result_speech._ERROR_SPEECH["DELIVERY_FAILED"]
 
 
 def test_phone_never_answering_ends_with_the_timeout_line(monkeypatch):
@@ -185,7 +185,8 @@ def test_phone_never_answering_ends_with_the_timeout_line(monkeypatch):
 
     out = list(music.handle_stop(b"", "", {}))
 
-    assert out[-1] == "Điện thoại chưa phản hồi, vui lòng kiểm tra thông báo trên điện thoại."
+    assert out[-1] == result_speech._TIMEOUT_MESSAGE
+    assert "thông báo" not in out[-1]  # người nghe qua kính không xem được thông báo
 
 
 @pytest.mark.parametrize("text", ["tắt cảnh báo", "tất cảnh báo vật cản", "tắc cảnh báo", "hủy cảnh báo", "thôi cảnh báo đi"])

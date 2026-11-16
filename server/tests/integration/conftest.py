@@ -132,7 +132,14 @@ def postgres_session_factory(postgres_engine: AsyncEngine) -> AsyncSessionFactor
 async def _truncate_mutable_tables(engine: AsyncEngine) -> None:
     """Clear rows written by a test without dropping or re-migrating the schema."""
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE operations, devices, glasses_devices"))
+        await connection.execute(
+            text(
+                "TRUNCATE TABLE operations, devices, glasses_devices, "
+                "usage_events, usage_attempts, usage_tasks, usage_sessions, "
+                "usage_calls, usage_sos, "
+                "usage_dirty_days, usage_daily, usage_hourly, usage_active_days"
+            )
+        )
 
 
 @pytest.fixture

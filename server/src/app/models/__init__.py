@@ -26,6 +26,18 @@ from app.models.message import Message
 from app.models.operation import Operation as OperationRecord
 from app.models.session import Session
 from app.models.support_ticket import SupportTicket
+from app.models.usage import (
+    UsageActiveDay,
+    UsageAttempt,
+    UsageCall,
+    UsageDaily,
+    UsageDirtyDay,
+    UsageEvent,
+    UsageHourly,
+    UsageSession,
+    UsageSos,
+    UsageTask,
+)
 from app.models.user import User
 
 __all__ = [
@@ -54,5 +66,15 @@ __all__ = [
     "RequestState",
     "Session",
     "SupportTicket",
+    "UsageActiveDay",
+    "UsageAttempt",
+    "UsageCall",
+    "UsageDaily",
+    "UsageDirtyDay",
+    "UsageEvent",
+    "UsageHourly",
+    "UsageSession",
+    "UsageSos",
+    "UsageTask",
     "User",
 ]

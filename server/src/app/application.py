@@ -14,6 +14,7 @@ from app.api.preferences import router as preferences_router
 from app.api.service import router as service_router
 from app.api.status import router as status_router
 from app.api.support import router as support_router
+from app.api.usage import router as usage_router
 from app.config import Settings
 from app.errors import register_exception_handlers
 from app.lifespan import application_lifespan
@@ -52,5 +53,6 @@ def create_app(settings: Settings) -> FastAPI:
     application.include_router(care_router)
     application.include_router(calls_router)
     application.include_router(messages_router)
+    application.include_router(usage_router)
 
     return application

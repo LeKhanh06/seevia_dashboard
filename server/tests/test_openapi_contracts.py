@@ -101,6 +101,7 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/messages",
         "/api/v1/service/emergency/start",
         "/api/v1/service/emergency/{emergency_id}/stop",
+        "/api/v1/usage/events",
     }
 
 

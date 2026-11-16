@@ -11,8 +11,11 @@ import pytest
 from scripts.create_admin import main as create_admin_main
 from sqlalchemy import select, update
 
+from app.application import create_app
 from app.models.admin import AdminSession, AdminUser
+from app.services.admin_auth import LoginThrottle
 from tests.integration.admin_helpers import PASSWORD, admin_client, auth, login, make_admin
+from tests.integration.usage_helpers import usage_settings
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -222,3 +225,33 @@ async def test_create_admin_script_reads_stdin(
     assert "Manh12345" not in admin.password_hash
     async with admin_client(postgres_session_factory) as client:
         assert await login(client, email="new@example.com", password="Manh12345")
+
+
+@pytest.mark.usefixtures("db_session")
+async def test_every_admin_route_requires_a_session(
+    postgres_session_factory: AsyncSessionFactory,
+) -> None:
+    """Every /api/v1/admin route except login answers 401 without a valid token."""
+    async with admin_client(postgres_session_factory) as client:
+        app = create_app(usage_settings("unused"))
+        routes = [
+            (method.upper(), path)
+            for path, item in app.openapi()["paths"].items()
+            if path.startswith("/api/v1/admin") and path != "/api/v1/admin/auth/login"
+            for method in item
+        ]
+        assert len(routes) >= 20
+        for method, path in routes:
+            url = path.replace("{account_id}", "x").replace("{device_id}", "x")
+            for headers in ({}, auth("not-a-token")):
+                response = await client.request(method, url, headers=headers)
+                assert response.status_code == 401, (method, path, response.status_code)
+                assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_login_throttle_memory_is_bounded() -> None:
+    """Spraying many emails cannot grow the failure table without limit."""
+    throttle = LoginThrottle()
+    for i in range(10_050):
+        throttle.fail(f"user{i}@example.com")
+    assert len(throttle._failures) <= 10_000  # noqa: SLF001

@@ -7,6 +7,7 @@ so a single process cannot be brute forced faster than scrypt already allows.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -66,6 +67,31 @@ def verify_password(password: str, stored: str) -> bool:
 
 # Hash compared when the email is unknown, so both paths cost one scrypt.
 _DUMMY_HASH: Final = hash_password(secrets.token_urlsafe(16))
+
+# scrypt costs ~16 MiB and tens of ms of CPU: run it off the event loop (VH and phone requests keep
+# flowing during a login burst) and at most a few at a time (memory stays bounded).
+_SCRYPT_SLOTS: Final = threading.BoundedSemaphore(4)
+_MAX_TRACKED_EMAILS: Final = 10_000
+
+
+def _guarded_verify(password: str, stored: str) -> bool:
+    with _SCRYPT_SLOTS:
+        return verify_password(password, stored)
+
+
+def _guarded_hash(password: str) -> str:
+    with _SCRYPT_SLOTS:
+        return hash_password(password)
+
+
+async def verify_password_async(password: str, stored: str) -> bool:
+    """:func:`verify_password` in a worker thread, bounded concurrency."""
+    return await asyncio.to_thread(_guarded_verify, password, stored)
+
+
+async def hash_password_async(password: str) -> str:
+    """:func:`hash_password` in a worker thread, bounded concurrency."""
+    return await asyncio.to_thread(_guarded_hash, password)
 
 
 def password_is_strong(password: str) -> bool:
@@ -140,6 +166,12 @@ class LoginThrottle:
         """Record one failure."""
         with self._lock:
             now = time.monotonic()
+            if len(self._failures) >= _MAX_TRACKED_EMAILS:
+                # Bounded memory under an email-spraying attack: forget expired windows first.
+                for key in list(self._failures):
+                    self._recent(key, now)
+                if len(self._failures) >= _MAX_TRACKED_EMAILS:
+                    self._failures.clear()
             self._failures[email] = [*self._recent(email, now), now]
 
     def reset(self, email: str) -> None:
@@ -187,7 +219,7 @@ class AdminAuthService:
                 429, "too_many_attempts", "Đăng nhập sai quá nhiều lần, thử lại sau 15 phút."
             )
         admin = await self._repo.get_by_email(key)
-        ok = verify_password(password, admin.password_hash if admin else _DUMMY_HASH)
+        ok = await verify_password_async(password, admin.password_hash if admin else _DUMMY_HASH)
         if admin is None or not ok:
             self._throttle.fail(key)
             raise _invalid_credentials()
@@ -227,15 +259,15 @@ class AdminAuthService:
     async def change_password(self, principal: AdminPrincipal, current: str, new: str) -> None:
         """Change own password; other sessions are revoked, the current one stays."""
         admin = await self.get(principal)
-        if not verify_password(current, admin.password_hash):
+        if not await verify_password_async(current, admin.password_hash):
             raise AdminApiError(400, "invalid_current_password", "Mật khẩu hiện tại không đúng.")
         if not password_is_strong(new):
             raise AdminApiError(
                 422, "weak_password", "Mật khẩu mới cần ít nhất 8 ký tự, có cả chữ và số."
             )
-        if verify_password(new, admin.password_hash):
+        if await verify_password_async(new, admin.password_hash):
             raise AdminApiError(422, "same_password", "Mật khẩu mới trùng mật khẩu cũ.")
-        admin.password_hash = hash_password(new)
+        admin.password_hash = await hash_password_async(new)
         await self._repo.revoke_other_sessions(admin.id, keep=principal.session_id)
         await self._session.commit()
 
@@ -274,7 +306,7 @@ class AdminAuthService:
         admin = await self._repo.create_admin(
             email=key,
             display_name=display_name.strip() or key,
-            password_hash=hash_password(password),
+            password_hash=await hash_password_async(password),
         )
         await self._session.commit()
         return admin

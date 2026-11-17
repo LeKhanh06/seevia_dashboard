@@ -283,9 +283,9 @@ export const vi = {
 
   accounts: {
     searchPlaceholder: "Tìm theo mã tài khoản", searchLabel: "Tìm theo mã tài khoản", statusLabel: "Trạng thái",
-    cols: { id: "Mã tài khoản", email: "Email (ẩn một phần)", created: "Ngày tạo", status: "Trạng thái", glasses: "Số kính liên kết" },
+    cols: { id: "Mã tài khoản", email: "Email / SĐT (ẩn một phần)", created: "Ngày tạo", status: "Trạng thái", glasses: "Số kính liên kết" },
     statuses: { active: "Hoạt động", suspended: "Tạm ngưng" },
-    breadcrumb: "Tài khoản", emailLabel: "Email", createdLabel: "Ngày tạo", statusField: "Trạng thái", glassesLabel: "Số kính liên kết",
+    breadcrumb: "Tài khoản", emailLabel: "Email / SĐT", createdLabel: "Ngày tạo", statusField: "Trạng thái", glassesLabel: "Số kính liên kết",
     linkedTitle: "Kính liên kết", linkedCols: { id: "Mã kính", firmware: "Phiên bản firmware", status: "Trạng thái", last: "Lần kết nối gần nhất" }, linkedEmpty: "Chưa liên kết kính nào",
   },
 

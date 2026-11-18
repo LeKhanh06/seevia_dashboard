@@ -5,6 +5,8 @@ import com.youreyes.app.calls.CallInfo
 import com.youreyes.app.calls.CareLink
 import com.youreyes.app.calls.ChatMessage
 import com.youreyes.app.calls.maskPhone
+import com.youreyes.app.stats.MyStats
+import com.youreyes.app.stats.parseMyStats
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -107,6 +109,16 @@ class SessionApiClient(
         }
     }
 
+    // ---- usage statistics ----
+
+    /**
+     * The signed-in glasses owner's own usage for [from]..[to] (inclusive, `yyyy-MM-dd`, Vietnam days).
+     * The server replies with the bare object (no `data` envelope). 503 `USAGE_NOT_CONFIGURED`: the
+     * server has statistics switched off.
+     */
+    fun myStats(from: String, to: String): ApiResult<MyStats> =
+        call("GET", "/api/v1/me/stats", query = listOf("from" to from, "to" to to), envelope = false, parse = ::parseMyStats)
+
     // ---- plumbing ----
 
     private fun <T> call(
@@ -114,6 +126,7 @@ class SessionApiClient(
         path: String,
         body: JSONObject? = null,
         query: List<Pair<String, String>> = emptyList(),
+        envelope: Boolean = true,
         parse: (JSONObject) -> T,
     ): ApiResult<T> {
         val url = (base + path).toHttpUrlOrNull()?.newBuilder()?.apply {
@@ -135,7 +148,7 @@ class SessionApiClient(
                 val text = response.body?.string().orEmpty()
                 when {
                     response.code == 401 -> ApiResult.Unauthorized
-                    response.isSuccessful -> parseSuccess(text, parse)
+                    response.isSuccessful -> parseSuccess(text, envelope, parse)
                     else -> parseError(response.code, text)
                 }
             }
@@ -144,9 +157,10 @@ class SessionApiClient(
         }
     }
 
-    private fun <T> parseSuccess(text: String, parse: (JSONObject) -> T): ApiResult<T> =
+    private fun <T> parseSuccess(text: String, envelope: Boolean, parse: (JSONObject) -> T): ApiResult<T> =
         try {
-            ApiResult.Ok(parse(JSONObject(text).getJSONObject("data")))
+            val body = JSONObject(text)
+            ApiResult.Ok(parse(if (envelope) body.getJSONObject("data") else body))
         } catch (e: JSONException) {
             ApiResult.Failed(200, "BAD_RESPONSE", "")
         }

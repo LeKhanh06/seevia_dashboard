@@ -68,6 +68,7 @@ import androidx.navigation.navArgument
 import com.youreyes.app.care.CareRoute
 import com.youreyes.app.core.FeatureFlags
 import com.youreyes.app.messages.ChatRoute
+import com.youreyes.app.stats.StatsRoute
 import com.youreyes.app.ui.activitylog.ActivityLogRoute
 import com.youreyes.app.ui.album.AlbumRoute
 import com.youreyes.app.ui.auth.AuthRoute
@@ -122,6 +123,7 @@ object Routes {
     const val DISPLAY = "display"
     const val DEV_TEST = "dev-test"
     const val CARE = "care"
+    const val STATS = "stats"
     const val READINESS = "readiness"
     const val CHAT = "chat/{peerUserId}?name={name}&toRelative={toRelative}"
 
@@ -315,6 +317,7 @@ private fun NavGraphBuilder.appDestinations(
             onNavigateToSupport = { navController.navigate(Routes.SUPPORT) },
             onNavigateToDisplay = { navController.navigate(Routes.DISPLAY) },
             onNavigateToGlasses = { navController.navigate(Routes.GLASSES) },
+            onNavigateToStats = { navController.navigate(Routes.STATS) },
         )
     }
 
@@ -332,6 +335,9 @@ private fun NavGraphBuilder.appDestinations(
     }
     composable(Routes.GLASSES) { GlassesLinkRoute(modifier = modifier, onBack = back) }
     composable(Routes.ACTIVITY_LOG) { ActivityLogRoute(modifier = modifier, onBack = back) }
+    composable(Routes.STATS) {
+        StatsRoute(modifier = modifier, onBack = back, onNavigateToAuth = { navController.navigate(Routes.AUTH) })
+    }
     composable(Routes.AUTH) { AuthRoute(modifier = modifier, onBack = back) }
     composable(Routes.SUPPORT) { SupportRoute(modifier = modifier, onBack = back) }
     if (FeatureFlags.ALBUM) composable(Routes.ALBUM) { AlbumRoute(modifier = modifier, onBack = back) }

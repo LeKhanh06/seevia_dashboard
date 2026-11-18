@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -97,6 +98,7 @@ fun ProfileRoute(
     onNavigateToSupport: () -> Unit = {},
     onNavigateToDisplay: () -> Unit = {},
     onNavigateToGlasses: () -> Unit = {},
+    onNavigateToStats: () -> Unit = {},
 ) {
     val overviewViewModel: OverviewViewModel = viewModel()
     val state by overviewViewModel.uiState.collectAsState()
@@ -127,6 +129,7 @@ fun ProfileRoute(
         onNavigateToSupport = onNavigateToSupport,
         onNavigateToDisplay = onNavigateToDisplay,
         onNavigateToGlasses = onNavigateToGlasses,
+        onNavigateToStats = onNavigateToStats,
         developerMode = developerMode,
         preferencesState = preferencesState,
         onFontSizeChange = preferencesViewModel::onFontSizeChange,
@@ -152,6 +155,7 @@ fun ProfileScreen(
     onNavigateToSupport: () -> Unit = {},
     onNavigateToDisplay: () -> Unit = {},
     onNavigateToGlasses: () -> Unit = {},
+    onNavigateToStats: () -> Unit = {},
     developerMode: Boolean = false,
     preferencesState: PreferencesUiState = PreferencesUiState(),
     onFontSizeChange: (String) -> Unit = {},
@@ -258,6 +262,14 @@ fun ProfileScreen(
             icon = Icons.Default.AccountCircle,
             iconTone = accentColor,
             onClick = onNavigateToAuth,
+        )
+
+        RowCard(
+            title = "Thống kê sử dụng",
+            subtitle = "Bạn đã dùng kính bao nhiêu lượt, làm được bao nhiêu, theo ngày và theo chức năng. Cần đăng nhập.",
+            icon = Icons.Default.Insights,
+            iconTone = accentTextColor,
+            onClick = onNavigateToStats,
         )
 
         RowCard(

@@ -30,3 +30,10 @@ class Reply:
     keeps_open: bool = False
     # Lượt thống kê của lời đáp này (đường HTTP chốt `playback` khi giao xong byte cuối).
     usage_attempt: str | None = None
+    # Lượt này hỏi lại người dùng: lý do (`confirm`, `missing_slot`, `missing_body`, `choose_contact`, `hearfix`).
+    # Có lý do -> tín hiệu `reprompt` và tác vụ còn mở chờ câu trả lời.
+    reprompt: list[str] = field(default_factory=list)
+    # Đã xếp một lệnh điện thoại (đọc lại + cửa sổ huỷ): lượt chỉ chốt khi điện thoại báo kết quả thật.
+    awaits_action: bool = False
+    # False: không phải một lần dùng (vd. "có"/"không" đứng một mình khi không có câu hỏi nào đang chờ).
+    counted: bool = True

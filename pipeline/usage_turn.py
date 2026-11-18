@@ -1,14 +1,18 @@
-"""Nối một lượt v2 với bộ ghép thống kê (`pipeline/usage_tasks.py`): mở lượt, kết quả dự kiến, phát xong.
+"""Nối một lượt v2 với bộ ghép thống kê (`pipeline/usage_tasks.py`): giữ chỗ, mở lượt, kết quả, phát xong.
 
-Gọi từ `pipeline/turn.py` (mở lượt ngay khi intent cuối đã chốt, TRƯỚC `final_router.route` để tín hiệu trong làn
-— ảnh bị từ chối, cần tra web — có ngữ cảnh), từ phiên WS (`played`, bị ngắt, đóng phiên) và từ đường HTTP
-(phát hết byte cuối). Mọi hàm ở đây nuốt lỗi của chính nó: thống kê hỏng không được làm hỏng lượt.
+Gọi từ `pipeline/turn.py` (giữ chỗ lúc nhả nút, MỞ sau `final_router.route` khi đã biết chức năng thật theo
+`Reply.intent`; tín hiệu phát trong làn được giữ tạm rồi gửi kèm), từ phiên WS (`played`, bị ngắt, đóng phiên),
+từ đường HTTP (phát hết byte cuối) và từ làn D (`pending_action`, `handlers/action_flow.py`, `handlers/phone.py`:
+cửa sổ huỷ, kết quả thật của điện thoại). Mọi hàm ở đây nuốt lỗi của chính nó: thống kê hỏng không được làm
+hỏng lượt.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import config
@@ -56,50 +60,202 @@ def wall(mono: float) -> datetime:
     return datetime.now(UTC) - timedelta(seconds=time.monotonic() - mono)
 
 
+@dataclass
+class _Draft:
+    device: str
+    released: float
+    entry: str
+    firmware: str | None
+
+
+# Lượt đã giữ chỗ (đầu lượt) nhưng chưa mở: chức năng chỉ biết sau khi route xong (`Reply.intent`).
+_drafts: dict[str, _Draft] = {}
+_drafts_lock = threading.Lock()
+
+
 def begin(
     device: str,
-    intent: str,
     released: float,
     *,
     transport: str,
     glasses: dict | None = None,
     has_speech: bool = True,
 ) -> str | None:
-    """Mở lượt thống kê; trả `attempt_id` (đặt luôn vào `usage.current_attempt`) hoặc None."""
+    """Giữ chỗ một lượt lúc nhả nút; trả `attempt_id` (đặt vào `usage.current_attempt`) hoặc None.
+
+    Chưa mở lượt ở đây: lượt trả lời "có/không/tên người" phải ghép vào tác vụ gọi/nhắn đang hỏi dở, mà chức
+    năng thật chỉ rõ sau `final_router.route` (vd. "có" -> `contact_call`). Tín hiệu phát trong lúc route được
+    `usage` giữ tạm và gửi khi `routed()` mở lượt.
+    """
     try:
-        feature = feature_for(intent)
-        if feature is None:
-            return None
         hold = _hold_ms(glasses)
         if not has_speech and hold is not None and hold < config.USAGE_MIN_PRESS_MS:
             return None  # nhấn chạm, không lời: không phải một lần dùng
         entry = {"ws": "v2_session", "post": "v2_turn", "process": "process"}.get(transport, "v2_session")
         firmware = (glasses or {}).get("fw")
-        attempt_id, _ = tracker.start(
-            device, feature, now=released, independent=intent in INDEPENDENT, entry=entry,
-            firmware_version=firmware if isinstance(firmware, str) else None,
-        )
-        tracker.require(attempt_id, "playback", deadline=released + _INITIAL_PLAYBACK_WAIT_S)
-        usage.current_attempt.set(attempt_id)
+        attempt_id = usage.uuid7()
+        with _drafts_lock:
+            _drafts[attempt_id] = _Draft(device, released, entry, firmware if isinstance(firmware, str) else None)
+        usage.hold(attempt_id)
         return attempt_id
     except Exception:  # noqa: BLE001
-        logger.exception("usage: mở lượt lỗi")
+        logger.exception("usage: giữ chỗ lượt lỗi")
         return None
 
 
+def _open(attempt_id: str | None, intent: str) -> bool:
+    """Mở lượt đã giữ chỗ với chức năng của `intent`; intent không đo -> bỏ lượt (và tín hiệu đã giữ)."""
+    if attempt_id is None:
+        return False
+    with _drafts_lock:
+        draft = _drafts.pop(attempt_id, None)
+    if draft is None:
+        return False  # đã mở / đã bỏ
+    feature = feature_for(intent)
+    if feature is None:
+        usage.release(attempt_id, keep=False)
+        return False
+    tracker.start(
+        draft.device, feature, now=draft.released, independent=intent in INDEPENDENT, entry=draft.entry,
+        firmware_version=draft.firmware, attempt_id=attempt_id, occurred_at=wall(draft.released).isoformat(),
+    )
+    tracker.require(attempt_id, "playback", deadline=draft.released + _INITIAL_PLAYBACK_WAIT_S)
+    usage.release(attempt_id, keep=True)
+    return True
+
+
 def routed(attempt_id: str | None, reply: Reply) -> None:
-    """Router đã trả `Reply`: ghi kết quả dự kiến; lượt OCR live chờ thêm phiên live đọc xong."""
+    """Router đã trả `Reply`: mở lượt theo `reply.intent`, ghi kết quả dự kiến.
+
+    OCR live chờ thêm phiên live đọc xong; lệnh điện thoại (`reply.awaits_action`) chờ điện thoại báo kết quả
+    thật. `reply.counted=False` (câu "có/không" lạc đề) -> không phải một lượt.
+    """
     if attempt_id is None:
         return
     try:
+        if not _open(attempt_id, reply.intent if reply.counted else ""):
+            return
         if reply.live == "ocr":
             tracker.require(attempt_id, "live")
+        if reply.awaits_action:
+            tracker.require(attempt_id, "action", deadline=time.monotonic() + config.USAGE_ACTION_WAIT_S)
+        for reason in reply.reprompt:
+            usage.signal("reprompt", reason, attempt_id=attempt_id)
         tracker.outcome(
             attempt_id, reply.outcome, now=time.monotonic(),
-            error_code=reply.error_code, keeps_open=reply.keeps_open,
+            error_code=reply.error_code, keeps_open=reply.keeps_open or bool(reply.reprompt),
         )
     except Exception:  # noqa: BLE001
         logger.exception("usage: ghi kết quả lỗi")
+
+
+def aborted(attempt_id: str | None, intent: str, *, cancelled: bool) -> None:
+    """Lượt hỏng trước khi có `Reply` (bị lượt mới/huỷ cắt, hoặc ngoại lệ): mở theo intent đã đoán rồi chốt."""
+    if attempt_id is None:
+        return
+    try:
+        if not _open(attempt_id, intent):
+            return
+        if cancelled:
+            interrupted(attempt_id)
+        else:
+            failed(attempt_id, "TURN_ERROR")
+    except Exception:  # noqa: BLE001
+        logger.exception("usage: chốt lượt hỏng lỗi")
+
+
+# ── làn D: lệnh điện thoại ───────────────────────────────────────────────────
+
+# Lý do huỷ lệnh chờ (`pending_action.cancel`) -> cách đếm. Người dùng tự huỷ trong cửa sổ (bấm nút, nói lệnh
+# khác, khung `cancel`) là huỷ thật; bị lệnh mới thay hoặc bị ngắt (rớt mạng, cuộc gọi đến) không phải lỗi.
+_USER_CANCEL = frozenset({"lượt mới", "kính huỷ"})
+_SUPERSEDED = frozenset({"lệnh mới thay thế"})
+# Mã lỗi điện thoại mà làn D hỏi lại ngay (`lanes/phone._SAY_AGAIN`: nói lại tên bài / điểm đến) -> tác vụ còn mở.
+_SAY_AGAIN_CODES = {"SONG_NOT_FOUND": "missing_slot", "INVALID_DESTINATION": "missing_slot"}
+
+
+def cancel_window(attempt_id: str | None) -> None:
+    """Câu đọc lại đã tới kính, cửa sổ huỷ bắt đầu đếm."""
+    if attempt_id is not None:
+        usage.signal("cancel_window_open", attempt_id=attempt_id)
+
+
+def action_cancelled(attempt_id: str | None, reason: str) -> None:
+    """Lệnh chờ bị huỷ trước khi chạy."""
+    if attempt_id is None:
+        return
+    try:
+        now = time.monotonic()
+        if reason in _SUPERSEDED:
+            tracker.finish(attempt_id, "cancelled", now=now, error_code="superseded")
+        elif reason in _USER_CANCEL:
+            usage.signal("cancelled_in_window", attempt_id=attempt_id)
+            tracker.finish(attempt_id, "cancelled", now=now)
+        else:
+            usage.signal("interrupted", attempt_id=attempt_id)
+            tracker.finish(attempt_id, "cancelled", now=now, error_code="interrupted")
+    except Exception:  # noqa: BLE001
+        logger.exception("usage: huỷ lệnh chờ lỗi")
+
+
+def action_sent(request_id: str | None = None, wait_s: float | None = None) -> str | None:
+    """Lệnh đã tới AB: lượt hiện tại chờ thêm kết quả thật từ điện thoại. Trả `attempt_id` để báo kết quả sau
+    (callback chạy ở luồng khác, không có ngữ cảnh)."""
+    attempt_id = usage.current_attempt.get()
+    if attempt_id is None:
+        return None
+    try:
+        deadline = time.monotonic() + (wait_s if wait_s is not None else config.USAGE_ACTION_WAIT_S)
+        tracker.require(attempt_id, "action", deadline=deadline)
+        if request_id:
+            tracker.bind_request(attempt_id, request_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("usage: ghi lệnh điện thoại lỗi")
+    return attempt_id
+
+
+def bind_request(attempt_id: str | None, request_id: str) -> None:
+    """Gắn `request_id` AB vào lượt (đi trong `attempt_finished` để AB đối chiếu)."""
+    if attempt_id is not None:
+        try:
+            tracker.bind_request(attempt_id, request_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("usage: gắn request_id lỗi")
+
+
+def action_done(
+    attempt_id: str | None, status: str, error_code: str | None = None, *, reprompt: str | None = None,
+) -> None:
+    """Điện thoại/AB đã báo kết quả của lệnh (gọi một lần; lần sau bị bỏ qua). `reprompt`: kết quả là một câu
+    hỏi lại (vd. trùng tên người thân) -> tác vụ còn mở."""
+    if attempt_id is None:
+        return
+    try:
+        if not tracker.waiting_for(attempt_id, "action"):
+            tracker.require(attempt_id, "action")  # lệnh hỏng trước khi kịp gửi (không qua `action_sent`)
+        if reprompt:
+            usage.signal("reprompt", reprompt, attempt_id=attempt_id)
+        tracker.confirm(
+            attempt_id, "action", now=time.monotonic(), status=status, error_code=error_code,
+            keeps_open=bool(reprompt),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("usage: ghi kết quả điện thoại lỗi")
+
+
+def phone_result(attempt_id: str | None, data: dict | None) -> None:
+    """Kết quả `GET /requests/{id}` hoặc callback AB -> trạng thái lượt. `None` = hết giờ chờ."""
+    if data is None:
+        action_done(attempt_id, "technical_error", "RESULT_TIMEOUT")
+        return
+    state = data.get("request_state")
+    if state == "succeeded":
+        action_done(attempt_id, "success")
+    elif state == "timed_out":
+        action_done(attempt_id, "technical_error", "RESULT_TIMEOUT")
+    else:
+        code = str((data.get("error") or {}).get("code") or "") or "PHONE_FAILED"
+        action_done(attempt_id, "failed", code, reprompt=_SAY_AGAIN_CODES.get(code))
 
 
 def audio_sent(attempt_id: str | None, first_chunk_at: float | None, audio_s: float) -> None:
@@ -151,6 +307,13 @@ def interrupted(attempt_id: str | None) -> None:
         return
     try:
         now = time.monotonic()
+        if not tracker.active(attempt_id):
+            return  # lượt không đo (chỉ giữ chỗ) hoặc đã chốt
+        if tracker.waiting_for(attempt_id, "action"):
+            # Lệnh điện thoại đã/đang đi: bấm nút chỉ cắt câu đang đọc. Huỷ lệnh chờ (nếu còn) do
+            # `action_cancelled` ghi; lệnh đã chạy thì lượt vẫn chờ kết quả thật.
+            tracker.confirm(attempt_id, "playback", now=now, playback="interrupted")
+            return
         if tracker.had_audio(attempt_id):
             tracker.finish(attempt_id, "completed_early", now=now)
         else:
@@ -180,6 +343,11 @@ def failed(attempt_id: str | None, error_code: str) -> None:
         tracker.finish(attempt_id, "technical_error", now=time.monotonic(), error_code=error_code)
     except Exception:  # noqa: BLE001
         logger.exception("usage: chốt lỗi kỹ thuật lỗi")
+
+
+def reset_for_tests() -> None:
+    with _drafts_lock:
+        _drafts.clear()
 
 
 def _hold_ms(glasses: dict | None) -> float | None:

@@ -428,7 +428,7 @@ class DeviceSession:
             tasks.extend(self._stop_live())
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-        pending_action.begin_turn(self.device)
+        pending_action.begin_turn(self.device, reason)  # lý do -> thống kê phân biệt người dùng huỷ / bị ngắt
         logger.info("v2 session %s: huỷ (%s)", self.session_id, reason)
 
     def _stop_live(self) -> list[asyncio.Task]:

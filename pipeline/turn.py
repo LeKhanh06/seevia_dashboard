@@ -159,6 +159,7 @@ async def run(
     ef = _EarlyFinal() if segmenter is not None and config.VAD_EARLY_FINAL else None
     partials = loop.create_task(_partial_loop(transcriber, early, stop, ctx, ef))
     attempt_id: str | None = None
+    decision: Decision | None = None
 
     try:
         async for chunk in body:
@@ -197,8 +198,7 @@ async def run(
                 decision = Decision(reply.intent, source="bypass")
                 logger.info("v2 turn %s: bấm nút không lời -> %s", turn_id, reply.intent)
         attempt_id = usage_turn.begin(
-            device, decision.intent, released, transport=transport, glasses=glasses,
-            has_speech=transcriber.has_speech,
+            device, released, transport=transport, glasses=glasses, has_speech=transcriber.has_speech,
         )
         if reply is None:
             reply = await final_router.route(ctx, decision, text)
@@ -207,10 +207,9 @@ async def run(
     except BaseException as exc:
         if on_cancel is not None and isinstance(exc, asyncio.CancelledError):
             on_cancel()  # phiên WS biết lượt này bị huỷ giữa chừng (lượt mới/cancel/ngắt)
-        if isinstance(exc, asyncio.CancelledError):
-            usage_turn.interrupted(attempt_id)  # bị lượt mới/huỷ cắt trước khi có lời đáp
-        elif attempt_id is not None:
-            usage_turn.failed(attempt_id, "TURN_ERROR")
+        # Bị lượt mới/huỷ cắt trước khi có lời đáp, hoặc lỗi: lượt mở theo intent đã đoán rồi chốt.
+        usage_turn.aborted(attempt_id, decision.intent if decision is not None else "",
+                           cancelled=isinstance(exc, asyncio.CancelledError))
         stop.set()
         partials.cancel()
         if ef is not None and ef.task is not None:

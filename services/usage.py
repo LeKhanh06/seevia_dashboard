@@ -124,11 +124,52 @@ def emit(etype: str, **fields: Any) -> str | None:
     return event["event_id"]
 
 
-def signal(name: str, reason_code: str | None = None) -> None:
-    """Đếm một tín hiệu cho lượt đang chạy trong ngữ cảnh; không có lượt thì bỏ qua."""
-    attempt_id = current_attempt.get()
-    if attempt_id is not None:
-        emit("attempt_signal", attempt_id=attempt_id, signal=name, reason_code=reason_code)
+class _Held:
+    """Tín hiệu của một lượt mới GIỮ chỗ (chưa biết chức năng): giữ tạm tới khi lượt mở hoặc bị bỏ."""
+
+    __slots__ = ("attempt_id", "items", "keep")
+
+    def __init__(self, attempt_id: str) -> None:
+        self.attempt_id = attempt_id
+        self.items: list[tuple[str, str | None]] | None = []
+        self.keep = False
+
+
+_held: contextvars.ContextVar[_Held | None] = contextvars.ContextVar("usage_held", default=None)
+_held_lock = threading.Lock()
+
+
+def hold(attempt_id: str) -> None:
+    """Giữ chỗ lượt `attempt_id` trong ngữ cảnh hiện tại; `signal()` từ giờ được giữ tạm tới `release()`."""
+    current_attempt.set(attempt_id)
+    _held.set(_Held(attempt_id))
+
+
+def release(attempt_id: str, *, keep: bool) -> None:
+    """Lượt đã mở (`keep`: gửi các tín hiệu đã giữ, từ đây gửi thẳng) hoặc bị bỏ (vứt, tín hiệu sau cũng vứt)."""
+    held = _held.get()
+    if held is None or held.attempt_id != attempt_id:
+        return
+    with _held_lock:
+        items, held.items, held.keep = held.items, None, keep
+    for name, reason in (items or []) if keep else []:
+        emit("attempt_signal", attempt_id=attempt_id, signal=name, reason_code=reason)
+
+
+def signal(name: str, reason_code: str | None = None, *, attempt_id: str | None = None) -> None:
+    """Đếm một tín hiệu cho lượt (mặc định: lượt đang chạy trong ngữ cảnh); không có lượt thì bỏ qua."""
+    attempt_id = attempt_id or current_attempt.get()
+    if attempt_id is None:
+        return
+    held = _held.get()
+    if held is not None and held.attempt_id == attempt_id:
+        with _held_lock:
+            if held.items is not None:
+                held.items.append((name, reason_code))
+                return
+            if not held.keep:
+                return  # lượt bị bỏ (không đo): tín hiệu không có lượt để gắn
+    emit("attempt_signal", attempt_id=attempt_id, signal=name, reason_code=reason_code)
 
 
 def on_tick(fn: Callable[[float], None]) -> None:
@@ -340,3 +381,5 @@ def reset_for_tests() -> None:
     _ticks.clear()
     _backoff_until = _backoff_s = 0.0
     _version = None
+    current_attempt.set(None)  # lượt giữ chỗ của test trước không rò sang test sau (cùng ngữ cảnh pytest)
+    _held.set(None)

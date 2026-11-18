@@ -7,12 +7,13 @@ import time
 import uuid
 
 import config
-from pipeline import device_ctx, tts
+from pipeline import device_ctx, tts, usage_turn
 from handlers.result_speech import speak_result
 from handlers.waiting import wait_for
 from services.visioncare_client import (
     VisionCareAPIError,
     call_service_api,
+    error_code,
     get_request_status,
 )
 from services.action_callbacks import action_callbacks
@@ -253,11 +254,16 @@ def run_action(
     request_payload = {**payload, "request_id": generated_request_id}
     device = device_ctx.current.get()
     per_device = device_ctx.per_device.get()  # callback chạy ở luồng khác: chụp lại để khôi phục
+    budget = result_timeout if result_timeout is not None else config.VISIONCARE_RESULT_TIMEOUT_SECONDS
+    # Thống kê: lượt chỉ chốt khi điện thoại báo kết quả thật. Đăng ký TRƯỚC khi gửi (callback có thể về trước
+    # khi `call_service_api` trả). Callback và lần hỏi trạng thái cùng đi qua `action_callbacks.resolve` -> một lần.
+    attempt = usage_turn.action_sent(wait_s=budget + config.USAGE_PLAYED_GRACE_S)
 
     def on_result(data: dict) -> None:
         # Callback tới từ luồng của app server: phải cập nhật đúng kính đã gọi.
         with device_ctx.use(device, per_device):
             note_result(operation, data)
+        usage_turn.phone_result(attempt, data)
 
     action_callbacks.register(
         generated_request_id,
@@ -273,15 +279,23 @@ def run_action(
         logger.info("%s requested, request_id=%s", operation, request_id)
     except VisionCareAPIError as exc:
         logger.error("%s error: %s", operation, exc)
+        if exc.connection:
+            usage_turn.action_done(attempt, "technical_error", "AB_UNREACHABLE")
+        else:
+            usage_turn.action_done(attempt, "failed", error_code(exc) or f"HTTP_{exc.status_code}")
         yield NO_PHONE_CONNECTION if exc.connection else failure
         return
     except Exception:
         logger.exception("%s unexpected error", operation)
+        usage_turn.action_done(attempt, "technical_error", "ACTION_ERROR")
         yield failure
         return
 
+    if request_id:
+        usage_turn.bind_request(attempt, request_id)
     yield _utterance(ack)
     if not request_id:
+        usage_turn.action_done(attempt, "technical_error", "NO_REQUEST_ID")  # không theo dõi được kết quả
         return
 
     # Một GET tức thời là recovery probe cho backend cũ/test; critical path sau
@@ -301,7 +315,6 @@ def run_action(
 
     # Không hủy action ở mốc SLO. Polling chỉ còn là recovery nền nếu callback
     # bị mất/restart; callback muộn vẫn cập nhật navigation_id/quote_id/state.
-    budget = result_timeout if result_timeout is not None else config.VISIONCARE_RESULT_TIMEOUT_SECONDS
 
     def reconcile_late() -> None:
         deadline = time.monotonic() + budget
@@ -324,4 +337,6 @@ def run_action(
     final = yield from wait_for(
         lambda: action_callbacks.wait(request_id, left), progress, tts.speaking_seconds(_STILL_WORKING),
     )
+    if final is None:
+        usage_turn.phone_result(attempt, None)  # hết ngân sách: kết quả muộn (nếu có) không đổi lượt đã chốt
     yield speak_result(operation, final)

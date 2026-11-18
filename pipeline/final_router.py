@@ -298,7 +298,8 @@ def _trusted(d: Decision) -> bool:
 def _ask_back(ctx: TurnContext, d: Decision, params: dict, lane: str) -> Reply:
     phone.set_pending_confirm(ctx.device, d.intent, params)
     logger.info("làn D %s: hỏi lại (backend=%r conf=%.2f)", d.intent, d.backend, d.confidence)
-    return Reply(speech=[phone.ask_confirm(d.intent, params)], intent=d.intent, lane=lane, params=params)
+    return Reply(speech=[phone.ask_confirm(d.intent, params)], intent=d.intent, lane=lane, params=params,
+                 reprompt=["confirm"])
 
 
 def _session_deliver(device: str):
@@ -396,12 +397,13 @@ async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None 
         # music_play tự hỏi bằng câu riêng (gợi ý ca sĩ), giữ nguyên hành vi cũ.
         phone.set_pending(ctx.device, intent)
         if intent in phone.ASK_TEXT:  # câu hỏi không có clip cue: đọc qua TTS (đã dựng sẵn)
-            return Reply(speech=[phone.ASK_TEXT[intent]], intent=intent, lane="D")
-        return Reply(cues=[phone.ASK_CUE[intent]], intent=intent, lane="D")
+            return Reply(speech=[phone.ASK_TEXT[intent]], intent=intent, lane="D", reprompt=["missing_slot"])
+        return Reply(cues=[phone.ASK_CUE[intent]], intent=intent, lane="D", reprompt=["missing_slot"])
     if intent in phone.EXTRA_SLOT and not params.get(phone.EXTRA_SLOT[intent]):
         # Có người nhận mà chưa có lời nhắn: hỏi lời nhắn (lượt sau nói thẳng nội dung).
         phone.set_pending_body(ctx.device, params[slot])
-        return Reply(speech=[phone.body_question(params[slot])], intent=intent, lane="D", params=params)
+        return Reply(speech=[phone.body_question(params[slot])], intent=intent, lane="D", params=params,
+                     reprompt=["missing_body"])
     if intent not in phone.CONFIRM_INTENTS:
         # music_stop / music_volume: không nguy hiểm, chạy ngay như cũ.
         return Reply(speech=phone.speech(intent, text, params), intent=intent, lane="D", params=params)
@@ -409,8 +411,9 @@ async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None 
         return _ask_back(ctx, d, params, "D")
     fired = _fire_after_readback(ctx, intent, text, params)
     if fired is None:
-        return Reply(intent=intent, lane="D")
-    return Reply(speech=[fired[0]], intent=intent, lane="D", on_audio_start=fired[1], params=params)
+        return Reply(intent=intent, lane="D", outcome="cancelled", error_code="superseded")
+    return Reply(speech=[fired[0]], intent=intent, lane="D", on_audio_start=fired[1], params=params,
+                 awaits_action=True)
 
 
 async def _dispatch(ctx: TurnContext, d: Decision, text: str) -> Reply:
@@ -437,7 +440,8 @@ async def _hearfix(ctx: TurnContext, text: str) -> Reply | None:
                 f" {sug.options}" if sug.kind == "options" else "")
     ctx.cancel_speculation()
     if sug.kind == "options":
-        return Reply(speech=[hearfix.options_question(text, sug.options)], intent="chat", lane="A")
+        return Reply(speech=[hearfix.options_question(text, sug.options)], intent="chat", lane="A",
+                     reprompt=["hearfix"])
     if sug.kind == "act":
         d = Decision(sug.intent, source="hearfix", backend="hearfix", confidence=sug.prob)
         return await _dispatch(ctx, d, text)
@@ -446,7 +450,8 @@ async def _hearfix(ctx: TurnContext, text: str) -> Reply | None:
     except Exception:  # noqa: BLE001 — trích lỗi thì hỏi chung ("Bạn muốn gọi điện phải không?")
         params = {}
     phone.set_pending_confirm(ctx.device, sug.intent, params)
-    return Reply(speech=[phone.ask_confirm(sug.intent, params)], intent=sug.intent, lane="D", params=params)
+    return Reply(speech=[phone.ask_confirm(sug.intent, params)], intent=sug.intent, lane="D", params=params,
+                 reprompt=["hearfix"])
 
 
 async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
@@ -458,10 +463,11 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if (phone.is_bare_reply(text) and not phone.has_pending(ctx.device)
             and not ctx.device_state.get("ride_quote_pending")):
         ctx.cancel_speculation()
+        # Không phải một lần dùng (lệnh vừa huỷ đã được đếm ở lượt của nó).
         if pending_action.take_recent_cancel(ctx.device) and phone.is_no(text):
-            return Reply(speech=[CANCELLED_MESSAGE], intent="chat", lane="A")
+            return Reply(speech=[CANCELLED_MESSAGE], intent="chat", lane="A", counted=False)
         logger.info("lời đáp có/không không có câu hỏi chờ: '%s' -> không chạy lệnh", text)
-        return Reply(speech=[NO_QUESTION_MESSAGE], intent="chat", lane="A")
+        return Reply(speech=[NO_QUESTION_MESSAGE], intent="chat", lane="A", counted=False)
 
     # Lượt trước hỏi "... phải không?": câu này là có/không.
     confirm = phone.take_pending_confirm(ctx.device)
@@ -476,8 +482,8 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
         if phone.is_no(text):
             ctx.cancel_speculation()
             if intent in phone.STOP_QUESTIONS:
-                return Reply(speech=[KEEP_MESSAGE], intent=intent, lane=Decision(intent).lane)
-            return Reply(speech=["Đã huỷ."], intent=intent, lane="D")
+                return Reply(speech=[KEEP_MESSAGE], intent=intent, lane=Decision(intent).lane, outcome="cancelled")
+            return Reply(speech=["Đã huỷ."], intent=intent, lane="D", outcome="cancelled")
         # Câu khác: bỏ lệnh chờ, xử lý như lượt mới.
 
     # Lượt trước hỏi "Bạn muốn gọi ai: A hay B?": câu này chọn một người (khớp không rõ thì xử lý như lượt mới).
@@ -501,7 +507,7 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
             return await _lane_d(ctx, d, text, params)
         if phone.is_no(text):
             ctx.cancel_speculation()
-            return Reply(speech=["Đã huỷ."], intent=intent, lane="D")
+            return Reply(speech=["Đã huỷ."], intent=intent, lane="D", outcome="cancelled")
 
     if not d.intent:
         return Reply(cues=["system_busy"])
@@ -511,7 +517,7 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if body_for is not None:
         if phone.is_no(text):
             ctx.cancel_speculation()
-            return Reply(speech=["Đã huỷ."], intent="message_send", lane="D")
+            return Reply(speech=["Đã huỷ."], intent="message_send", lane="D", outcome="cancelled")
         if d.lane == "A":
             ctx.cancel_speculation()
             # Người dùng trả lời đúng câu vừa hỏi và sẽ nghe đọc lại -> tin cậy (không hỏi "phải không?" thêm lần nữa).
@@ -522,7 +528,7 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
     pending = phone.take_pending(ctx.device)
     if pending is not None and phone.is_no(text):
         ctx.cancel_speculation()
-        return Reply(speech=[CANCELLED_MESSAGE], intent=pending[0], lane="D")
+        return Reply(speech=[CANCELLED_MESSAGE], intent=pending[0], lane="D", outcome="cancelled")
     if pending is not None and (d.intent == pending[0] or d.lane == "A"):
         intent, slot = pending
         params = await _params(ctx, intent, text) if d.intent == intent else {}
@@ -544,7 +550,7 @@ async def route(ctx: TurnContext, d: Decision, text: str) -> Reply:
         ctx.cancel_speculation()
         phone.set_pending_confirm(ctx.device, stop, {})
         logger.info("'%s' không có động từ mà việc đó đang chạy: hỏi lại %s", text, stop)
-        return Reply(speech=[phone.ask_confirm(stop, {})], intent=stop, lane=Decision(stop).lane)
+        return Reply(speech=[phone.ask_confirm(stop, {})], intent=stop, lane=Decision(stop).lane, reprompt=["confirm"])
     if d.intent == "chat" and not d.needs_web:
         fixed = await _hearfix(ctx, text)
         if fixed is not None:

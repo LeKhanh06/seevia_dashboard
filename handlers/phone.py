@@ -4,8 +4,8 @@ from collections.abc import Iterator
 import config
 from handlers.action_flow import run_action
 from live import call_bridge, messages
-from pipeline import device_ctx
-from services import visioncare_client
+from pipeline import device_ctx, usage_turn
+from services import usage, visioncare_client
 
 logger = logging.getLogger("blind_assist")
 
@@ -141,6 +141,18 @@ def _ended_early(call) -> bool:
     return call.state == call_bridge.ENDED
 
 
+def _report(status: str, code: str | None = None, reprompt: str | None = None) -> None:
+    """Thống kê: kết quả bắt đầu cuộc gọi / gửi tin của lượt đang chạy (mã lỗi AB, không tên người)."""
+    usage_turn.action_done(usage.current_attempt.get(), status, code, reprompt=reprompt)
+
+
+def _report_ab_error(code: str) -> None:
+    if code == "MULTIPLE_CONTACTS_FOUND":
+        _report("failed", code, reprompt="choose_contact")
+    else:
+        _report("failed", code or "AB_REJECTED")
+
+
 def handle_contact_call(image: bytes, command_text: str, params: dict | None = None) -> Iterator[str]:
     params = params or {}
     name = params.get("contact_name")
@@ -150,11 +162,13 @@ def handle_contact_call(image: bytes, command_text: str, params: dict | None = N
     device = device_ctx.current.get()
     reason = call_bridge.unavailable_reason(device, device_ctx.per_device.get())
     if reason:  # phòng thủ: router đã chặn trước khi đọc lại, nhưng phiên có thể rớt trong cửa sổ huỷ
+        _report("failed", "CALL_UNAVAILABLE")
         yield reason
         return
     try:
         call = call_bridge.calls.create(None, device, name, call_bridge.TO_RELATIVE)
     except call_bridge.GlassesBusy:
+        _report("failed", "GLASSES_BUSY")
         yield _CALL_BUSY
         return
     failure = f"Chưa gọi được cho {name}. Bạn thử lại nhé."
@@ -164,6 +178,12 @@ def handle_contact_call(image: bytes, command_text: str, params: dict | None = N
         call_bridge.calls.discard(call)
         code = visioncare_client.error_code(exc)
         candidates = visioncare_client.error_candidates(exc)
+        if exc.connection:
+            _report("technical_error", "AB_UNREACHABLE")
+        elif code != "MULTIPLE_CONTACTS_FOUND" or len(candidates) >= 2:
+            _report_ab_error(code)
+        else:
+            _report("failed", code)
         if code == "MULTIPLE_CONTACTS_FOUND" and len(candidates) >= 2:
             from lanes import phone as lane  # nhập muộn: lanes.phone nhập module này
 
@@ -180,8 +200,10 @@ def handle_contact_call(image: bytes, command_text: str, params: dict | None = N
     except Exception:  # noqa: BLE001
         call_bridge.calls.discard(call)
         logger.exception("contact_call: lỗi bất ngờ khi gọi AB")
+        _report("technical_error", "ACTION_ERROR")
         yield failure
         return
+    _report("success")  # AB đã nhận và đang đổ chuông bên kia; nghe máy/cúp đo ở AB (usage_calls)
     call_bridge.calls.bind(call, str(data.get("call_id") or call.call_id), (data.get("relative") or {}).get("display_name"))
     if _ended_early(call):  # người dùng cúp trong lúc AB đang xử lý `start`: AB còn đang đổ chuông bên kia
         try:
@@ -203,6 +225,7 @@ def handle_emergency_call(image: bytes, command_text: str, params: dict | None =
     try:
         call = call_bridge.calls.create(None, device, "người thân", call_bridge.TO_RELATIVE, emergency=True)
     except call_bridge.GlassesBusy:
+        _report("failed", "GLASSES_BUSY")
         yield _CALL_BUSY
         return
     tokens = [call.media_token, *call_bridge.calls.add_tokens(call, max(1, config.EMERGENCY_MEDIA_TOKENS) - 1)]
@@ -211,17 +234,26 @@ def handle_emergency_call(image: bytes, command_text: str, params: dict | None =
     except visioncare_client.VisionCareAPIError as exc:
         call_bridge.calls.discard(call)
         code = visioncare_client.error_code(exc)
+        if exc.connection:
+            _report("technical_error", "AB_UNREACHABLE")
+        else:
+            _report("failed", code or "AB_REJECTED")
         logger.warning("emergency_call: AB từ chối start (%s, HTTP %s)", code or "?", exc.status_code)
         yield _EMERGENCY_NO_CONTACT if code == "EMERGENCY_CONTACT_NOT_FOUND" else _EMERGENCY_FAILURE
         return
     except Exception:  # noqa: BLE001
         call_bridge.calls.discard(call)
         logger.exception("emergency_call: lỗi bất ngờ khi gọi AB")
+        _report("technical_error", "ACTION_ERROR")
         yield _EMERGENCY_FAILURE
         return
     call.emergency_id = str(data.get("emergency_id") or "") or None
     if data.get("call_id"):
         call_bridge.calls.bind(call, str(data["call_id"]), (data.get("relative") or {}).get("display_name"))
+    if data.get("state") == "exhausted":
+        _report("failed", "NO_ANSWER")
+    else:
+        _report("success")  # chuỗi gọi đã bắt đầu; ai nghe máy / hết lượt đo ở AB (usage_sos)
     if data.get("state") == "exhausted":
         call_bridge.calls.discard(call, "emergency_exhausted")
         yield call_bridge.EMERGENCY_NONE_REACHED
@@ -252,11 +284,13 @@ def handle_message_send(image: bytes, command_text: str, params: dict | None = N
         from lanes import phone as lane  # nhập muộn: lanes.phone nhập module này
 
         lane.set_pending_body(device_ctx.current.get(), name)
+        _report("success", reprompt="missing_body")
         yield lane.body_question(name)
         return
     device = device_ctx.current.get()
     reason = call_bridge.unavailable_reason(device, device_ctx.per_device.get())
     if reason:  # phòng thủ: router đã chặn, nhưng phiên có thể rớt trong cửa sổ huỷ
+        _report("failed", "CALL_UNAVAILABLE")
         yield MSG_NEED_UPDATE if reason == call_bridge.NEED_UPDATE else MSG_NEED_OWN_TOKEN
         return
     try:
@@ -264,6 +298,12 @@ def handle_message_send(image: bytes, command_text: str, params: dict | None = N
     except visioncare_client.VisionCareAPIError as exc:
         code = visioncare_client.error_code(exc)
         candidates = visioncare_client.error_candidates(exc)
+        if exc.connection:
+            _report("technical_error", "AB_UNREACHABLE")
+        elif code != "MULTIPLE_CONTACTS_FOUND" or len(candidates) >= 2:
+            _report_ab_error(code)
+        else:
+            _report("failed", code)
         if code == "MULTIPLE_CONTACTS_FOUND" and len(candidates) >= 2:
             from lanes import phone as lane
 
@@ -279,8 +319,10 @@ def handle_message_send(image: bytes, command_text: str, params: dict | None = N
         return
     except Exception:  # noqa: BLE001
         logger.exception("message_send: lỗi bất ngờ khi gọi AB")
+        _report("technical_error", "ACTION_ERROR")
         yield f"Chưa gửi được tin nhắn cho {name}. Bạn thử lại nhé."
         return
+    _report("success")
     yield _MSG_SENT
 
 
@@ -293,6 +335,7 @@ def handle_message_read(image: bytes, command_text: str, params: dict | None = N
         unread = visioncare_client.messages_unread()
     except Exception:  # noqa: BLE001
         logger.exception("message_read: không lấy được tin chưa đọc")
+        _report("technical_error", "AB_UNREACHABLE")
         yield "Không lấy được tin nhắn, vui lòng thử lại."
         return
     spoken = 0

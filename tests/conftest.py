@@ -117,6 +117,7 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def isolated_usage_spool(tmp_path, monkeypatch):
     """Sự kiện thống kê không bao giờ ghi vào spool thật hay gửi tới AB thật trong test."""
+    from pipeline import usage_turn
     from pipeline.usage_tasks import tracker
     from services import usage
 
@@ -124,6 +125,8 @@ def isolated_usage_spool(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USAGE_API_TOKEN", "")
     usage.reset_for_tests()
     tracker.reset()
+    usage_turn.reset_for_tests()
     yield
     usage.reset_for_tests()
     tracker.reset()
+    usage_turn.reset_for_tests()

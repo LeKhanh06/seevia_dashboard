@@ -13,7 +13,8 @@ import time
 from typing import Callable, Dict
 
 import config
-from pipeline import device_ctx, tts
+from pipeline import device_ctx, tts, usage_turn
+from services import usage
 
 log = logging.getLogger("pending_action")
 
@@ -26,16 +27,17 @@ _cancelled_by_turn: Dict[str, float] = {}
 _RECENT_CANCEL_S = 20.0
 
 
-def begin_turn(device: str) -> int:
+def begin_turn(device: str, reason: str = "lượt mới") -> int:
     """Lượt mới của `device`: tăng thế hệ rồi huỷ lệnh chờ, dưới cùng một khoá.
 
     Lượt cũ còn đang trong router không được phép schedule sau đây — `schedule`
-    so thế hệ nó mang theo với thế hệ hiện tại và từ chối nếu đã cũ.
+    so thế hệ nó mang theo với thế hệ hiện tại và từ chối nếu đã cũ. `reason` cho thống kê biết lệnh chờ bị
+    huỷ vì người dùng ("lượt mới", "kính huỷ") hay vì bị ngắt (rớt kết nối, cuộc gọi đến).
     """
     with _lock:
         _generation[device] = _generation.get(device, 0) + 1
         gen = _generation[device]
-    if cancel(device, "lượt mới"):
+    if cancel(device, reason):
         with _lock:
             _cancelled_by_turn[device] = time.monotonic()
     return gen
@@ -59,6 +61,8 @@ class PendingAction:
         self.label = label
         # Chụp lúc tạo: Timer chạy ở thread mới, mất ContextVar. Chỉ giữ khi lệnh đặt cho đúng kính của luồng này.
         self.per_device = device_ctx.per_device.get() and device == device_ctx.current.get()
+        # Lượt thống kê đã xếp lệnh này (Timer chạy ở thread mới, mất ContextVar): mang theo để lệnh báo kết quả.
+        self.usage_attempt = usage.current_attempt.get()
         self.fired = threading.Event()
         self.cancelled = threading.Event()
         self._fn = fn
@@ -76,11 +80,14 @@ class PendingAction:
         # `threading.Timer` chạy trong thread mới với ContextVar mặc định: không đặt lại thì
         # `run_background` copy nhầm kính mặc định và lệnh gọi/chỉ đường đi về sai kính
         # (bench_load 2026-10-19: GLASSES_DEVICE_NOT_LINKED device_id=glasses-123).
+        token = usage.current_attempt.set(self.usage_attempt)
         try:
             with device_ctx.use(self.device, self.per_device):
                 self._fn()
         except Exception:
             log.exception("làn D: lệnh chờ %s lỗi", self.label)
+        finally:
+            usage.current_attempt.reset(token)
 
 
     def arm(self, delay_s: float) -> bool:
@@ -93,7 +100,8 @@ class PendingAction:
             timer.daemon = True
             self._timer = timer
             timer.start()
-            return True
+        usage_turn.cancel_window(self.usage_attempt)
+        return True
 
 
 def schedule(device: str, delay_s: float | None, fn: Callable[[], None],
@@ -117,6 +125,10 @@ def schedule(device: str, delay_s: float | None, fn: Callable[[], None],
             timer.daemon = True
             action._timer = timer
             timer.start()
+    if old is not None and old.cancelled.is_set():
+        usage_turn.action_cancelled(old.usage_attempt, "lệnh mới thay thế")
+    if delay_s is not None:
+        usage_turn.cancel_window(action.usage_attempt)
     return action
 
 
@@ -133,7 +145,8 @@ def cancel(device: str, reason: str) -> bool:
         if action is None or action.fired.is_set():
             return False
         _cancel_locked(action, reason)
-        return True
+    usage_turn.action_cancelled(action.usage_attempt, reason)
+    return True
 
 
 def readback_delay(text: str) -> float:

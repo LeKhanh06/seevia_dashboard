@@ -43,7 +43,8 @@ class _Attempt:
     task: _Task
     started: float
     pending: set[str] = field(default_factory=set)
-    deadline: float | None = None
+    deadline: float | None = None  # hạn chờ `played`
+    action_deadline: float | None = None  # hạn chờ điện thoại báo kết quả
     status: str | None = None
     error_code: str | None = None
     keeps_open: bool = False
@@ -74,8 +75,14 @@ class Tracker:
         independent: bool = False,
         entry: str = "v2_session",
         firmware_version: str | None = None,
+        attempt_id: str | None = None,
+        occurred_at: str | None = None,
     ) -> tuple[str, str]:
-        """Mở một lượt; trả `(attempt_id, task_id)` và phát `attempt_started`."""
+        """Mở một lượt; trả `(attempt_id, task_id)` và phát `attempt_started`.
+
+        `attempt_id`: mã đã giữ chỗ từ đầu lượt (tín hiệu trong lúc route đã mang mã này). `occurred_at`: giờ
+        bắt đầu lượt (lúc nhả nút), vì lượt chỉ được mở sau khi route xong.
+        """
         abandoned: _Task | None = None
         with self._lock:
             key = (device, feature)
@@ -97,7 +104,7 @@ class Tracker:
             task.last_call = now
             task.waiting_since = None
             task.busy += 1
-            attempt = _Attempt(attempt_id=usage.uuid7(), task=task, started=now)
+            attempt = _Attempt(attempt_id=attempt_id or usage.uuid7(), task=task, started=now)
             self._attempts[attempt.attempt_id] = attempt
         if abandoned is not None:
             self._emit_task(abandoned, "abandoned")
@@ -109,6 +116,7 @@ class Tracker:
             entry=entry,
             device_id=device,
             firmware_version=firmware_version,
+            occurred_at=occurred_at,
         )
         return attempt.attempt_id, task.task_id
 
@@ -121,6 +129,29 @@ class Tracker:
             attempt.pending.update(parts)
             if deadline is not None and "playback" in parts:
                 attempt.deadline = deadline
+            if deadline is not None and "action" in parts:
+                attempt.action_deadline = deadline
+
+    def active(self, attempt_id: str) -> bool:
+        """Lượt đã mở và chưa chốt?"""
+        with self._lock:
+            attempt = self._attempts.get(attempt_id)
+            return bool(attempt and not attempt.done)
+
+    def waiting_for(self, attempt_id: str, part: str) -> bool:
+        """Lượt còn chờ phần `part` chưa xác nhận?"""
+        with self._lock:
+            attempt = self._attempts.get(attempt_id)
+            return bool(attempt and not attempt.done and part in attempt.pending)
+
+    def bind_request(self, attempt_id: str, request_id: str) -> None:
+        """Gắn `request_id` của lệnh điện thoại vào lượt (AB ghép kết quả; `by_request`)."""
+        with self._lock:
+            attempt = self._attempts.get(attempt_id)
+            if attempt is None or attempt.done:
+                return
+            attempt.request_id = request_id
+            self._requests[request_id] = attempt_id
 
     def mark(self, attempt_id: str, **marks: object) -> None:
         """Ghi mốc thời gian (`first_audio_at`, `processing_ms`, `align_ms`)."""
@@ -189,13 +220,19 @@ class Tracker:
         status: str | None = None,
         error_code: str | None = None,
         playback: str | None = None,
+        keeps_open: bool = False,
     ) -> None:
-        """Một phần đã xác nhận; phần báo lỗi đầu tiên quyết định trạng thái."""
+        """Một phần đã xác nhận; phần báo lỗi đầu tiên quyết định trạng thái.
+
+        `keeps_open`: kết quả của phần này là một câu hỏi lại (vd. điện thoại báo trùng tên người thân) -> tác
+        vụ còn mở chờ người dùng trả lời.
+        """
         with self._lock:
             attempt = self._attempts.get(attempt_id)
             if attempt is None or attempt.done or part not in attempt.pending:
                 return
             attempt.pending.discard(part)
+            attempt.keeps_open = attempt.keeps_open or keeps_open
             if part == "playback":
                 attempt.playback = playback or "confirmed"
             if status is not None and status not in SUCCESSES:
@@ -226,10 +263,15 @@ class Tracker:
     def expire(self, now: float) -> None:
         """Chốt lượt chờ `played` quá hạn và tác vụ chờ người dùng quá `USAGE_ABANDON_S`."""
         late: list[str] = []
+        lost: list[str] = []
         stale: list[_Task] = []
         with self._lock:
             for attempt in self._attempts.values():
-                if not attempt.done and attempt.deadline is not None and now > attempt.deadline:
+                if attempt.done:
+                    continue
+                if "action" in attempt.pending and attempt.action_deadline is not None and now > attempt.action_deadline:
+                    lost.append(attempt.attempt_id)
+                elif attempt.deadline is not None and now > attempt.deadline:
                     late.append(attempt.attempt_id)
             for key, task in list(self._tasks.items()):
                 if (
@@ -251,6 +293,8 @@ class Tracker:
                 ready = not attempt.pending
             if ready:
                 self._finish(attempt_id, now)
+        for attempt_id in lost:  # điện thoại không bao giờ báo (lệnh mất, VH không còn chờ): lỗi kỹ thuật
+            self.finish(attempt_id, "technical_error", now=now, error_code="RESULT_TIMEOUT")
         for task in stale:
             self._emit_task(task, "abandoned")
 

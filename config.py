@@ -252,6 +252,9 @@ USAGE_MERGE_WINDOW_S = float(get("USAGE_MERGE_WINDOW_S", "60"))
 USAGE_PLAYED_GRACE_S = float(get("USAGE_PLAYED_GRACE_S", "10"))
 # Giữ nút ngắn hơn hạn này mà không có lời -> không tính là một lượt (dashboard: bỏ nhấn < 0,3 s).
 USAGE_MIN_PRESS_MS = int(get("USAGE_MIN_PRESS_MS", "300"))
+# Lượt làn D chờ điện thoại báo kết quả tối đa (đọc lại + cửa sổ huỷ + chờ AB) trước khi chốt RESULT_TIMEOUT.
+# Lưới an toàn khi lệnh không bao giờ chạy/không ai báo; đường thường do `run_action` chốt theo ngân sách của nó.
+USAGE_ACTION_WAIT_S = float(get("USAGE_ACTION_WAIT_S", "180"))
 VISIONCARE_CLIENT_TOKEN = get("VISIONCARE_CLIENT_TOKEN", "")
 VISIONCARE_DEVICE_ID = get("VISIONCARE_DEVICE_ID", "glasses-123")
 # `user_id` (public_user_id) chủ kính, gửi AB ở các lệnh gọi/nhắn/khẩn cấp (AB kiểm kính có gắn user này không).

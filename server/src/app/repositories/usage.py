@@ -86,6 +86,20 @@ _SESSION_RULES = {
     "end_reason": Merge.ONCE,
 }
 
+# AB's own call/SOS rows: the final state (and its time/reason) is written once.
+_CALL_RULES = {
+    "started_at": Merge.EARLIEST,
+    "final_state": Merge.ONCE,
+    "ended_at": Merge.ONCE,
+    "end_reason": Merge.ONCE,
+}
+_SOS_RULES = {
+    "started_at": Merge.EARLIEST,
+    "status": Merge.ONCE,
+    "finished_at": Merge.ONCE,
+    "error_code": Merge.ONCE,
+}
+
 
 def report_day(moment: datetime, tz: ZoneInfo) -> date:
     """Return the calendar day of ``moment`` in the report time zone."""
@@ -165,6 +179,23 @@ class UsageRepository:
         started, ended, last_seen = row
         return cast("datetime | None", started), cast("datetime | None", ended or last_seen)
 
+    async def upsert_call(self, values: dict[str, Any]) -> datetime | None:
+        """Merge one Internet call's columns; return its ``started_at``."""
+        row = await self._upsert(
+            UsageCall,
+            "call_id",
+            "final_state",
+            _CALL_RULES,
+            values,
+            immutable={"direction", "emergency"},
+        )
+        return cast("datetime | None", row[0])
+
+    async def upsert_sos(self, values: dict[str, Any]) -> datetime | None:
+        """Merge one SOS activation's columns; return its ``started_at``."""
+        row = await self._upsert(UsageSos, "sos_id", "status", _SOS_RULES, values)
+        return cast("datetime | None", row[0])
+
     async def mark_dirty(self, days: set[date]) -> None:
         """Queue report days for the rollup worker (re-marking refreshes ``marked_at``)."""
         if not days:
@@ -175,7 +206,7 @@ class UsageRepository:
         )
         await self._session.execute(stmt)
 
-    async def _upsert(  # noqa: PLR0913 -- one generic statement builder for three tables
+    async def _upsert(  # noqa: PLR0913 -- one generic statement builder for all layer-2 tables
         self,
         model: type[Base],
         key: str,

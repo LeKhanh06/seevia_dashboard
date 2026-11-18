@@ -34,6 +34,7 @@ from app.repositories.glasses_device import GlassesDeviceRepository
 from app.repositories.user import UserRepository
 from app.security import hash_token
 from app.services.care import resolve_alias
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -83,6 +84,7 @@ class CallService:
         self._glasses = GlassesDeviceRepository(session)
         self._devices = DeviceRepository(session)
         self._users = UserRepository(session)
+        self._usage = AbUsageRecorder(session, settings)
         self._pushes: list[_Push] = []
 
     # ------------------------------------------------------------------ glasses server
@@ -150,6 +152,7 @@ class CallService:
             media_token_pending=media_token,
             ring_deadline_at=self._deadline(),
         )
+        await self._usage.call(call)
         owner = await self._users.get_by_public_user_id(link.owner_user_id)
         queued = await self._push(
             call.relative_user_id,
@@ -188,6 +191,7 @@ class CallService:
         call.media_token_hash = hash_token(media_token)
         call.media_token_pending = media_token  # giữ tới khi app lấy qua GET; FCM đã mang sẵn
         await self._calls.touch(call)
+        await self._usage.call(call)
         await self._push(
             call.relative_user_id,
             call,
@@ -244,6 +248,7 @@ class CallService:
             media_token_pending=None,
             ring_deadline_at=self._deadline(),
         )
+        await self._usage.call(call)
         await self._enqueue(call, "call_incoming")
         return call
 
@@ -261,6 +266,7 @@ class CallService:
         call.answered_at = datetime.now(UTC)
         token, call.media_token_pending = call.media_token_pending, None
         await self._calls.touch(call)
+        await self._usage.call(call)
         await self._enqueue(call, "call_answered")
         return call, token
 
@@ -408,6 +414,7 @@ class CallService:
         call.ended_at = datetime.now(UTC)
         call.media_token_pending = None  # token chưa giao thì huỷ, không để lại bản gốc
         await self._calls.touch(call)
+        await self._usage.call(call)  # thống kê: cùng transaction với trạng thái cuối
 
     async def _enqueue(self, call: Call, event: str) -> None:
         """Queue ``event`` for the glasses server (skipped when no callback is configured)."""

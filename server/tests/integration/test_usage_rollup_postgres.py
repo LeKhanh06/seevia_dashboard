@@ -71,7 +71,9 @@ async def test_late_result_updates_previous_day(
     async with usage_client(postgres_session_factory) as (client, token):
         await post_events(client, token, events)
         worker = _worker(postgres_session_factory)
-        await worker.run_once()
+        # Đồng hồ cố định ngay sau sự kiện: đồng hồ thật > 30 phút sau thì lượt bị quét UNCLOSED.
+        clock = vn("2026-11-17 00:05:00")
+        await worker.run_once(now=clock)
         day = date(2026, 11, 16)
         assert await _sum(db_session, day, "tasks_pending") == 1
         await post_events(
@@ -79,7 +81,7 @@ async def test_late_result_updates_previous_day(
             token,
             [task_done("call", task_id, vn("2026-11-17 00:01:00"), status="success", attempts=1)],
         )
-        await worker.run_once()
+        await worker.run_once(now=clock)
     await db_session.rollback()  # fresh snapshot
     assert await _sum(db_session, day, "tasks_pending") == 0
     assert await _sum(db_session, day, "tasks_closed") == 1

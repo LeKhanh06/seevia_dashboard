@@ -30,6 +30,7 @@ from app.repositories.glasses_device import GlassesDeviceRepository
 from app.repositories.user import UserRepository
 from app.services.call import CallService
 from app.services.message import MessageService
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -83,6 +84,7 @@ class EmergencyService:
         self._users = UserRepository(session)
         self._call_service = CallService(session, settings, adapter)
         self._message_service = MessageService(session, settings, adapter)
+        self._usage = AbUsageRecorder(session, settings)
 
     # ------------------------------------------------------------------ glasses server
 
@@ -122,6 +124,7 @@ class EmergencyService:
             request_id=request_id,
             media_tokens=media_tokens,
         )
+        await self._usage.sos(emergency)
         call = await self._ring_next(emergency, links)
         await self._emergencies.touch(emergency)
         return EmergencyStart(emergency, call, len(links))
@@ -135,7 +138,7 @@ class EmergencyService:
             return emergency
         call = await self._current_call(emergency)
         if call is not None and self._answered(call):
-            await self._finish(emergency, EmergencyState.ANSWERED)
+            await self._finish(emergency, EmergencyState.ANSWERED, call)
             return emergency
         await self._finish(emergency, EmergencyState.STOPPED)
         if call is not None and call.state is CallState.RINGING:
@@ -237,7 +240,7 @@ class EmergencyService:
             await self._finish(emergency, EmergencyState.EXHAUSTED)
             return True
         if self._answered(call):
-            await self._finish(emergency, EmergencyState.ANSWERED)
+            await self._finish(emergency, EmergencyState.ANSWERED, call)
             return True
         if call.state is CallState.RINGING:
             return False
@@ -249,10 +252,14 @@ class EmergencyService:
             await self._emergencies.touch(emergency)
         return True
 
-    async def _finish(self, emergency: Emergency, state: EmergencyState) -> None:
+    async def _finish(
+        self, emergency: Emergency, state: EmergencyState, answered: Call | None = None
+    ) -> None:
         emergency.state = state
         emergency.media_tokens = []  # token chưa dùng thì huỷ, không để lại trong DB
         await self._emergencies.touch(emergency)
+        # Thống kê: cùng transaction; thời gian tới khi có người nghe = lúc cuộc gọi được nghe.
+        await self._usage.sos(emergency, answered_at=answered.answered_at if answered else None)
 
     async def _enqueue_exhausted(self, emergency: Emergency, last_call: Call) -> None:
         """Tell the glasses server nobody answered (skipped when no callback is configured)."""

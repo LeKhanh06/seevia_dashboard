@@ -197,6 +197,15 @@ kính   (bấm nút hỏi giờ: turn_start mới, nav vẫn chạy, hazard vẫ
   (byte audio đầu tới kính), `first_audio_ms` (tiếng đầu ra loa). Server ghi mỗi lượt một dòng vào `<STORAGE_DIR>/metrics/turns.jsonl` và
   thêm một dòng bổ sung khi `played` tới (ghép theo `turn`). Kính cứ gửi đủ mốc, kể cả với `result-*`.
 
+### 7.1 Thống kê sử dụng dùng `played` và `hello` (không đổi hợp đồng)
+
+- Server chốt "một lượt dùng" khi kính báo `played` cho lượt đó (cộng điện thoại báo kết quả với lệnh làn D). Không có `played` thì lượt
+  chốt `unconfirmed` sau độ dài audio + 10 s. `played` lặp lại cho cùng lượt bị bỏ qua. Firmware mới có thể thêm `"aborted":true` khi
+  phát bị cắt giữa chừng (`pqFlush`) — server tính lượt đó là `completed_early`; firmware cũ không gửi thì thôi.
+- `hello` có thể kèm (không bắt buộc) `uptime_ms`, `reset_reason`, `wifi_drops`, `last_wifi_reason`, `rssi` (số nguyên; `rssi` từ -127 tới 0)
+  và `fw`. Server chỉ dùng làm số chẩn đoán của phiên kết nối; giá trị sai kiểu/ngoài khoảng bị bỏ, không làm hỏng `hello`.
+- Server không ghi câu nói, ảnh, chữ đọc được, số tiền, tên/số điện thoại người thân vào thống kê; mã kính chỉ được AB lưu dưới dạng băm.
+
 ## 8. Đường HTTP còn giữ
 
 Đều đòi token (`Authorization: Bearer`) và chịu cùng trần/rate limit như mục 11.

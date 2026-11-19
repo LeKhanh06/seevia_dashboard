@@ -6,6 +6,7 @@ Với `/process` thì `ctx.single_shot = True`: không có WebSocket nào để 
 """
 
 import asyncio
+import contextlib
 import logging
 import re
 from collections.abc import AsyncIterator, Callable
@@ -17,7 +18,7 @@ from lanes import general, ocr_live, phone
 from live import call_bridge, text_align
 from live.session import sessions
 from models import search
-from pipeline import device_ctx, hearfix, image_quality, pending_action, speech
+from pipeline import device_ctx, hearfix, image_quality, intent_early, pending_action, speech, usage_turn
 from services import usage
 from pipeline.image_buffer import image_buffer
 from pipeline.intent_early import Decision
@@ -156,6 +157,11 @@ async def _lane_a(ctx: TurnContext, d: Decision, text: str) -> Reply:
             return Reply(speech=[reason], intent=d.intent, lane="A", outcome="rejected_image", keeps_open=True)
         image = await asyncio.to_thread(entry.llm_jpeg)
 
+    if d.intent == "chat":
+        # Thống kê tỷ lệ cần tra web: mẫu số = lượt chat đã tới bước quyết định này; chủ đề chỉ là nhãn.
+        usage.signal("needs_web_decided")
+        if d.needs_web:
+            usage.signal("needs_web", intent_early.web_topic(text))
     if d.intent == "chat" and d.needs_web:
         # Câu chạy trước (speculation) sinh khi chưa có kết quả tra -> không dùng.
         if ctx.spec_answer is not None:
@@ -167,11 +173,42 @@ async def _lane_a(ctx: TurnContext, d: Decision, text: str) -> Reply:
     if spec is not None and spec.key == (d.intent, text):
         ctx.spec_answer = None
         logger.info("làn A: dùng câu trả lời đã sinh song song với Clef")
-        return Reply(speech=_sync(ctx, spec.replay()), intent=d.intent, lane="A")
+        return Reply(speech=_sync(ctx, _judged(d.intent, spec.replay())), intent=d.intent, lane="A")
     if spec is not None:
         spec.cancel()
         ctx.spec_answer = None
-    return Reply(speech=_sync(ctx, general.answer(d.intent, text, image)), intent=d.intent, lane="A")
+    return Reply(speech=_sync(ctx, _judged(d.intent, general.answer(d.intent, text, image))), intent=d.intent, lane="A")
+
+
+def _judged(intent: str, agen: AsyncIterator[str]) -> AsyncIterator[str]:
+    """Lời đáp làn A có ảnh: chấm câu đầu ("không thấy" -> lượt `failed`, `usage_turn.judge`), nói nguyên văn.
+
+    Lấy mã lượt NGAY lúc route (lời đáp chạy sau, ở ngữ cảnh khác); `routed()` đã mở lượt trước khi câu đầu sinh ra.
+    """
+    attempt_id = usage.current_attempt.get()
+    if attempt_id is None or intent not in usage_turn.JUDGED_INTENTS:
+        return agen
+
+    async def run() -> AsyncIterator[str]:
+        head, judged = "", False
+        async with contextlib.aclosing(agen):  # bị cắt giữa chừng: đóng luôn stream Gemma như khi không bọc
+            async for piece in agen:
+                if not judged:
+                    head += piece
+                    if "\n" in head or len(head) > 200:
+                        judged = True
+                        _apply_verdict(attempt_id, intent, head)
+                yield piece
+        if not judged and head:
+            _apply_verdict(attempt_id, intent, head)
+
+    return run()
+
+
+def _apply_verdict(attempt_id: str, intent: str, head: str) -> None:
+    found = usage_turn.judge(intent, head)
+    if found is not None:
+        usage_turn.verdict(attempt_id, found[0], found[1], keeps_open=True)
 
 
 async def _web_answer(d: Decision, text: str) -> AsyncIterator[str]:
@@ -264,14 +301,24 @@ async def _money(ctx: TurnContext, jpeg: bytes) -> Reply:
     """Đọc tiền v2: đọc chặt 1 khung (ảnh buffer UXGA, τ MONEY_MIN_PROB). Chắc -> nói mệnh giá, trễ như cũ. Không chắc ->
     nói MỘT câu hướng dẫn (read_money.hint) và, có WS, mở phiên live `money_retry` đọc lại đúng một lần từ khung mới
     (lanes/ocr_live._money_retry). Phiên mang mode "ocr" để nav live được tạm nhường chỗ rồi dựng lại như mọi OCR live.
-    "Không có tiền" và lỗi mạng giữ câu cũ, không đọc lại."""
+    "Không có tiền" và lỗi mạng giữ câu cũ, không đọc lại.
+
+    Thống kê: `money_decided` mỗi lượt có kết quả nhận diện (mẫu số tỷ lệ uncertain), `money_uncertain` khi lần đọc
+    đầu dưới ngưỡng (mã câu hướng dẫn). Có đọc lại thì phiên live chốt lượt (`success` / `uncertain`)."""
     sentence, top = await ocr_live.read_money_frame(jpeg, config.MONEY_MIN_PROB)
-    if sentence != read_money.UNSURE or top is None:
+    if top is None:  # lỗi mạng/model: không có kết quả nhận diện
+        return Reply(speech=[sentence], intent="money", lane="B", outcome="technical_error", error_code="MODEL_ERROR")
+    usage.signal("money_decided")
+    if sentence == read_money.NO_MONEY:  # câu đã nhắc đưa tờ tiền ra trước kính: tác vụ còn mở chờ chụp lại
+        return Reply(speech=[sentence], intent="money", lane="B", outcome="failed", error_code="NO_MONEY",
+                     keeps_open=True)
+    if sentence != read_money.UNSURE:
         return Reply(speech=[sentence], intent="money", lane="B")
     line = read_money.hint(top, await asyncio.to_thread(read_money.blur_score, jpeg))
+    usage.signal("money_uncertain", read_money.HINT_CODES.get(line))
     logger.info("làn B tiền: chưa chắc (top=%s) -> %r%s", top, line, "" if not ctx.single_shot else " (không WS, không đọc lại)")
     if ctx.single_shot:  # /process: không có WS để lấy khung mới; người dùng tự bấm lại
-        return Reply(speech=[line], intent="money", lane="B")
+        return Reply(speech=[line], intent="money", lane="B", outcome="uncertain", keeps_open=True)
     session = ctx.prewarmer.session("ocr", {"mode": "money_retry"})
     return Reply(speech=[line], live="ocr", live_token=session.token, intent="money", lane="B")
 

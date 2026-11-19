@@ -10,6 +10,7 @@ hỏng lượt.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -44,8 +45,22 @@ FEATURES: dict[str, str] = {
     "ride_quote": "ride",
     "ride_confirm": "ride",
 }
+# Intent cố ý KHÔNG đo theo lượt (test phủ: mọi intent của `schemas.Intent` + `LANE` có feature hoặc nằm ở đây).
+NOT_MEASURED: dict[str, str] = {
+    "alert_on": "đo theo phiên alert_mode",
+    "alert_off": "đo theo phiên alert_mode",
+    "unknown": "không nghe ra lời: chỉ hỏi lại, không phải một lần dùng chức năng",
+}
 # Mỗi lần kích hoạt là một việc riêng, không bao giờ ghép vào tác vụ trước (spec §6.12).
 INDEPENDENT = frozenset({"emergency_call"})
+# Câu ĐẦU của lời đáp làn A có ảnh nói "không thấy / không đọc được" -> lượt `failed` (câu đã gợi ý chụp lại nên tác
+# vụ còn mở). Tìm đồ: "không thấy <vật>" là không tìm ra. Hỏi ảnh / mô tả / vật cản: chỉ khi ảnh không đủ để trả lời
+# ("không thấy rõ", "không đọc được"); "không thấy vật cản / không thấy ai" là một câu trả lời thật, vẫn `success`.
+_NOT_FOUND = re.compile(r"^(?:tôi |mình )?(?:không|chưa) (?:nhìn )?thấy")
+_UNREADABLE = re.compile(r"^(?:tôi |mình )?(?:không|chưa) (?:thể )?(?:nhìn|thấy|đọc|xác định)(?: được)?(?: rõ| được)")
+_JUDGED = {"find": (_NOT_FOUND, "NOT_FOUND"), "ask": (_UNREADABLE, "UNREADABLE"),
+           "space": (_UNREADABLE, "UNREADABLE"), "hazard": (_UNREADABLE, "UNREADABLE")}
+JUDGED_INTENTS = frozenset(_JUDGED)
 # Lượt chờ `played` tối đa trước khi biết độ dài audio (chặn trên; `audio_sent` thu hẹp lại).
 _INITIAL_PLAYBACK_WAIT_S = 180.0
 
@@ -147,6 +162,25 @@ def routed(attempt_id: str | None, reply: Reply) -> None:
         )
     except Exception:  # noqa: BLE001
         logger.exception("usage: ghi kết quả lỗi")
+
+
+def judge(intent: str, first_sentence: str) -> tuple[str, str] | None:
+    """(`failed`, mã) khi câu đầu của lời đáp làn A có ảnh nói không thấy / không đọc được; còn lại None."""
+    rule = _JUDGED.get(intent)
+    if rule is None:
+        return None
+    head = re.split(r"[.!?…\n]", (first_sentence or "").strip().lower(), maxsplit=1)[0]
+    return ("failed", rule[1]) if rule[0].search(head) else None
+
+
+def verdict(attempt_id: str | None, status: str, error_code: str | None = None, *, keeps_open: bool = False) -> None:
+    """Sửa kết quả dự kiến khi chỉ biết lúc lời đáp đang sinh (sau `routed`); lượt đã chốt thì bỏ qua."""
+    if attempt_id is None:
+        return
+    try:
+        tracker.outcome(attempt_id, status, now=time.monotonic(), error_code=error_code, keeps_open=keeps_open)
+    except Exception:  # noqa: BLE001
+        logger.exception("usage: sửa kết quả lỗi")
 
 
 def aborted(attempt_id: str | None, intent: str, *, cancelled: bool) -> None:
@@ -323,14 +357,19 @@ def interrupted(attempt_id: str | None) -> None:
         logger.exception("usage: ngắt lượt lỗi")
 
 
-def live_done(attempt_id: str | None, *, status: str, error_code: str | None = None, align_ms: int | None = None) -> None:
-    """Phiên OCR live của lượt đã đọc xong (hoặc không có chữ / bị huỷ)."""
+def live_done(
+    attempt_id: str | None, *, status: str, error_code: str | None = None, align_ms: int | None = None,
+    keeps_open: bool = False,
+) -> None:
+    """Phiên OCR live của lượt đã đọc xong (hoặc không có chữ / bị huỷ). `keeps_open`: đọc tiền lại vẫn chưa chắc."""
     if attempt_id is None:
         return
     try:
         if align_ms is not None:
             tracker.mark(attempt_id, align_ms=align_ms)
-        tracker.confirm(attempt_id, "live", now=time.monotonic(), status=status, error_code=error_code)
+        tracker.confirm(
+            attempt_id, "live", now=time.monotonic(), status=status, error_code=error_code, keeps_open=keeps_open,
+        )
     except Exception:  # noqa: BLE001
         logger.exception("usage: live xong lỗi")
 

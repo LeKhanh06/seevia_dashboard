@@ -75,12 +75,18 @@ _RULES: tuple[tuple[re.Pattern, str, str], ...] = tuple(
 # tỉ số, giờ mở cửa...); (2) hỏi địa điểm kinh doanh "gần đây/ở đâu" (gold gán web vì phải tra bản
 # đồ). Câu chỉ cảnh vật ngay trước mắt ("phía trước", "trước mặt") và hỏi địa danh hành chính
 # ("thuộc tỉnh nào") KHÔNG phải web.
-_WEB_FRESH = re.compile(
-    r"(?<!\w)(?:thời tiết|nhiệt độ|mưa|nắng|dự báo|giá(?: cả)?|bao nhiêu tiền|tỉ giá|tỷ giá|giá vàng|giá xăng|"
-    r"xăng|tin tức|thời sự|mới nhất|tỉ số|tỷ số|kết quả (?:trận|bóng)|lịch chiếu|lịch thi đấu|"
-    r"giờ mở cửa|giờ đóng cửa|mấy giờ (?:mở|đóng)|còn mở|đang mở|có mở cửa|"
-    r"(?:hôm nay|tối nay|ngày mai|cuối tuần|tuần này) (?:có|diễn ra|trời|sự kiện))(?!\w)"
+# Nhóm từ khoá theo CHỦ ĐỀ (thứ tự = ưu tiên khi một câu khớp nhiều nhóm). `_WEB_FRESH` là hợp của các nhóm nên
+# `needs_web_rule` không đổi; chủ đề chỉ là nhãn cho thống kê (`web_topic`), không bao giờ ghi câu hỏi.
+_WEB_TOPICS: tuple[tuple[str, str], ...] = (
+    ("weather", r"thời tiết|nhiệt độ|mưa|nắng|dự báo|(?:hôm nay|tối nay|ngày mai|cuối tuần|tuần này) trời"),
+    ("sports", r"tỉ số|tỷ số|kết quả (?:trận|bóng)|lịch thi đấu"),
+    ("price", r"giá(?: cả)?|bao nhiêu tiền|tỉ giá|tỷ giá|giá vàng|giá xăng|xăng"),
+    ("news", r"tin tức|thời sự|mới nhất"),
+    ("schedule", r"lịch chiếu|giờ mở cửa|giờ đóng cửa|mấy giờ (?:mở|đóng)|còn mở|đang mở|có mở cửa|"
+                 r"(?:hôm nay|tối nay|ngày mai|cuối tuần|tuần này) (?:có|diễn ra|sự kiện)"),
 )
+_WEB_TOPIC_RES = tuple((topic, re.compile(rf"(?<!\w)(?:{pattern})(?!\w)")) for topic, pattern in _WEB_TOPICS)
+_WEB_FRESH = re.compile(r"(?<!\w)(?:" + "|".join(pattern for _, pattern in _WEB_TOPICS) + r")(?!\w)")
 _WEB_PLACE = re.compile(
     r"(?<!\w)(?:quán|tiệm|quầy|chợ|kiosk|bưu điện|cây rút tiền|cây atm|atm|ngân hàng|cửa hàng|siêu thị|"
     r"nhà thuốc|hiệu thuốc|tiệm thuốc|cà phê|nhà hàng|bệnh viện|phòng khám|trạm xăng|tiệm tạp hoá|"
@@ -97,6 +103,12 @@ def needs_web_rule(text: str) -> bool:
     return bool(
         _WEB_PLACE.search(lowered) and _WEB_WHERE.search(lowered) and not _WEB_NOT.search(lowered)
     )
+
+
+def web_topic(text: str) -> str:
+    """Chủ đề của câu cần tra web: `news|weather|price|sports|schedule|other` (không khớp nhóm nào, kể cả hỏi địa điểm)."""
+    lowered = (text or "").lower()
+    return next((topic for topic, rx in _WEB_TOPIC_RES if rx.search(lowered)), "other")
 
 
 _BLOCKED_BY_KEYWORD = {

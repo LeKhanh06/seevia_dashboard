@@ -89,6 +89,8 @@ STEP_BACK = "Lùi ra xa một chút, để cả tờ tiền nằm giữa."
 COME_CLOSER = "Đưa tờ tiền lại gần hơn một chút."
 RETRY_FAILED = "Tôi vẫn chưa đọc chắc được tờ này."
 STATIC_SPEECH = (HOLD_STILL, STEP_BACK, COME_CLOSER, RETRY_FAILED)
+# Mã câu hướng dẫn cho thống kê (`money_uncertain` reason_code) — không bao giờ ghi mệnh giá.
+HINT_CODES = {HOLD_STILL: "hold_still", STEP_BACK: "step_back", COME_CLOSER: "come_closer"}
 
 # Độ nét tính trên ảnh thu về cạnh dài này: đúng cỡ ảnh dev (vnd_kaggle 192x144) mà ngưỡng MONEY_BLUR_HINT được chọn.
 # Laplacian phụ thuộc cỡ ảnh nên khung UXGA/VGA của kính phải thu nhỏ trước khi so với ngưỡng.

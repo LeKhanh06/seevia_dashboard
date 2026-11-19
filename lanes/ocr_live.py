@@ -232,10 +232,11 @@ async def speak_ws(ws: WebSocket, text) -> None:
                 await ws.send_bytes(protocol.audio(chunk))
 
 
-async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> None:
+async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> bool | None:
     """Đọc tiền lại MỘT lần sau câu hướng dẫn (final_router._money): bỏ khung trong MONEY_RETRY_SETTLE_S đầu cho người
     dùng chỉnh tay, lấy khung đầu tiên đủ nét (độ nét >= MONEY_BLUR_HINT); hết MONEY_RETRY_TIMEOUT_S thì khung nét nhất
-    đã thấy; không có khung nào thì nói "vẫn chưa đọc chắc". Không bao giờ đọc lần thứ hai (người khiếm thị không kẹt vòng lặp)."""
+    đã thấy; không có khung nào thì nói "vẫn chưa đọc chắc". Không bao giờ đọc lần thứ hai (người khiếm thị không kẹt vòng lặp).
+    Trả True khi đã nói được mệnh giá, False khi "vẫn chưa đọc chắc", None khi phiên đóng trước khi nói xong."""
     await ws.send_text(protocol.cam("vga", 5))
     # Đồng hồ tính từ SAU khi gửi `cam` (gửi chậm không được ăn vào thời gian chỉnh tay / hạn đọc).
     started = time.monotonic()
@@ -256,7 +257,7 @@ async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> No
         if score >= config.MONEY_BLUR_HINT:
             break
     if box.closed or session.closed.is_set():
-        return
+        return None
     sentence = read_money.RETRY_FAILED
     if best is not None:
         logger.info("đọc tiền đọc lại: dùng khung nét %.0f (ngưỡng %.0f) sau %.1fs", best_score,
@@ -267,12 +268,13 @@ async def _money_retry(ws: WebSocket, box: _Mailbox, session: LiveSession) -> No
     else:
         logger.info("đọc tiền đọc lại: không có khung nào trong %.1fs", config.MONEY_RETRY_TIMEOUT_S)
     if box.closed or session.closed.is_set():
-        return
+        return None
     await speak_ws(ws, [sentence])
     if box.closed or session.closed.is_set():
-        return
+        return None
     await speak_ws(ws, [EXIT_MONEY])
     await ws.send_text(protocol.end())
+    return sentence != read_money.RETRY_FAILED
 
 
 _SIZE_W = {"svga": 800, **dict(text_align.CAPTURE_SIZES)}
@@ -335,8 +337,9 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     outcome: dict = {"status": "cancelled", "error_code": "live_closed", "align_ms": None}
     try:
         if mode == "money_retry":
-            await _money_retry(ws, box, session)
-            outcome.update(status="success", error_code=None)
+            read = await _money_retry(ws, box, session)
+            if read is not None:  # None: phiên đóng / kính ngắt trước khi nói -> giữ `cancelled`
+                outcome.update(status="success" if read else "uncertain", error_code=None, keeps_open=not read)
             return
         one_shot = session.params.get("capture_size")
         if one_shot:

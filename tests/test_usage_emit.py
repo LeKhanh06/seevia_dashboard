@@ -157,3 +157,29 @@ def test_post_timeout_is_config_and_covers_slow_batch(monkeypatch):
     assert config.USAGE_POST_TIMEOUT_S >= 30
     monkeypatch.setattr(config, "USAGE_POST_TIMEOUT_S", 42.0)
     assert usage._post([{"type": "x"}]) == 200 and seen["timeout"] == 42.0
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_auth_error_backs_off_and_keeps_batch(sent, code):
+    # Token sai/bị đổi: lô KHÔNG được bỏ (đổi token xong gửi lại đủ), chỉ lô sai dạng (400/422) mới bỏ.
+    batches, codes = sent
+    first = usage.emit("session_heartbeat", session_id="s0", kind="connection")
+    codes.append(code)
+    assert usage.flush_now() == 0
+    assert usage._read_cursor() == ("", 0)
+    usage._backoff_until = 0.0
+    assert usage.flush_now() == 1
+    assert _ids(batches) == [first, first]
+
+
+def test_backlog_sends_one_batch_per_call_when_limited(sent, monkeypatch):
+    # Thread nền chạy tick (hết hạn lượt, heartbeat) cùng vòng với gửi: tồn đọng lâu không được chặn tick hàng phút.
+    batches, _ = sent
+    monkeypatch.setattr(config, "USAGE_BATCH", 2)
+    for i in range(5):
+        usage.emit("session_heartbeat", session_id=f"s{i}", kind="connection")
+    assert usage.flush_now(max_batches=1) == 2
+    assert len(batches) == 1
+    assert usage.pending()
+    assert usage.flush_now() == 3
+    assert not usage.pending()

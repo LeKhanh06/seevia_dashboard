@@ -300,15 +300,15 @@ def _post(batch: list[dict[str, Any]]) -> int:
     return response.status_code
 
 
-def flush_now() -> int:
-    """Ghi hàng đợi xuống đĩa rồi gửi hết các lô có thể; trả số sự kiện AB đã nhận lô (2xx)."""
+def flush_now(max_batches: int | None = None) -> int:
+    """Ghi hàng đợi xuống đĩa rồi gửi các lô có thể (tối đa `max_batches`); trả số sự kiện AB đã nhận (2xx)."""
     global _backoff_until, _backoff_s
     with _io_lock:
         _drain_to_disk()
         if not config.USAGE_API_TOKEN or time.monotonic() < _backoff_until:
             return 0
         sent = 0
-        while True:
+        for _ in iter(int, 1) if max_batches is None else range(max_batches):
             batch, end_file, end_off = _next_batch()
             if not batch:
                 if end_file:
@@ -317,16 +317,25 @@ def flush_now() -> int:
             code = _post(batch)
             if 200 <= code < 300:
                 sent += len(batch)
-            elif code in (0, 408, 429) or code >= 500:
+            elif code in (0, 401, 403, 408, 429) or code >= 500:
+                # Mạng/AB lỗi, hoặc token sai/vừa đổi: giữ lô, lùi rồi gửi lại (sửa token xong không mất gì).
                 _backoff_s = min(300.0, max(5.0, _backoff_s * 2))
                 _backoff_until = time.monotonic() + _backoff_s
                 return sent
             else:
-                # 4xx còn lại (sai token, lô sai dạng): gửi lại cũng hỏng như vậy — ghi log và đi tiếp.
+                # 4xx còn lại (lô sai dạng): gửi lại cũng hỏng như vậy — ghi log và đi tiếp.
                 logger.error("usage: AB trả %s cho lô %d sự kiện, bỏ qua lô", code, len(batch))
             _backoff_s = 0.0
             _write_cursor(end_file, end_off)
             _cleanup(end_file)
+        return sent
+
+
+def pending() -> bool:
+    """Spool còn sự kiện chưa gửi."""
+    with _io_lock:
+        _drain_to_disk()
+        return bool(_next_batch()[0])
 
 
 def _loop() -> None:
@@ -340,8 +349,10 @@ def _loop() -> None:
                 logger.exception("usage: tick lỗi")
         try:
             if now >= next_send:
-                flush_now()
-                next_send = now + config.USAGE_FLUSH_S
+                # Một lô mỗi vòng: tồn đọng lâu (AB tắt nhiều giờ) không được chặn tick hết hạn lượt / heartbeat
+                # (mỗi lô có thể chờ tới USAGE_POST_TIMEOUT_S). Còn tồn thì gửi tiếp ở vòng sau (~1 s).
+                sent = flush_now(max_batches=1)
+                next_send = now if sent and pending() else now + config.USAGE_FLUSH_S
             else:
                 with _io_lock:
                     _drain_to_disk()

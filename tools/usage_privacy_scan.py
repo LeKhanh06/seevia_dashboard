@@ -4,7 +4,8 @@
 
 Tìm trong MỌI trường của sự kiện (trừ `device_id`: AB cần mã kính thô để tra chủ kính rồi băm, không lưu thô) và
 trong các dòng log của logger `blind_assist.usage`: mã kính thô, số điện thoại, số tiền, chuỗi mẫu riêng tư dùng
-trong e2e (tên người thân, chữ OCR mẫu...). Log lượt thường (câu nghe được) không thuộc phạm vi thống kê nên bỏ qua.
+trong e2e (tên người thân, chữ OCR mẫu...). Dòng log thống kê = thông điệp mở đầu "usage:"; log lượt thường (câu nghe
+được) không thuộc phạm vi thống kê nên bỏ qua.
 In từng chỗ vi phạm `<vị trí>:<loại>:<chi tiết>`; mã thoát 1 khi có vi phạm.
 """
 
@@ -18,7 +19,9 @@ from pathlib import Path
 
 _PHONE = re.compile(r"(?<!\d)(?:\+?84|0)\d{9}(?!\d)")
 _MONEY = re.compile(r"\d+\s*(?:nghìn|ngàn|triệu)?\s*(?:đồng|vnd|vnđ)|\d{1,3}(?:[.,]000)+(?!\d)", re.IGNORECASE)
-_USAGE_LOG = "blind_assist.usage"
+# Dòng log của bộ thống kê: thông điệp mở đầu "usage:" (định dạng log `pipeline/metrics.LOG_FORMAT` không có tên
+# logger: "<giờ> <mức> [<kính> <lượt>] usage: ..."); nếu log có tên logger thì nhận cả "blind_assist.usage".
+_USAGE_LOG = re.compile(r"\] usage: |blind_assist\.usage")
 
 
 def _values(obj: object, skip_device: bool = True) -> list[str]:
@@ -53,8 +56,9 @@ def scan(spool_dir: Path, log_file: Path | None, devices: list[str] = (), patter
                 hits += _check(f"{path.name}#{no}", value, devices, patterns)
     if log_file is not None and Path(log_file).exists():
         for no, line in enumerate(Path(log_file).read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            if _USAGE_LOG in line:
-                hits += _check(f"{Path(log_file).name}#{no}", line, devices, patterns)
+            match = _USAGE_LOG.search(line)
+            if match:  # chỉ phần thông điệp: tiền tố "[<kính> <lượt>]" là định dạng log chung của mọi dòng
+                hits += _check(f"{Path(log_file).name}#{no}", line[match.end():], devices, patterns)
     return hits
 
 

@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 
 import config
 from pipeline.reply import Reply
+from pipeline import usage_sessions
 from pipeline.usage_tasks import tracker
 from services import usage
 
@@ -107,7 +108,7 @@ def begin(
         if not has_speech and hold is not None and hold < config.USAGE_MIN_PRESS_MS:
             return None  # nhấn chạm, không lời: không phải một lần dùng
         entry = {"ws": "v2_session", "post": "v2_turn", "process": "process"}.get(transport, "v2_session")
-        firmware = (glasses or {}).get("fw")
+        firmware = usage_sessions.firmware_version((glasses or {}).get("fw"))  # cùng luật với `hello`
         attempt_id = usage.uuid7()
         with _drafts_lock:
             _drafts[attempt_id] = _Draft(device, released, entry, firmware if isinstance(firmware, str) else None)
@@ -346,7 +347,8 @@ def interrupted(attempt_id: str | None) -> None:
         if tracker.waiting_for(attempt_id, "action"):
             # Lệnh điện thoại đã/đang đi: bấm nút chỉ cắt câu đang đọc. Huỷ lệnh chờ (nếu còn) do
             # `action_cancelled` ghi; lệnh đã chạy thì lượt vẫn chờ kết quả thật.
-            tracker.confirm(attempt_id, "playback", now=now, playback="interrupted")
+            # Câu đọc lại đã phát một phần (AB chỉ nhận `confirmed|unconfirmed`); lượt chốt theo kết quả điện thoại.
+            tracker.confirm(attempt_id, "playback", now=now, playback="confirmed")
             return
         if tracker.had_audio(attempt_id):
             tracker.finish(attempt_id, "completed_early", now=now)

@@ -244,6 +244,8 @@ USAGE_API_TOKEN = get("USAGE_API_TOKEN", "")
 USAGE_SPOOL_DIR = get("USAGE_SPOOL_DIR", os.path.join(STORAGE_DIR, "usage"))
 USAGE_BATCH = int(get("USAGE_BATCH", "500"))
 USAGE_FLUSH_S = float(get("USAGE_FLUSH_S", "5"))
+# Chờ AB nhận một lô tối đa chừng này giây (lô 500 dồn lại sau khi AB tắt lâu: ~2 s, lúc DB tải nặng từng 12-20 s).
+USAGE_POST_TIMEOUT_S = float(get("USAGE_POST_TIMEOUT_S", "30"))
 # Tác vụ chờ người dùng (chụp lại, chọn người, xác nhận) quá hạn này không có lượt mới -> bỏ cuộc.
 USAGE_ABANDON_S = float(get("USAGE_ABANDON_S", "120"))
 # Cửa sổ ghép lượt vào tác vụ đang mở (tài liệu nghiệp vụ: <= 60 s ghép, 61 s không).

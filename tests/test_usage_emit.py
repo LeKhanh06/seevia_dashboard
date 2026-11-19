@@ -137,3 +137,23 @@ def test_uuid7_is_version_7_and_time_ordered():
     b = usage.uuid7()
     assert uuid.UUID(a).version == 7
     assert a < b
+
+
+def test_post_timeout_is_config_and_covers_slow_batch(monkeypatch):
+    # Lô 500 dồn lại lúc AB/DB tải nặng từng mất 12-20 s: chờ ngắn hơn thì VH bỏ giữa chừng rồi gửi lại cả lô.
+    seen = {}
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"rejected": []}
+
+    def fake_post(url, json, headers, timeout):
+        seen["timeout"] = timeout
+        return _Resp()
+
+    monkeypatch.setattr(usage.httpx, "post", fake_post)
+    assert config.USAGE_POST_TIMEOUT_S >= 30
+    monkeypatch.setattr(config, "USAGE_POST_TIMEOUT_S", 42.0)
+    assert usage._post([{"type": "x"}]) == 200 and seen["timeout"] == 42.0

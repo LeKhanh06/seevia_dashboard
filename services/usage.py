@@ -285,7 +285,7 @@ def _post(batch: list[dict[str, Any]]) -> int:
             config.USAGE_ENDPOINT,
             json={"events": batch},
             headers={"Authorization": f"Bearer {config.USAGE_API_TOKEN}"},
-            timeout=10.0,
+            timeout=config.USAGE_POST_TIMEOUT_S,
         )
     except httpx.HTTPError as exc:
         logger.warning("usage: gửi lô lỗi mạng (%s)", type(exc).__name__)

@@ -7,7 +7,7 @@ import time
 import uuid
 
 import config
-from pipeline import device_ctx, tts, usage_turn
+from pipeline import device_ctx, tts, usage_sessions, usage_turn
 from handlers.result_speech import speak_result
 from handlers.waiting import wait_for
 from services.visioncare_client import (
@@ -151,19 +151,35 @@ def reset_state() -> None:
     _ACTIVE.clear()
 
 
+# Trạng thái đang chạy -> loại phiên thống kê (pipeline/usage_sessions.py): thời lượng nghe nhạc / dẫn đường.
+_SESSION_KIND = {"music_playing": "music", "navigating": "navigation"}
+
+
+def _usage_session(task: str, *, start: bool, reason: str = "user_off") -> None:
+    device, kind = device_ctx.current.get(), _SESSION_KIND.get(task)
+    if not device or kind is None:
+        return
+    if start:
+        usage_sessions.open_session(kind, device)
+    else:
+        usage_sessions.close_kind(device, kind, reason)
+
+
 def mark_active(task: str) -> None:
     """Đánh dấu tác vụ `task` ('music_playing' hoặc 'navigating') đang hoạt động duy nhất."""
     active = _active()
+    for other in [t for t in active if t != task]:
+        _usage_session(other, start=False, reason="replaced")  # điện thoại chỉ chạy một việc: việc mới thay việc cũ
     active.clear()
     active[task] = time.monotonic()
+    _usage_session(task, start=True)
 
 
 def mark_inactive(task: str | None = None) -> None:
     """Xóa tác vụ đang hoạt động."""
-    if task:
-        _active().pop(task, None)
-    else:
-        _active().clear()
+    for name in [task] if task else list(_active()):
+        if _active().pop(name, None) is not None:
+            _usage_session(name, start=False)
 
 
 def note_result(operation: str, data: dict | None) -> None:
@@ -183,7 +199,8 @@ def note_result(operation: str, data: dict | None) -> None:
         mark_active(started)
         logger.info("Bắt đầu: %s", started)
     ended = _ENDS.get(operation)
-    if ended and _active().pop(ended, None) is not None:
+    if ended and ended in _active():
+        mark_inactive(ended)
         logger.info("Kết thúc: %s", ended)
 
 

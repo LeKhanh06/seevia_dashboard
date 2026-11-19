@@ -41,7 +41,7 @@ from live.call_bridge import calls
 from live.observers import ANY_DEVICE, observers
 from live.session import sessions
 from live.ws_adapter import LiveSocket
-from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action, speech, usage_turn
+from pipeline import adpcm, cues, device_ctx, guard, metrics, pending_action, speech, usage_sessions, usage_turn
 from pipeline import turn as turn_v2
 from pipeline.image_buffer import image_buffer
 from pipeline.reply import Reply
@@ -119,6 +119,10 @@ class DeviceSession:
         self._live_sock: LiveSocket | None = None
         self._shut = False
         self._replaced = False
+        # Thống kê phiên kết nối (pipeline/usage_sessions.py): mã phiên, chẩn đoán từ `hello`, lý do kết thúc.
+        self._usage_conn: str | None = None
+        self._hello_info: dict | None = None
+        self._usage_end = "closed"
         self._evloop = asyncio.get_running_loop()
         # MỘT kênh audio 0x02 có thứ tự: mỗi câu (lượt trả lời reply..reply_end, câu kết quả `result-<id>`,
         # câu của outbox nav live, cue đọc thay clip) giữ khoá này trọn câu rồi mới tới câu sau (FIFO).
@@ -279,6 +283,8 @@ class DeviceSession:
         _registry[self.device] = self
         if old is not None and old is not self:
             await old.replace()
+        self._usage_conn = usage_sessions.open_session(
+            "connection", self.device, firmware=usage_sessions.firmware_version(self.firmware), info=self._hello_info)
         device_ctx.current.set(self.device)  # task con thừa kế
         device_ctx.per_device.set(self.per_device)
         device_ctx.say.set(self._say_hook)  # thread TTS (copy context) báo từng câu vào TTS; không ai nghe thì bỏ
@@ -296,6 +302,9 @@ class DeviceSession:
             await self._loop()
         except (WebSocketDisconnect, RuntimeError):
             pass
+        except Exception:
+            self._usage_end = "error"
+            raise
         finally:
             await self.shutdown("socket đóng")
             if _registry.get(self.device) is self:
@@ -335,6 +344,7 @@ class DeviceSession:
             self.cue_version = 0
         fw = str(hello.get("fw", ""))[:40]
         self.firmware = fw if fw.replace(".", "").replace("-", "").replace("_", "").replace("+", "").isalnum() else ""
+        self._hello_info = usage_sessions.device_info(hello)
         logger.info("v2 session %s: hello device=%s per_device=%s fw=%s accept=%s", self.session_id, device,
                     self.per_device, str(hello.get("fw", ""))[:32], str(hello.get("accept", ""))[:80])
         return True
@@ -365,6 +375,9 @@ class DeviceSession:
         if self._shut:
             return
         self._shut = True
+        end = "replaced" if self._replaced else self._usage_end
+        usage_sessions.close_session(self._usage_conn, end)
+        usage_sessions.connection_ended(self.device, end)
         call = calls.by_device(self.device)
         if call is not None and call.session is self:  # kính rớt/bị thay giữa cuộc gọi
             if call.emergency and call.state == call_bridge.RINGING_OUT:
@@ -499,6 +512,7 @@ class DeviceSession:
                 msg = await asyncio.wait_for(self.ws.receive(), IDLE_TIMEOUT_S)
             except asyncio.TimeoutError:
                 logger.info("v2 session %s: idle quá %ds, đóng", self.session_id, IDLE_TIMEOUT_S)
+                self._usage_end = "timeout"
                 await self._close(1001)
                 return
             if msg["type"] == "websocket.disconnect":
@@ -811,6 +825,8 @@ class DeviceSession:
         sock = LiveSocket(self.send_text, self.send_bytes, speak_cues=self.cue_version < cues.CUE_VERSION,
                           audio_lock=self._audio_lock, debug=self.emit_debug)
         runner = ocr_live.run if live.mode == "ocr" else nav_live.run
+        if live.mode == "nav":  # bật lại / dựng lại sau OCR live: vẫn cùng phiên chế độ cảnh báo
+            usage_sessions.open_session("alert_mode", self.device)
         self._live_session, self._live_sock = live, sock
         # Chạy ở task riêng để vòng nhận (và turn_start/cancel) không bị chặn; task
         # `_run_turn` kết thúc ngay sau đây nên không tự huỷ chính live của mình.

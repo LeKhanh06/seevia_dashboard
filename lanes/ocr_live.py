@@ -24,7 +24,7 @@ from live import protocol, text_align
 from live.session import LiveSession, sessions
 from models import llm
 from models.ocr import prompts
-from pipeline import speech, usage_turn
+from pipeline import speech, usage_sessions, usage_turn
 from pipeline.usage_tasks import tracker
 from pipeline.image_buffer import resize_jpeg
 
@@ -335,6 +335,8 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     debug = getattr(ws, "debug", None)  # chỉ có trên LiveSocket của phiên bật debug (demo)
     attempt_id = session.params.get("usage_attempt")
     outcome: dict = {"status": "cancelled", "error_code": "live_closed", "align_ms": None}
+    # Phiên thống kê `ocr_live` (thời lượng, thời gian căn khung). Đọc tiền lại không phải đọc chữ: không mở phiên.
+    usage_session = usage_sessions.open_session("ocr_live", session.device) if mode != "money_retry" else None
     try:
         if mode == "money_retry":
             read = await _money_retry(ws, box, session)
@@ -430,3 +432,5 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
         receiver.cancel()
         sessions.release(session)
         usage_turn.live_done(attempt_id, **outcome)
+        usage_sessions.close_session(usage_session, "cancelled" if outcome["status"] == "cancelled" else "done",
+                                     align_ms=outcome["align_ms"])

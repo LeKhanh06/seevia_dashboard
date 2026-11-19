@@ -18,7 +18,7 @@ from lanes import general, ocr_live, phone
 from live import call_bridge, text_align
 from live.session import sessions
 from models import search
-from pipeline import device_ctx, hearfix, image_quality, intent_early, pending_action, speech, usage_turn
+from pipeline import device_ctx, hearfix, image_quality, intent_early, pending_action, speech, usage_sessions, usage_turn
 from services import usage
 from pipeline.image_buffer import image_buffer
 from pipeline.intent_early import Decision
@@ -404,6 +404,7 @@ async def _lane_c(ctx: TurnContext, d: Decision, text: str, params: dict | None 
     if ctx.single_shot and d.intent == "alert_on":
         return Reply(speech=[NO_LIVE_MESSAGE], intent=d.intent, lane="C")
     if d.intent == "alert_off":
+        usage_sessions.close_kind(ctx.device, "alert_mode", "user_off")
         sessions.close_device(ctx.device, "nav")
         from live import device_session  # nhập muộn: device_session nhập pipeline
 

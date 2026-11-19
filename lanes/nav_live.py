@@ -22,7 +22,7 @@ import config
 from lanes.ocr_live import _Mailbox, receive_frames
 from live import ego_motion, hazard, protocol
 from live.session import LiveSession, sessions
-from pipeline import speech
+from pipeline import speech, usage_sessions
 
 logger = logging.getLogger("blind_assist")
 
@@ -140,6 +140,7 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
             if sent:
                 await ws.send_text(protocol.hazard(result.level, result.dir, result.kind))
                 logger.info("hazard level=%d dir=%s kind=%s", result.level, result.dir, result.kind)
+                usage_sessions.alert_for(session.device, result.level)  # chỉ cảnh báo đã phát (sau chống làm phiền)
             if debug is not None and size[0]:  # SAU hazard, không chờ gửi; JPEG hỏng (0x0) thì bỏ khung
                 debug({**_det_frame(result, detections, size, bool(sent)), protocol.DEBUG_JPEG: frame})
             frames += 1

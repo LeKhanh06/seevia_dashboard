@@ -306,9 +306,11 @@ class DeviceSession:
             self._usage_end = "error"
             raise
         finally:
-            await self.shutdown("socket đóng")
-            if _registry.get(self.device) is self:
-                del _registry[self.device]
+            try:
+                await self.shutdown("socket đóng")
+            finally:  # bị huỷ giữa lúc shutdown vẫn phải rời registry (không thì kính nối lại gặp phiên ma)
+                if _registry.get(self.device) is self:
+                    del _registry[self.device]
 
     async def _hello(self) -> bool:
         try:
@@ -357,6 +359,8 @@ class DeviceSession:
 
     async def replace(self) -> None:
         """Phiên mới của cùng kính: huỷ sạch việc dở của phiên này rồi đóng 4000."""
+        if self._evloop.is_closed():
+            return  # phiên ma: loop của nó đã đóng (chỉ có khi mỗi socket một loop, như TestClient)
         if asyncio.get_running_loop() is not self._evloop:
             # Chỉ xảy ra khi mỗi socket một event loop (TestClient); server thật dùng một loop.
             future = asyncio.run_coroutine_threadsafe(self._replace_here(), self._evloop)

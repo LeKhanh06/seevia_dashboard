@@ -42,6 +42,7 @@ from app.repositories.usage_rows import (
 )
 
 if TYPE_CHECKING:
+    from uuid import UUID
     from zoneinfo import ZoneInfo
 
     from sqlalchemy import Table
@@ -148,6 +149,21 @@ class UsageRepository:
             )
         )
         return owner
+
+    async def insert_events(self, rows: list[dict[str, Any]]) -> set[UUID]:
+        """Insert many layer-1 events in one statement; return the new ``event_id`` values.
+
+        A repeated ``event_id`` (already stored, or twice in ``rows``) is skipped by ``DO NOTHING``.
+        """
+        if not rows:
+            return set()
+        stmt = (
+            insert(UsageEvent)
+            .values(rows)
+            .on_conflict_do_nothing(index_elements=[UsageEvent.event_id])
+            .returning(UsageEvent.event_id)
+        )
+        return set((await self._session.execute(stmt)).scalars().all())
 
     async def insert_event(self, row: dict[str, Any]) -> bool:
         """Insert one layer-1 event; ``False`` when ``event_id`` was already stored."""

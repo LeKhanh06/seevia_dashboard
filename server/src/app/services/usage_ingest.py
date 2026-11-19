@@ -1,8 +1,10 @@
 """Ingest one usage event batch: validate, deduplicate, merge into layer 2, queue dirty days.
 
-Each event runs in its own savepoint so a constraint conflict (e.g. two attempts claiming one
-``request_id``) rejects that event only. Layer 2 is touched only when the layer-1 insert is new,
-so resending a batch is a no-op beyond the ``duplicates`` count.
+Fast path: one multi-row layer-1 insert, then the layer-2 upserts of the new events, all inside ONE
+savepoint (~1 statement per event instead of ~4). A constraint conflict (e.g. two attempts claiming
+one ``request_id``) rolls that savepoint back and the batch is replayed event by event, each in its
+own savepoint, so the conflict rejects that event only. Layer 2 is touched only when the layer-1
+insert is new, so resending a batch is a no-op beyond the ``duplicates`` count.
 """
 
 from __future__ import annotations
@@ -50,33 +52,65 @@ class UsageIngestService:
 
     async def ingest(self, batch: UsageBatchIn) -> UsageBatchOut:
         """Validate and store every event of ``batch``; commit is the caller's."""
-        accepted = duplicates = 0
-        rejected: list[RejectedEvent] = []
-        dirty: set[date] = set()
-        for raw in batch.events:
+        rejected: list[tuple[int, RejectedEvent]] = []
+        events: list[tuple[int, UsageEventIn]] = []
+        for index, raw in enumerate(batch.events):
             event_id = raw.get("event_id")
             shown_id = event_id if isinstance(event_id, str) else None
             model = EVENT_MODELS.get(str(raw.get("type")))
             if model is None:
-                rejected.append(RejectedEvent(event_id=shown_id, code="UNKNOWN_TYPE"))
+                rejected.append((index, RejectedEvent(event_id=shown_id, code="UNKNOWN_TYPE")))
                 continue
             try:
-                event: UsageEventIn = model.model_validate(raw)  # type: ignore[assignment]
+                events.append((index, model.model_validate(raw)))  # type: ignore[arg-type]
             except ValidationError:
-                rejected.append(RejectedEvent(event_id=shown_id, code="INVALID_EVENT"))
-                continue
+                rejected.append((index, RejectedEvent(event_id=shown_id, code="INVALID_EVENT")))
+        dirty: set[date] = set()
+        try:
+            async with self._session.begin_nested():
+                new = await self._store_all([event for _, event in events], dirty)
+        except IntegrityError:
+            dirty = set()
+            new, conflicts = await self._store_each(events, dirty)
+            rejected += conflicts
+        await self._repo.mark_dirty(dirty)
+        rejected.sort(key=lambda item: item[0])
+        return UsageBatchOut(
+            accepted=new,
+            duplicates=len(events) - new - sum(r.code == "CONFLICT" for _, r in rejected),
+            rejected=[r for _, r in rejected],
+        )
+
+    async def _store_all(self, events: list[UsageEventIn], dirty: set[date]) -> int:
+        """Fast path: one layer-1 insert for the batch, then layer 2 per new event in order."""
+        now = datetime.now(UTC)
+        rows = [await self._row(event, now) for event in events]
+        fresh = await self._repo.insert_events([row for row, _ in rows])
+        new = 0
+        for event, (row, owner) in zip(events, rows, strict=True):
+            if event.event_id in fresh:
+                fresh.discard(event.event_id)  # repeated in the batch: only the first one counts
+                await self._apply(event, owner, row["device_hash"], dirty)
+                new += 1
+        return new
+
+    async def _store_each(
+        self, events: list[tuple[int, UsageEventIn]], dirty: set[date]
+    ) -> tuple[int, list[tuple[int, RejectedEvent]]]:
+        """Slow path after a conflict: one savepoint per event; only the offender is rejected."""
+        new = 0
+        conflicts: list[tuple[int, RejectedEvent]] = []
+        for index, event in events:
             try:
                 async with self._session.begin_nested():
                     is_new = await self._store(event, dirty)
             except IntegrityError:
-                rejected.append(RejectedEvent(event_id=str(event.event_id), code="CONFLICT"))
+                conflicts.append(
+                    (index, RejectedEvent(event_id=str(event.event_id), code="CONFLICT"))
+                )
                 continue
-            if is_new:
-                accepted += 1
-            else:
-                duplicates += 1
-        await self._repo.mark_dirty(dirty)
-        return UsageBatchOut(accepted=accepted, duplicates=duplicates, rejected=rejected)
+            new += is_new
+        return new, conflicts
 
     async def _owner_hash(self, device_id: str) -> str | None:
         if device_id not in self._owner_cache:
@@ -86,28 +120,31 @@ class UsageIngestService:
             )
         return self._owner_cache[device_id]
 
-    async def _store(self, event: UsageEventIn, dirty: set[date]) -> bool:
+    async def _row(self, event: UsageEventIn, now: datetime) -> tuple[dict[str, Any], str | None]:
+        """Layer-1 row of ``event`` (pseudonymised ids, operational body) plus owner pseudonym."""
         owner = await self._owner_hash(event.device_id)
-        device = pseudonym(self._key, "device", event.device_id)
         body = event.model_dump(
             mode="json",
             exclude={"event_id", "type", "occurred_at", "device_id", "component_version"},
             exclude_none=True,
         )
-        is_new = await self._repo.insert_event(
-            {
-                "event_id": event.event_id,
-                "type": event.type,
-                "occurred_at": event.occurred_at,
-                "received_at": datetime.now(UTC),
-                "owner_hash": owner,
-                "device_hash": device,
-                "component_version": event.component_version,
-                "body": body,
-            }
-        )
+        row = {
+            "event_id": event.event_id,
+            "type": event.type,
+            "occurred_at": event.occurred_at,
+            "received_at": now,
+            "owner_hash": owner,
+            "device_hash": pseudonym(self._key, "device", event.device_id),
+            "component_version": event.component_version,
+            "body": body,
+        }
+        return row, owner
+
+    async def _store(self, event: UsageEventIn, dirty: set[date]) -> bool:
+        row, owner = await self._row(event, datetime.now(UTC))
+        is_new = await self._repo.insert_event(row)
         if is_new:
-            await self._apply(event, owner, device, dirty)
+            await self._apply(event, owner, row["device_hash"], dirty)
         return is_new
 
     async def _apply(

@@ -24,6 +24,9 @@ from services import usage
 logger = logging.getLogger("blind_assist.usage")
 
 SUCCESSES = ("success", "completed_early")
+# Trạng thái lỗi đến sau được ghi đè lên: thành công dự kiến, và `unconfirmed` (kính không báo `played` kịp — chỉ là
+# thiếu xác nhận phát, không được che lỗi thật điện thoại báo về sau).
+_OVERRIDABLE = (*SUCCESSES, "unconfirmed")
 
 
 @dataclass
@@ -83,6 +86,8 @@ class Tracker:
         `attempt_id`: mã đã giữ chỗ từ đầu lượt (tín hiệu trong lúc route đã mang mã này). `occurred_at`: giờ
         bắt đầu lượt (lúc nhả nút), vì lượt chỉ được mở sau khi route xong.
         """
+        if not config.USAGE_ENABLED:  # tắt thống kê: không giữ lượt/tác vụ nào trong RAM
+            return attempt_id or usage.uuid7(), ""
         abandoned: _Task | None = None
         with self._lock:
             key = (device, feature)
@@ -201,7 +206,9 @@ class Tracker:
             attempt = self._attempts.get(attempt_id)
             if attempt is None or attempt.done:
                 return
-            if attempt.status is None or attempt.status in SUCCESSES:
+            if attempt.status is None or attempt.status in SUCCESSES or (
+                attempt.status == "unconfirmed" and status not in SUCCESSES
+            ):
                 attempt.status, attempt.error_code = status, error_code
             attempt.keeps_open = attempt.keeps_open or keeps_open
             if request_id is not None:
@@ -236,7 +243,7 @@ class Tracker:
             if part == "playback":
                 attempt.playback = playback or "confirmed"
             if status is not None and status not in SUCCESSES:
-                if attempt.status is None or attempt.status in SUCCESSES:
+                if attempt.status is None or attempt.status in _OVERRIDABLE:
                     attempt.status, attempt.error_code = status, error_code
             elif status is not None and attempt.status is None:
                 attempt.status = status
@@ -244,11 +251,19 @@ class Tracker:
         if ready:
             self._finish(attempt_id, now)
 
-    def finish(self, attempt_id: str, status: str, *, now: float, error_code: str | None = None) -> None:
-        """Chốt ngay (huỷ, bị ngắt, lỗi kỹ thuật) bất kể phần đang chờ."""
+    def finish(
+        self, attempt_id: str, status: str, *, now: float, error_code: str | None = None,
+        only_if_pending: str | None = None,
+    ) -> None:
+        """Chốt ngay (huỷ, bị ngắt, lỗi kỹ thuật) bất kể phần đang chờ.
+
+        `only_if_pending`: chỉ chốt khi phần này còn chờ (quét hết hạn đua với xác nhận vừa tới).
+        """
         with self._lock:
             attempt = self._attempts.get(attempt_id)
             if attempt is None or attempt.done:
+                return
+            if only_if_pending is not None and only_if_pending not in attempt.pending:
                 return
             attempt.status, attempt.error_code = status, error_code
             attempt.keeps_open = False
@@ -284,8 +299,8 @@ class Tracker:
         for attempt_id in late:
             with self._lock:
                 attempt = self._attempts.get(attempt_id)
-                if attempt is None or attempt.done:
-                    continue
+                if attempt is None or attempt.done or "playback" not in attempt.pending:
+                    continue  # `played` vừa tới giữa lúc quét: giữ xác nhận thật
                 attempt.pending.discard("playback")
                 attempt.playback = "unconfirmed"
                 if attempt.status is None or attempt.status in SUCCESSES:
@@ -294,7 +309,8 @@ class Tracker:
             if ready:
                 self._finish(attempt_id, now)
         for attempt_id in lost:  # điện thoại không bao giờ báo (lệnh mất, VH không còn chờ): lỗi kỹ thuật
-            self.finish(attempt_id, "technical_error", now=now, error_code="RESULT_TIMEOUT")
+            # Kiểm lại trong khoá: kết quả vừa tới giữa lúc quét thì không ghi đè thành RESULT_TIMEOUT.
+            self.finish(attempt_id, "technical_error", now=now, error_code="RESULT_TIMEOUT", only_if_pending="action")
         for task in stale:
             self._emit_task(task, "abandoned")
 
@@ -311,10 +327,15 @@ class Tracker:
             task = attempt.task
             task.busy = max(0, task.busy - 1)
             status = attempt.status or "technical_error"
+            current = self._tasks.get((task.device, task.feature)) is task
             close_task = not attempt.keeps_open
+            task_status = status
             if close_task:
-                if self._tasks.get((task.device, task.feature)) is task:
+                if current:
                     del self._tasks[(task.device, task.feature)]
+            elif not current:
+                # Tác vụ đã bị lượt mới thay chỗ: không ai trả lời câu hỏi lại này nữa -> bỏ cuộc (không treo tới UNCLOSED).
+                close_task, task_status = True, "abandoned"
             else:
                 task.waiting_since = now
         usage.emit(
@@ -327,8 +348,8 @@ class Tracker:
             request_id=attempt.request_id,
             device_id=task.device,
         )
-        if close_task:
-            self._emit_task(task, status)
+        if close_task:  # tác vụ chỉ ghép lượt mới khi không còn lượt chạy (busy == 0): đây là lượt cuối
+            self._emit_task(task, task_status)
 
     def _emit_task(self, task: _Task, status: str) -> None:
         usage.emit(

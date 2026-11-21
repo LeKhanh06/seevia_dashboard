@@ -245,6 +245,7 @@ def _next_batch() -> tuple[list[dict[str, Any]], str, int]:
     """Đọc ≤ USAGE_BATCH sự kiện từ con trỏ; trả (lô, file, offset sau lô). Dòng hỏng bị bỏ qua."""
     cur_file, cur_off = _read_cursor()
     batch: list[dict[str, Any]] = []
+    size = 0
     end_file, end_off = cur_file, cur_off
     for name in _spool_files():
         if cur_file and name < cur_file:
@@ -256,13 +257,17 @@ def _next_batch() -> tuple[list[dict[str, Any]], str, int]:
                 line = fh.readline()
                 if not line or not line.endswith(b"\n"):
                     break  # hết file, hoặc dòng đang ghi dở
+                if batch and size + len(line) > config.USAGE_BATCH_BYTES:
+                    size = config.USAGE_BATCH_BYTES  # lô đã đủ byte: dòng này để lô sau
+                    break
+                size += len(line)
                 offset += len(line)
                 end_file, end_off = name, offset
                 try:
                     batch.append(json.loads(line))
                 except ValueError:
                     logger.warning("usage: bỏ một dòng spool hỏng ở %s", name)
-        if len(batch) >= config.USAGE_BATCH:
+        if len(batch) >= config.USAGE_BATCH or size >= config.USAGE_BATCH_BYTES:
             break
     return batch, end_file, end_off
 
@@ -276,6 +281,26 @@ def _cleanup(sent_file: str) -> None:
                 os.remove(os.path.join(_spool_dir(), name))
             except OSError:
                 pass
+
+
+def _prune_old(now: datetime | None = None) -> int:
+    """Xoá file spool cũ hơn `USAGE_SPOOL_MAX_DAYS` dù chưa gửi (token trống / AB tắt lâu): đĩa không đầy mãi.
+
+    AB tự chốt lượt treo `UNCLOSED`; mất số liệu quá cũ còn hơn làm đầy đĩa máy chạy kính. Trả số file đã xoá.
+    """
+    now = now or datetime.now(UTC)
+    cutoff = f"spool-{now - timedelta(days=config.USAGE_SPOOL_MAX_DAYS):%Y%m%d}.jsonl"
+    removed = 0
+    for name in _spool_files():
+        if name < cutoff:
+            try:
+                os.remove(os.path.join(_spool_dir(), name))
+                removed += 1
+            except OSError:
+                pass
+    if removed:
+        logger.warning("usage: xoá %d file spool quá %d ngày chưa gửi được", removed, config.USAGE_SPOOL_MAX_DAYS)
+    return removed
 
 
 def _post(batch: list[dict[str, Any]]) -> int:
@@ -340,8 +365,16 @@ def pending() -> bool:
 
 def _loop() -> None:
     next_send = 0.0
+    next_prune = 0.0
     while not _stop.wait(1.0):
         now = time.monotonic()
+        if now >= next_prune:
+            next_prune = now + 3600.0
+            try:
+                with _io_lock:
+                    _prune_old()
+            except Exception:  # noqa: BLE001
+                logger.exception("usage: dọn spool lỗi")
         for fn in list(_ticks):
             try:
                 fn(now)
@@ -365,6 +398,7 @@ def start_sender() -> None:
     global _thread
     if not config.USAGE_ENABLED or (_thread is not None and _thread.is_alive()):
         return
+    component_version()  # `git rev-parse` một lần lúc khởi động, không chạy trên event loop ở lượt đầu
     _stop.clear()
     _thread = threading.Thread(target=_loop, name="usage-io", daemon=True)
     _thread.start()

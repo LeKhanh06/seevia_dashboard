@@ -243,6 +243,10 @@ USAGE_ENDPOINT = get("USAGE_ENDPOINT", VISIONCARE_HOST_URL.rstrip("/") + "/api/v
 USAGE_API_TOKEN = get("USAGE_API_TOKEN", "")
 USAGE_SPOOL_DIR = get("USAGE_SPOOL_DIR", os.path.join(STORAGE_DIR, "usage"))
 USAGE_BATCH = int(get("USAGE_BATCH", "500"))
+# Trần byte một lô (AB từ chối thân > 2 MiB với 413): cắt lô sớm hơn khi sự kiện to.
+USAGE_BATCH_BYTES = int(get("USAGE_BATCH_BYTES", str(1024 * 1024)))
+# File spool cũ hơn số ngày này bị xoá dù chưa gửi (token trống / AB tắt lâu).
+USAGE_SPOOL_MAX_DAYS = int(get("USAGE_SPOOL_MAX_DAYS", "14"))
 USAGE_FLUSH_S = float(get("USAGE_FLUSH_S", "5"))
 # Chờ AB nhận một lô tối đa chừng này giây (lô 500 dồn lại sau khi AB tắt lâu: ~2 s, lúc DB tải nặng từng 12-20 s).
 USAGE_POST_TIMEOUT_S = float(get("USAGE_POST_TIMEOUT_S", "30"))

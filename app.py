@@ -775,9 +775,14 @@ def start_usage_sender() -> None:
 
 @app.on_event("shutdown")
 def stop_usage_sender() -> None:
-    """Gửi nốt sự kiện thống kê còn trong hàng đợi trước khi tắt."""
+    """Đóng các phiên thống kê còn mở (`shutdown`) rồi gửi nốt hàng đợi trước khi tắt."""
+    from pipeline import usage_sessions
     from services import usage
 
+    try:
+        usage_sessions.close_all("shutdown")
+    except Exception:  # noqa: BLE001 -- tắt server không được hỏng vì thống kê
+        logging.getLogger("blind_assist.usage").exception("usage: đóng phiên lúc tắt lỗi")
     usage.stop_sender()
 
 

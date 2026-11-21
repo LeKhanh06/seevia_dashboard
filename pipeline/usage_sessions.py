@@ -70,7 +70,9 @@ def device_info(hello: dict) -> dict | None:
 def open_session(
     kind: str, device: str, *, firmware: str | None = None, info: dict | None = None, now: float | None = None,
 ) -> str | None:
-    """Mở phiên; trả `session_id`. Loại một-phiên-mỗi-kính đang mở thì trả phiên đang mở."""
+    """Mở phiên; trả `session_id`. Loại một-phiên-mỗi-kính đang mở thì trả phiên đang mở. Tắt thống kê -> None."""
+    if not config.USAGE_ENABLED:
+        return None
     try:
         now = time.monotonic() if now is None else now
         with _lock:

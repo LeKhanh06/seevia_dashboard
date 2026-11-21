@@ -429,8 +429,9 @@ async def run(ws: WebSocket, session: LiveSession) -> None:
     except (WebSocketDisconnect, RuntimeError) as exc:
         logger.info("OCR live: kính ngắt kết nối (%r), huỷ", exc)
     finally:
+        # Phiên thống kê đóng TRƯỚC: các bước sau có lỗi thì phiên cũng không heartbeat mãi.
+        usage_sessions.close_session(usage_session, "cancelled" if outcome["status"] == "cancelled" else "done",
+                                     align_ms=outcome["align_ms"])
         receiver.cancel()
         sessions.release(session)
         usage_turn.live_done(attempt_id, **outcome)
-        usage_sessions.close_session(usage_session, "cancelled" if outcome["status"] == "cancelled" else "done",
-                                     align_ms=outcome["align_ms"])

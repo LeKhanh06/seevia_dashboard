@@ -144,3 +144,51 @@ def test_first_audio_marked_once(events):
     marks = _of(events, "attempt_marks")
     assert len(marks) == 1
     assert t.had_first_audio(a)
+
+
+def test_late_phone_failure_overrides_unconfirmed(events):
+    """Kính không báo `played` kịp (unconfirmed) rồi điện thoại báo lỗi: lượt là `failed` + mã, không che lỗi."""
+    t = Tracker()
+    a, _ = t.start("g", "music", now=0.0)
+    t.require(a, "playback", deadline=10.0)
+    t.require(a, "action", deadline=200.0)
+    t.outcome(a, "success", now=1.0)
+    t.expire(11.0)  # quá hạn played -> unconfirmed, vẫn chờ điện thoại
+    assert _of(events, "attempt_finished") == []
+    t.confirm(a, "action", now=12.0, status="failed", error_code="SONG_NOT_FOUND")
+    (done,) = _of(events, "attempt_finished")
+    assert (done["status"], done["error_code"], done["playback"]) == ("failed", "SONG_NOT_FOUND", "unconfirmed")
+
+
+def test_expire_rechecks_part_still_pending(monkeypatch, events):
+    """Kết quả điện thoại tới giữa lúc quét hết hạn: không bị ghi đè thành RESULT_TIMEOUT."""
+    t = Tracker()
+    a, _ = t.start("g", "music", now=0.0)
+    t.require(a, "playback", deadline=500.0)
+    t.require(a, "action", deadline=100.0)
+    t.outcome(a, "success", now=1.0)
+    real_finish = t.finish
+
+    def racing_finish(attempt_id, status, **kw):
+        # callback tới đúng lúc expire đã gom `lost` nhưng chưa chốt
+        t.confirm(attempt_id, "action", now=101.0, status="success")
+        return real_finish(attempt_id, status, **kw)
+
+    monkeypatch.setattr(t, "finish", racing_finish)
+    t.expire(101.0)
+    assert _of(events, "attempt_finished") == []  # còn chờ played; không chốt technical_error
+    t.confirm(a, "playback", now=102.0, playback="confirmed")
+    (done,) = _of(events, "attempt_finished")
+    assert done["status"] == "success"
+
+
+def test_keeps_open_on_replaced_task_still_finishes(events):
+    """Lượt hỏi lại chốt sau khi tác vụ đã bị thay (lượt mới mở tác vụ khác): tác vụ cũ vẫn có task_finished."""
+    t = Tracker()
+    a1, task1 = t.start("g", "call", now=0.0)
+    a2, task2 = t.start("g", "call", now=1.0)  # a1 còn chạy -> tác vụ mới thay chỗ
+    assert task1 != task2
+    t.outcome(a1, "failed", error_code="MULTIPLE_CONTACTS_FOUND", keeps_open=True, now=2.0)
+    t.outcome(a2, "success", now=3.0)
+    finished = {e["task_id"]: e["status"] for e in _of(events, "task_finished")}
+    assert finished == {task1: "abandoned", task2: "success"}

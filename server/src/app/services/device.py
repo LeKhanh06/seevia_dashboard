@@ -24,6 +24,7 @@ from app.repositories.operation import (
     ReportOutcomeStatus,
 )
 from app.services.operation import wants_callback
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,5 +119,10 @@ class DeviceService:
         if outcome is None or outcome.status is ReportOutcomeStatus.CONFLICT:
             message = "Report conflict or operation already terminal"
             raise RequestIdConflictError(message)
+        if outcome.status is ReportOutcomeStatus.APPLIED:
+            await AbUsageRecorder(self._session, self._settings).sim_sos(
+                outcome.operation,
+                error_code=body.error.code if body.error is not None else None,
+            )
         await self._session.commit()
         return callback_enabled

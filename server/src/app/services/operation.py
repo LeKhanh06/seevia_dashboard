@@ -24,6 +24,7 @@ from app.repositories.glasses_device import GlassesDeviceRepository
 from app.repositories.operation import NewOperation, OperationInsertStatus, OperationRepository
 from app.schemas.service_requests import MusicPlayRequest
 from app.services.glasses import resolve_glasses_device_owner
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -145,6 +146,10 @@ class OperationService:
         if result.status is AcceptOperationStatus.CONFLICT:
             message = "Existing request ID has different fingerprint or client"
             raise RequestIdConflictError(message)
+        if result.inserted:  # SOS qua SIM: thống kê ghi cùng transaction với lệnh
+            await AbUsageRecorder(self._session, self._settings).sim_sos(
+                result.operation, glasses_device_id=request.device_id
+            )
         await self._session.commit()
         return result.operation
 

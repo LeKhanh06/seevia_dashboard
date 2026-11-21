@@ -12,12 +12,15 @@ makes every method a no-op.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid5
 from zoneinfo import ZoneInfo
 
+from app.actions import Action
 from app.models.enums import CallState, EmergencyState
+from app.repositories.glasses_device import GlassesDeviceRepository
 from app.repositories.usage import UsageRepository, days_between
 from app.services.usage_ids import pseudonym
 
@@ -27,6 +30,7 @@ if TYPE_CHECKING:
     from app.config import Settings
     from app.models.call import Call
     from app.models.emergency import Emergency
+    from app.models.operation import Operation
 
 # Fixed namespace for AB-originated event ids (never change: it is what makes replays duplicates).
 USAGE_EVENT_NAMESPACE = UUID("8a0f6f0e-3b1d-5c47-9e2a-5d6c1b7e4f90")
@@ -38,6 +42,14 @@ _SOS_RESULT: dict[EmergencyState, tuple[str, str | None]] = {
     EmergencyState.EXHAUSTED: ("failed", "NO_ANSWER"),
     EmergencyState.STOPPED: ("cancelled", None),
 }
+
+# SIM fallback SOS (``emergency/call`` operation) end state -> (status, default error code).
+_SIM_SOS_RESULT: dict[str, tuple[str, str | None]] = {
+    "succeeded": ("success", None),
+    "failed": ("failed", "PHONE_FAILED"),
+    "timed_out": ("failed", "RESULT_TIMEOUT"),
+}
+_CODE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 
 
 def event_id(entity_id: UUID, state: str) -> UUID:
@@ -61,6 +73,7 @@ class AbUsageRecorder:
         """Bind to the caller-owned session; no key configured = statistics off."""
         key = settings.usage_id_key
         self._key = bytes.fromhex(key.get_secret_value()) if key is not None else None
+        self._session = session
         self._repo = UsageRepository(session)
         self._tz = ZoneInfo(settings.usage_report_tz)
 
@@ -151,6 +164,61 @@ class AbUsageRecorder:
             values["answered_at"] = answered_at
         if result is not None:
             status, code = result
+            values |= {"status": status, "finished_at": now, "error_code": code}
+        stored = await self._repo.upsert_sos(values) or started
+        await self._repo.mark_dirty(set(days_between(stored, now if result else stored, self._tz)))
+
+    async def sim_sos(
+        self,
+        operation: Operation,
+        *,
+        state: str | None = None,
+        error_code: str | None = None,
+        glasses_device_id: str | None = None,
+    ) -> None:
+        """Record an SOS sent the old SIM way (``emergency/call``: SMS + call from owner's phone).
+
+        Same ``usage_sos`` row as the Internet chain (keyed by the operation ``request_id``), so the
+        dashboard counts every SOS once whichever path it took. ``state`` overrides the row's state
+        when the caller just changed it in SQL (timeout, delivery failure) without reloading.
+        Other actions are ignored.
+        """
+        if self._key is None or operation.action is not Action.EMERGENCY_CALL:
+            return
+        now = datetime.now(UTC)
+        state = state or operation.request_state.value
+        started = _loaded(operation, "created_at") or now
+        result = _SIM_SOS_RESULT.get(state)
+        glasses = glasses_device_id or await GlassesDeviceRepository(
+            self._session
+        ).get_active_device_id(operation.user_id)
+        owner = pseudonym(self._key, "owner", operation.user_id)
+        device = pseudonym(self._key, "device", glasses) if glasses else None
+        is_new = await self._repo.insert_event(
+            {
+                "event_id": event_id(operation.request_id, f"sim:{state}"),
+                "type": "sos_state",
+                "occurred_at": now,
+                "received_at": now,
+                "owner_hash": owner,
+                "device_hash": device,
+                "component_version": COMPONENT_VERSION,
+                "body": {"sos_id": str(operation.request_id), "state": state, "channel": "sim"},
+            }
+        )
+        if not is_new:
+            return
+        values: dict[str, Any] = {
+            "sos_id": operation.request_id,
+            "owner_hash": owner,
+            "device_hash": device,
+            "started_at": started,
+        }
+        if result is not None:
+            status, default_code = result
+            code = error_code if error_code and _CODE.match(error_code) else default_code
+            if status == "success":
+                code = None
             values |= {"status": status, "finished_at": now, "error_code": code}
         stored = await self._repo.upsert_sos(values) or started
         await self._repo.mark_dirty(set(days_between(stored, now if result else stored, self._tz)))

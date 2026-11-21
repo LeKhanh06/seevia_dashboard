@@ -8,16 +8,22 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select, text
 
+from app.actions import Action
 from app.database import build_session_factory
 from app.models.call import Call
+from app.models.operation import Operation
 from app.models.usage import UsageCall, UsageEvent, UsageSos
+from app.schemas.device import DeviceReportRequest
 from app.services.admin_stats import owner_stats, resolve_period, today_vn
+from app.services.device import DeviceService
 from app.services.usage_ab import AbUsageRecorder
+from app.workers.timeout import TimeoutWorker
 from app.workers.usage_rollup import UsageRollupWorker
 from tests.helpers import PUBLIC_TOKEN
 from tests.integration.usage_helpers import ID_KEY, usage_settings
@@ -245,3 +251,69 @@ async def test_no_names_numbers_or_raw_ids_stored(world: World) -> None:
         "media-token",
     ):
         assert private not in dump
+
+
+async def _sim_sos(world: World, request_id: uuid.UUID | None = None) -> uuid.UUID:
+    """VH rơi về đường SIM cũ: ``POST /service/emergency/call`` (SMS + gọi từ máy chủ kính)."""
+    request_id = request_id or uuid.uuid4()
+    res = await world.client.post(
+        "/api/v1/service/emergency/call",
+        json={"device_id": world.glasses_id, "request_id": str(request_id)},
+        headers=SVC,
+    )
+    assert res.status_code == 202, res.text
+    return request_id
+
+
+async def _phone_reports(world: World, request_id: uuid.UUID, *, ok: bool) -> None:
+    async with world.factory() as session:
+        op = await session.get(Operation, request_id)
+        assert op is not None
+        body = DeviceReportRequest.model_validate(
+            {
+                "user_id": op.user_id,
+                "device_id": op.device_id or "phone-1",
+                "request_id": str(request_id),
+                "action": "emergency_call",
+                "execution_state": "succeeded" if ok else "failed",
+                "result": {"called": True} if ok else None,
+                "error": None
+                if ok
+                else {"code": "CALL_PERMISSION_DENIED", "message": "x", "details": {}},
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
+        await DeviceService(session, world.settings).record_report(body)
+
+
+async def test_sim_fallback_sos_counted(world: World) -> None:
+    """SOS qua SIM vào cùng ``usage_sos``: thành công, máy báo lỗi, hết giờ; gửi lặp 1 lần."""
+    ok = await _sim_sos(world)
+    await _sim_sos(world, ok)  # VH gửi lại cùng request_id: không đếm đôi
+    await _phone_reports(world, ok, ok=True)
+    failed = await _sim_sos(world)
+    await _phone_reports(world, failed, ok=False)
+    lost = await _sim_sos(world)
+    timeout = TimeoutWorker(world.factory, world.settings)
+    await timeout.run_once(now=datetime.now(UTC) + timedelta(hours=1))
+
+    rows = {r.sos_id: r for r in await world.rows(UsageSos)}
+    assert set(rows) == {ok, failed, lost}
+    assert (rows[ok].status, rows[ok].error_code) == ("success", None)
+    assert (rows[failed].status, rows[failed].error_code) == ("failed", "CALL_PERMISSION_DENIED")
+    assert (rows[lost].status, rows[lost].error_code) == ("failed", "RESULT_TIMEOUT")
+    assert all(r.owner_hash and r.device_hash for r in rows.values())
+    totals = await _owner_totals(world)
+    assert totals["sos"] == 3
+
+
+async def test_other_actions_do_not_touch_sos(world: World) -> None:
+    """Lệnh điện thoại khác (vd. lấy vị trí) không tạo hàng SOS."""
+    res = await world.client.post(
+        "/api/v1/service/location/get",
+        json={"device_id": world.glasses_id, "request_id": str(uuid.uuid4())},
+        headers=SVC,
+    )
+    assert res.status_code == 202, res.text
+    assert Action.LOCATION_GET.value == "location_get"
+    assert await world.rows(UsageSos) == []

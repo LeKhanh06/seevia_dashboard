@@ -2,7 +2,9 @@
 
 Statistics tables never hold a raw glasses ``device_id`` or ``public_user_id``; they hold
 ``HMAC-SHA256(USAGE_ID_KEY, "<kind>:<id>")``. ``/me/stats`` recomputes the owner's pseudonym
-from the authenticated identity to filter, and admin responses never include either value.
+from the authenticated identity to filter. Admin statistics responses (``/admin/stats/*``) never
+include a pseudonym; the directory endpoints (``/admin/accounts``, ``/admin/devices``) list the
+real account/glasses ids from the main tables, as the dashboard contract requires.
 """
 
 from __future__ import annotations

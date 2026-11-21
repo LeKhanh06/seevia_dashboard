@@ -234,3 +234,28 @@ def test_active_only_from_real_use() -> None:
     )
     result = aggregate_day(rows, date(2026, 11, 16), VN)
     assert result.active == {("o1", "d1")}
+
+
+def test_ocr_live_align_counted_once() -> None:
+    """`align_ms` có ở cả lượt lẫn phiên `ocr_live`: histogram căn khung chỉ đếm một lần."""
+    rows = Layer2Rows(
+        attempts=[
+            _attempt("2026-11-16 09:00:00", "2026-11-16 09:00:12", "success", align_ms=4000),
+        ],
+        tasks=[_task("2026-11-16 09:00:00", "success", 1)],
+        sessions=[
+            SessionRow(
+                "ocr_live",
+                "o1",
+                "d1",
+                None,
+                vn("2026-11-16 09:00:01"),
+                None,
+                vn("2026-11-16 09:00:11"),
+                "done",
+                4000,
+            )
+        ],
+    )
+    result = aggregate_day(rows, date(2026, 11, 16), VN)
+    assert sum(_hist(result, "align_hist")) == 1

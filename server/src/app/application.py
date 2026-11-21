@@ -18,6 +18,7 @@ from app.api.preferences import router as preferences_router
 from app.api.service import router as service_router
 from app.api.status import router as status_router
 from app.api.support import router as support_router
+from app.api.usage import UsageBodyLimitMiddleware
 from app.api.usage import router as usage_router
 from app.config import Settings
 from app.errors import register_exception_handlers
@@ -41,6 +42,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     # Middleware
     application.add_middleware(RequestCorrelationMiddleware)
+    application.add_middleware(UsageBodyLimitMiddleware)
     if settings.admin_cors_origins:
         # Chỉ các origin dashboard đã cấu hình; token đi qua header, không dùng cookie.
         application.add_middleware(

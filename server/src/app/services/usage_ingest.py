@@ -9,6 +9,7 @@ insert is new, so resending a batch is a no-op beyond the ``duplicates`` count.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -39,6 +40,19 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
+_UUID_TEXT_LEN = 36
+
+
+def _uuid_text(value: object) -> str | None:
+    """``value`` khi là UUID hợp lệ (dạng chuẩn), ngược lại None."""
+    if not isinstance(value, str) or len(value) > _UUID_TEXT_LEN:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        return None
+
+
 class UsageIngestService:
     """Write path of the usage statistics."""
 
@@ -56,7 +70,8 @@ class UsageIngestService:
         events: list[tuple[int, UsageEventIn]] = []
         for index, raw in enumerate(batch.events):
             event_id = raw.get("event_id")
-            shown_id = event_id if isinstance(event_id, str) else None
+            # Chỉ trả lại mã đúng dạng UUID: không phản hồi lại chuỗi tuỳ ý của client.
+            shown_id = _uuid_text(event_id)
             model = EVENT_MODELS.get(str(raw.get("type")))
             if model is None:
                 rejected.append((index, RejectedEvent(event_id=shown_id, code="UNKNOWN_TYPE")))

@@ -104,7 +104,8 @@ def _user_out(admin: AdminUser) -> AdminUserOut:
 @router.post("/auth/login", response_model=AdminLoginOut)
 async def admin_login(body: AdminLoginIn, request: Request, session: Db) -> AdminLoginOut:
     """Email + password -> bearer token (``expires_in`` seconds)."""
-    result = await _service(request, session).login(body.email, body.password)
+    client_ip = request.client.host if request.client else None
+    result = await _service(request, session).login(body.email, body.password, client_ip)
     return AdminLoginOut(
         token=result.token, expires_in=result.expires_in, user=_user_out(result.admin)
     )

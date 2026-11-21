@@ -15,6 +15,7 @@ from app.adapters.delivery import get_delivery_adapter
 from app.repositories.operation import OperationRepository
 from app.services.call import CallService
 from app.services.operation import wants_callback
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -65,6 +66,9 @@ class TimeoutWorker:
                     schedule_callback=wants_callback(self._settings, operation.client_id),
                 ):
                     count += 1
+                    await AbUsageRecorder(session, self._settings).sim_sos(
+                        operation, state="timed_out"
+                    )
             await session.commit()
 
         if count:

@@ -255,3 +255,23 @@ def test_login_throttle_memory_is_bounded() -> None:
     for i in range(10_050):
         throttle.fail(f"user{i}@example.com")
     assert len(throttle._failures) <= 10_000  # noqa: SLF001
+
+
+def test_login_throttle_limits_one_ip_across_emails() -> None:
+    """One client spraying many emails is stopped by the per-IP limit; other clients are not."""
+    throttle = LoginThrottle(max_failures_ip=50)
+    for i in range(50):
+        throttle.fail(f"user{i}@example.com", "203.0.113.7")
+    assert throttle.blocked("fresh@example.com", "203.0.113.7")
+    assert not throttle.blocked("fresh@example.com", "198.51.100.1")
+    assert not throttle.blocked("fresh@example.com")
+
+
+def test_login_throttle_spray_keeps_locked_email() -> None:
+    """Filling the table with one-off emails must not unlock an email that is already locked."""
+    throttle = LoginThrottle()
+    for _ in range(5):
+        throttle.fail("kh@example.com")
+    for i in range(10_050):
+        throttle.fail(f"user{i}@example.com")
+    assert throttle.blocked("kh@example.com")

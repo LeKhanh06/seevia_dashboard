@@ -14,6 +14,8 @@ from uuid import UUID  # noqa: TC003
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
 
 MAX_BATCH_EVENTS = 500
+# Trần byte thân một lô (VH ~0,3-1 KB/sự kiện, tự cắt lô dưới 1 MiB): chặn trước khi parse.
+MAX_BATCH_BYTES = 2 * 1024 * 1024
 
 Feature = Literal[
     "ocr",

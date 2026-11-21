@@ -319,8 +319,8 @@ def aggregate_day(  # noqa: C901, PLR0912, PLR0915 -- one pass per row family, k
             if s.kind == "alert_mode":
                 outcome = "failed" if s.end_reason == "error" else "completed"
                 _use(m, hourly, s.started_at.astimezone(tz).hour, feature, outcome)
-            if s.align_ms is not None:
-                m["align_hist"][bisect_left(BUCKETS_MS, s.align_ms)] += 1
+            # `align_ms` của phiên ocr_live trùng với mốc của lượt (attempt_marks) đã đếm ở trên:
+            # không cộng lần nữa (histogram căn khung đếm theo lượt, gắn với chức năng ocr_live).
             if s.ended_at is not None:
                 _bump(m["session_ended"], s.kind)
                 m["session_ended_seconds"][s.kind] = (

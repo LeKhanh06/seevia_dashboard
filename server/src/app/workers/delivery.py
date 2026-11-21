@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from app.adapters.delivery import DeliveryOutcomeStatus, get_delivery_adapter
 from app.repositories.device import DeviceRepository
 from app.repositories.operation import OperationRepository
+from app.services.usage_ab import AbUsageRecorder
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -115,11 +116,14 @@ class DeliveryWorker:
                     "message": reason,
                     "details": {},
                 }
-                await repo.record_delivery_permanent_failure(
+                if await repo.record_delivery_permanent_failure(
                     request_id=op.request_id,
                     lease_until=locked_until,
                     error=error_payload,
-                )
+                ):
+                    await AbUsageRecorder(session, self._settings).sim_sos(
+                        op, state="failed", error_code="DELIVERY_FAILED"
+                    )
 
             await session.commit()
 

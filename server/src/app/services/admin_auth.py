@@ -35,6 +35,7 @@ _DKLEN = 32
 _PREFIX: Final = "scrypt"
 AVATAR_MAX_BYTES: Final = 256 * 1024
 _LOGIN_MAX_FAILURES: Final = 5
+_LOGIN_MAX_FAILURES_IP: Final = 50
 _LOGIN_WINDOW_S: Final = 900.0
 
 
@@ -71,7 +72,7 @@ _DUMMY_HASH: Final = hash_password(secrets.token_urlsafe(16))
 # scrypt costs ~16 MiB and tens of ms of CPU: run it off the event loop (VH and phone requests keep
 # flowing during a login burst) and at most a few at a time (memory stays bounded).
 _SCRYPT_SLOTS: Final = threading.BoundedSemaphore(4)
-_MAX_TRACKED_EMAILS: Final = 10_000
+_MAX_TRACKED_KEYS: Final = 10_000
 
 
 def _guarded_verify(password: str, stored: str) -> bool:
@@ -138,46 +139,72 @@ def avatar_url(admin: AdminUser) -> str | None:
 
 
 class LoginThrottle:
-    """Per-email failed-login counter in a sliding window (in-process)."""
+    """Failed-login counter in a sliding window (in-process), per email AND per client IP.
+
+    Per email: ``max_failures`` (5) locks that email. Per IP: ``max_failures_ip`` (50, across all
+    emails) stops one client from spraying many emails. The IP limit is high on purpose: behind a
+    reverse proxy every admin shares one address.
+    """
 
     def __init__(
-        self, max_failures: int = _LOGIN_MAX_FAILURES, window_s: float = _LOGIN_WINDOW_S
+        self,
+        max_failures: int = _LOGIN_MAX_FAILURES,
+        window_s: float = _LOGIN_WINDOW_S,
+        max_failures_ip: int = _LOGIN_MAX_FAILURES_IP,
     ) -> None:
-        """Configure the limit."""
+        """Configure the limits."""
         self._max = max_failures
+        self._max_ip = max_failures_ip
         self._window = window_s
         self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
-    def _recent(self, email: str, now: float) -> list[float]:
-        kept = [t for t in self._failures.get(email, []) if now - t < self._window]
+    def _recent(self, key: str, now: float) -> list[float]:
+        kept = [t for t in self._failures.get(key, []) if now - t < self._window]
         if kept:
-            self._failures[email] = kept
+            self._failures[key] = kept
         else:
-            self._failures.pop(email, None)
+            self._failures.pop(key, None)
         return kept
 
-    def blocked(self, email: str) -> bool:
-        """Tell whether ``email`` reached the failure limit inside the window."""
-        with self._lock:
-            return len(self._recent(email, time.monotonic())) >= self._max
-
-    def fail(self, email: str) -> None:
-        """Record one failure."""
+    def blocked(self, email: str, ip: str | None = None) -> bool:
+        """Tell whether ``email`` (or client ``ip``) reached its limit inside the window."""
         with self._lock:
             now = time.monotonic()
-            if len(self._failures) >= _MAX_TRACKED_EMAILS:
-                # Bounded memory under an email-spraying attack: forget expired windows first.
-                for key in list(self._failures):
-                    self._recent(key, now)
-                if len(self._failures) >= _MAX_TRACKED_EMAILS:
-                    self._failures.clear()
-            self._failures[email] = [*self._recent(email, now), now]
+            if len(self._recent(f"e:{email}", now)) >= self._max:
+                return True
+            return ip is not None and len(self._recent(f"i:{ip}", now)) >= self._max_ip
+
+    def fail(self, email: str, ip: str | None = None) -> None:
+        """Record one failure for the email and the client IP."""
+        with self._lock:
+            now = time.monotonic()
+            keys = [f"e:{email}"] + ([f"i:{ip}"] if ip is not None else [])
+            if len(self._failures) + len(keys) > _MAX_TRACKED_KEYS:
+                self._evict(now)
+            for key in keys:
+                self._failures[key] = [*self._recent(key, now), now]
+
+    def _evict(self, now: float) -> None:
+        """Bounded memory under spraying: drop expired windows, then the keys closest to zero.
+
+        Keys with the fewest failures go first, so a spray of one-off emails cannot push out an
+        email that is already locked (the old version cleared the whole table).
+        """
+        for key in list(self._failures):
+            self._recent(key, now)
+        overflow = len(self._failures) - _MAX_TRACKED_KEYS // 2
+        if overflow > 0:
+            ranked = sorted(
+                self._failures, key=lambda k: (len(self._failures[k]), self._failures[k][-1])
+            )
+            for key in ranked[:overflow]:
+                del self._failures[key]
 
     def reset(self, email: str) -> None:
-        """Forget failures after a successful login."""
+        """Forget the email's failures after a successful login (the IP count stays)."""
         with self._lock:
-            self._failures.pop(email, None)
+            self._failures.pop(f"e:{email}", None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,17 +238,17 @@ class AdminAuthService:
         self._ttl_s = ttl_s
         self._throttle = throttle
 
-    async def login(self, email: str, password: str) -> LoginResult:
+    async def login(self, email: str, password: str, client_ip: str | None = None) -> LoginResult:
         """Verify credentials and issue a session token."""
         key = normalize_email(email)
-        if self._throttle.blocked(key):
+        if self._throttle.blocked(key, client_ip):
             raise AdminApiError(
                 429, "too_many_attempts", "Đăng nhập sai quá nhiều lần, thử lại sau 15 phút."
             )
         admin = await self._repo.get_by_email(key)
         ok = await verify_password_async(password, admin.password_hash if admin else _DUMMY_HASH)
         if admin is None or not ok:
-            self._throttle.fail(key)
+            self._throttle.fail(key, client_ip)
             raise _invalid_credentials()
         self._throttle.reset(key)
         now = datetime.now(UTC)

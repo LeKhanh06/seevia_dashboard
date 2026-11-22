@@ -34,12 +34,12 @@ function periodOf(query) {
   // Chỉ các ngày/giờ ĐÃ QUA mới có số liệu: kỳ chưa kết thúc (tuần này, tháng này, hôm nay) không có dữ liệu tương lai.
   const nowVn = new Date(Date.now() + 7 * 3600000);
   const elapsed = clamp(Math.round((utc(today) - utc(from)) / MS_DAY) + 1, 0, days);
-  const nowHour = nowVn.getUTCHours();
+  const nowHour = nowVn.getUTCHours(), hourFrac = (nowVn.getUTCMinutes() * 60 + nowVn.getUTCSeconds()) / 3600;   // giờ đang chạy tính theo phần đã qua → "Hôm nay" tăng dần
   const exactWeek = false;   // số liệu luôn được phân bổ theo quy mô VOLUME, không dùng mảng cố định của tuần thiết kế
   // Hôm nay: chỉ tính phần trăm số lượt đã diễn ra tới giờ hiện tại (theo hình dạng trong ngày).
-  const shape = D.HOUR_SHAPE, dayShare = from === to && from === today ? shape.slice(0, nowHour + 1).reduce((x, y) => x + y, 0) / shape.reduce((x, y) => x + y, 0) : 1;
+  const shape = D.HOUR_SHAPE, dayShare = from === to && from === today ? (shape.slice(0, nowHour).reduce((x, y) => x + y, 0) + shape[nowHour] * hourFrac) / shape.reduce((x, y) => x + y, 0) : 1;
   return {
-    period: query.period || "week", from, to, days, dates, exactWeek, elapsed, today, nowHour, K: ((from === to ? dayShare : elapsed) / 7) * D.VOLUME,
+    period: query.period || "week", from, to, days, dates, exactWeek, elapsed, today, nowHour, hourFrac, K: ((from === to ? dayShare : elapsed) / 7) * D.VOLUME,
     compare_from: addDays(from, -days), compare_to: addDays(from, -1),
   };
 }
@@ -57,7 +57,7 @@ function seriesFor(p) {
   let buckets, uses, prev, owners, prevOwners;
   if (hourly) {
     buckets = Array.from({ length: 24 }, (_, h) => `${p.from}T${String(h).padStart(2, "0")}:00:00+07:00`);
-    const live = p.from === p.today ? D.HOUR_SHAPE.map((w, h) => (h <= p.nowHour ? w : 0)) : D.HOUR_SHAPE;   // giờ chưa tới: chưa có dữ liệu
+    const live = p.from === p.today ? D.HOUR_SHAPE.map((w, h) => (h < p.nowHour ? w : h === p.nowHour ? w * p.hourFrac : 0)) : D.HOUR_SHAPE;   // giờ chưa tới: chưa có dữ liệu
     uses = distribute(total, live);
     prev = distribute(Math.round(D.BASE_USES * (p.days / 7) * D.VOLUME * 0.93), D.HOUR_SHAPE.map((w, i) => w * (0.8 + 0.4 * jit(i, 3))));
     owners = uses.map(u => (u ? Math.min(D.DAILY_OWNERS, Math.ceil(u / 12)) : 0));
@@ -225,6 +225,96 @@ function quality(p) {
   };
 }
 
+// ---- Chi phí AI: dòng như bảng usage_llm_daily của AB, gộp + tính tiền theo đúng quy tắc của AB (services/llm_cost.py) ----
+const LLM_PRICES = [
+  { model: "gemini-3.8-flash", to: "2026-12-31", input: 0.75, output: 3.75, cached: 0.075 },
+  { model: "gemini-3.8-flash", from: "2027-01-01", input: 1.5, output: 7.5, cached: 0.15 },
+  { model: "gemini-3.5-flash-lite", input: 0.3, output: 2.5, cached: 0.03 },
+];
+const LLM_FREE = new Set(["uit", "9router"]);
+const LLM_COMPARE = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];   // mô hình đầu = số "Quy đổi" chính (what_if_model)
+// [chức năng, tỷ trọng lượt, token vào / lượt, token ra / lượt, ảnh / lượt]
+const LLM_FEATURES = [["ocr", 81, 1450, 170, 1], ["space", 38, 1180, 120, 1], ["money", 31, 520, 6, 1], ["ask", 25, 1260, 140, 1], ["chat", 24, 820, 160, 0],
+  ["find", 20, 1150, 80, 1], ["call", 18, 380, 18, 0], ["message_send", 14, 520, 40, 0], ["music", 10, 300, 12, 0], ["navigation", 8, 340, 20, 0]];
+const baseModel = m => String(m).split("/").pop().toLowerCase().replace(/-(minimal|low|medium|high)$/, "");
+const priceOf = (model, day) => LLM_PRICES.filter(x => x.model === baseModel(model) && (!x.from || day >= x.from) && (!x.to || day <= x.to)).pop() || null;
+function llmCost(price, row) {
+  if (!price) return null;
+  const cached = Math.min(row.cached_tokens, row.in_tokens);
+  return ((row.in_tokens - cached) * price.input + cached * (price.cached ?? price.input) + row.out_tokens * price.output) / 1e6;
+}
+function llmRows(p) {
+  const rows = [], uses = Math.round(D.BASE_USES * p.K);
+  const perDay = distribute(uses, p.dates.map((d, i) => (i < p.elapsed ? D.WEEK_USES[weekdayOf(d) - 1] : 0)));
+  const add = (day, feature, provider, model, purpose, status, calls, attempts, inT, outT, extra = {}) => {
+    if (calls > 0) rows.push({ day, feature, provider, model, purpose, status, calls, attempts, in_tokens: Math.round(inT), out_tokens: Math.round(outT),
+      reasoning_tokens: extra.reasoning || 0, cached_tokens: Math.round(extra.cached || 0), images: extra.images || 0, estimated_calls: extra.estimated || 0, latency_ms_sum: Math.round(extra.latency || 0) });
+  };
+  p.dates.forEach((day, di) => {
+    if (!perDay[di]) return;
+    const split = distribute(perDay[di], LLM_FEATURES.map(f => f[1]));
+    LLM_FEATURES.forEach(([feature, , inT, outT, img], fi) => {
+      const n = split[fi]; if (!n) return;
+      const trial = Math.round(n * 0.05), main = n - trial;   // ~5% lượt thử nhánh Gemini 3.5 Flash-Lite qua 9router
+      const answer = feature === "money" ? "money" : feature === "ocr" ? "ocr" : "answer";
+      add(day, feature, "uit", "gemma-4-26b", "classify", "ok", main, main, main * 310, main * 3, { latency: main * 380 });
+      if (["call", "message_send", "music", "navigation"].includes(feature)) add(day, feature, "uit", "gemma-4-26b", "extract", "ok", main, 0, main * 420, main * 28, { latency: main * 520 });
+      add(day, feature, "uit", "gemma-4-26b", answer, "ok", main, 0, main * inT, main * outT, { images: main * img, cached: main * inT * 0.35, latency: main * 1250 });
+      const cancelled = Math.round(main * 0.12 * jit(di + fi, 6));
+      add(day, feature, "uit", "gemma-4-26b", "answer", "cancelled", cancelled, 0, cancelled * inT, cancelled * outT * 0.3, { estimated: cancelled, latency: cancelled * 600 });
+      add(day, feature, "9router", "ag/gemini-3.5-flash-lite", answer, "ok", trial, trial, trial * (inT + 2000), trial * outT, { images: trial * img, latency: trial * 1300 });
+    });
+    const errors = Math.round(perDay[di] * 0.02);
+    add(day, "chat", "uit", "gemma-4-26b", "answer", "error", errors, 0, 0, 0, { latency: errors * 900 });
+    const warm = Math.round(perDay[di] * 0.4);
+    add(day, "none", "uit", "gemma-4-26b", "prewarm", "ok", warm, 0, warm * 900, warm, { latency: warm * 220 });
+  });
+  return rows;
+}
+function llm(p) {
+  const rows = llmRows(p);
+  const blank = () => ({ calls: 0, estimated_calls: 0, in_tokens: 0, out_tokens: 0, reasoning_tokens: 0, cached_tokens: 0, images: 0, latency_ms_sum: 0, cost_actual: 0, cost_list: 0, cost_what_if: 0, unpriced_calls: 0 });
+  const SUMS = ["calls", "estimated_calls", "in_tokens", "out_tokens", "reasoning_tokens", "cached_tokens", "images", "latency_ms_sum"];
+  const r6 = v => Math.round(v * 1e6) / 1e6;
+  const finish = acc => { const { latency_ms_sum, ...rest } = acc; return { ...rest, avg_latency_ms: acc.calls ? Math.round(latency_ms_sum / acc.calls) : null, cost_actual: r6(acc.cost_actual), cost_list: r6(acc.cost_list), cost_what_if: r6(acc.cost_what_if) }; };
+  const totals = blank(), groups = { day: new Map(), feature: new Map(), purpose: new Map(), model: new Map() };
+  const waste = { cancelled_calls: 0, cancelled_tokens: 0, cancelled_cost_list: 0, cancelled_cost_what_if: 0, prewarm_calls: 0, prewarm_tokens: 0, prewarm_cost_list: 0, prewarm_cost_what_if: 0, error_calls: 0 };
+  const attemptsBy = {};
+  const alts = LLM_COMPARE.map(model => ({ model, cost: 0, priced: false }));
+  for (const row of rows) {
+    const listed = llmCost(priceOf(row.model, row.day), row), actual = LLM_FREE.has(row.provider) ? 0 : listed || 0;
+    const alt = llmCost(priceOf(LLM_COMPARE[0], row.day), row) || 0;
+    const keys = { day: row.day, feature: row.feature, purpose: row.purpose, model: `${row.provider}\u0000${row.model}` };
+    for (const acc of [totals, ...Object.entries(keys).map(([g, k]) => { if (!groups[g].has(k)) groups[g].set(k, blank()); return groups[g].get(k); })]) {
+      SUMS.forEach(k => { acc[k] += row[k]; });
+      acc.cost_actual += actual; acc.cost_what_if += alt;
+      if (listed === null) acc.unpriced_calls += row.calls; else acc.cost_list += listed;
+    }
+    const tokens = row.in_tokens + row.out_tokens;
+    if (row.status === "error") waste.error_calls += row.calls;
+    for (const kind of [row.status === "cancelled" && "cancelled", row.purpose === "prewarm" && "prewarm"].filter(Boolean)) {
+      waste[`${kind}_calls`] += row.calls; waste[`${kind}_tokens`] += tokens; waste[`${kind}_cost_list`] += listed || 0; waste[`${kind}_cost_what_if`] += alt;
+    }
+    if (row.feature !== "none") attemptsBy[row.feature] = (attemptsBy[row.feature] || 0) + row.attempts;
+    alts.forEach(a => { const c = llmCost(priceOf(a.model, row.day), row); if (c !== null) { a.cost += c; a.priced = true; } });
+  }
+  const attempts = Object.values(attemptsBy).reduce((x, y) => x + y, 0);
+  const sorted = m => [...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  Object.keys(waste).forEach(k => { if (k.includes("cost")) waste[k] = r6(waste[k]); });
+  return {
+    range: rangeOf(p), currency: "USD", what_if_model: LLM_COMPARE[0], usd_vnd: 26300, attempts,
+    totals: finish(totals), waste,
+    by_day: sorted(groups.day).map(([day, acc]) => ({ day, ...finish(acc) })),
+    by_feature: sorted(groups.feature).map(([feature, acc]) => {
+      const out = finish(acc), n = attemptsBy[feature] || 0;
+      return { feature, ...out, attempts: n, cost_list_per_attempt: n ? r6(out.cost_list / n) : null, cost_what_if_per_attempt: n ? r6(out.cost_what_if / n) : null };
+    }),
+    by_purpose: sorted(groups.purpose).map(([purpose, acc]) => ({ purpose, ...finish(acc) })),
+    by_model: sorted(groups.model).map(([k, acc]) => { const [provider, model] = k.split("\u0000"); return { provider, model, ...finish(acc) }; }),
+    what_if: alts.map(a => ({ model: a.model, cost: r6(a.cost), priced: a.priced, per_attempt: attempts && a.priced ? r6(a.cost / attempts) : null })),
+  };
+}
+
 function engagement(p) {
   const s = seriesFor(p);
   return {
@@ -332,6 +422,7 @@ function route(method, path, query, body, token) {
     case "quality": return ok(quality(p));
     case "engagement": return ok(engagement(p));
     case "safety": return ok(safety(p));
+    case "llm": return ok(llm(p));
     case "errors": return ok(errorsList(p, query));
     default: break;
   }

@@ -38,6 +38,10 @@
 .stack-seg { transform-origin: left; animation: seg-grow 800ms var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms); }
 .tooltip { animation: fade 120ms var(--ease); }
 
+/* Tự cập nhật: phần vẽ lại không chạy hiệu ứng vào trang (cột co giãn bằng JS, số chạy bằng countUp) */
+.is-live .is-entering *, .is-live .donut-seg, .is-live .donut-total, .is-live .donut-unit, .is-live .heat-cell, .is-live .stack-seg { animation: none !important; }
+.is-live .is-entering .chart-line { stroke-dasharray: none; }
+
 /* Hover, focus, chuyển màu */
 .kpi-card, .detail-card { transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
 @media (hover: hover) { .kpi-card:hover, .detail-card:hover { transform: translateY(-2px); border-color: var(--accent-text); } }

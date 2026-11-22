@@ -1,6 +1,6 @@
 /*
  * Kiểm tra chéo dữ liệu mẫu (chạy khi USE_MOCK = true, báo lỗi ra console nếu số liệu không khớp nhau):
- * tổng kỳ = tổng theo ngày = tổng heatmap = tổng nhóm + SOS = tổng trạng thái; SOS; mức cảnh báo = 100%; lỗi các trang = bảng lỗi.
+ * tổng kỳ = tổng theo ngày = tổng heatmap = tổng nhóm + SOS = tổng trạng thái; SOS; mức cảnh báo = 100%; lỗi các trang = bảng lỗi; Chi phí AI: các nhóm = tổng.
  * Thuần JS, chạy được cả trong Node: node -e "import('./validate.js').then(m=>console.log(m.validateMock()))"
  */
 import { rawRoute, GROUP_KEYS } from "./handler.js";
@@ -44,6 +44,14 @@ export function validateMock() {
     }
     const errs = get("/admin/stats/errors", { ...q, page_size: 100 });
     eq(t("tổng lỗi bảng Lỗi hệ thống = tổng cột Lỗi ở các trang nhóm"), sum(errs.items.map(e => e.count)), errorsOnPages);
+    const llm = get("/admin/stats/llm", q), close = (x, y) => Math.abs(x - y) < 1e-4;
+    for (const g of ["by_day", "by_feature", "by_purpose", "by_model"]) {
+      eq(t(`Chi phí AI: lần gọi ${g} = tổng`), sum(llm[g].map(x => x.calls)), llm.totals.calls);
+      eq(t(`Chi phí AI: token vào ${g} = tổng`), sum(llm[g].map(x => x.in_tokens)), llm.totals.in_tokens);
+      if (!close(sum(llm[g].map(x => x.cost_what_if)), llm.totals.cost_what_if)) problems.push(t(`Chi phí AI: quy đổi ${g} ≠ tổng`));
+    }
+    eq(t("Chi phí AI: lượt sử dụng = tổng lượt các chức năng"), sum(llm.by_feature.map(f => f.attempts)), llm.attempts);
+    if (!close(llm.what_if[0].cost, llm.totals.cost_what_if)) problems.push(t("Chi phí AI: what_if ≠ totals.cost_what_if"));
   }
   const week = PERIODS.week, community = get("/admin/stats/community", week);
   eq("tổng tài khoản (Cộng đồng) = số tài khoản trong danh sách", community.total_accounts, ACCOUNTS.length);

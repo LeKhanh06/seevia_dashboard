@@ -15,7 +15,7 @@ const CHROME = process.env.CHROME || [
   "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "/usr/bin/google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ].find(p => fs.existsSync(p));
-const ROUTES = ["overview", "see-read", "find", "connect", "go", "community", "time", "quality", "engagement", "safety", "accounts", "devices", "errors", "config",
+const ROUTES = ["overview", "see-read", "find", "connect", "go", "community", "time", "quality", "engagement", "safety", "ai-cost", "accounts", "devices", "errors", "config",
   "account-detail/TK-0001", "device-detail/KINH-01", "profile"];
 const BAD = /\[object|undefined|\bNaN\b/;
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".woff2": "font/woff2" };

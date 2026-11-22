@@ -90,8 +90,10 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
         return
     message = llm.user_message(_prompt(mode), image)
     digit_probs: list[float] = []
+    got_logprobs = [False]
 
     def seen(items: list[dict]) -> None:
+        got_logprobs[0] = True
         digit_probs.extend(math.exp(it["logprob"]) for it in items
                            if it.get("logprob") is not None and any(c.isdigit() for c in it.get("token", "")))
 
@@ -124,6 +126,10 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
     text = "".join(reply).strip()
     if hedge and digit_probs and min(digit_probs) < config.OCR_DIGIT_HEDGE_PROB:
         logger.info("đọc chữ: chữ số kém chắc (p min %.3f) -> cảnh báo", min(digit_probs))
+        yield " " + DIGIT_HEDGE
+    elif hedge and not got_logprobs[0] and any(c.isdigit() for c in text):
+        # Nhánh không trả logprobs (Gemini dự phòng qua 9router): không biết chữ số chắc đến đâu -> vẫn cảnh báo.
+        logger.info("đọc chữ: không có logprobs, có chữ số -> cảnh báo")
         yield " " + DIGIT_HEDGE
     if text and mode != "money":
         _remember(device, text)

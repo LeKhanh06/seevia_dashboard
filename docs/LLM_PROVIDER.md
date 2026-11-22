@@ -87,6 +87,47 @@ Lưu ý:
 - `confidence` thấp nghĩa là xác suất dàn trải (ví dụ `severity` ở trên chỉ 0,11); đừng tin `score`/`choice` khi confidence thấp.
 - Lỗi `required properties at '/' are 'model,state,questions'` xuất hiện cả khi sai cấu trúc `questions` (ví dụ mảng, hay thiếu `type`/`instructions`), không chỉ khi thiếu trường.
 
+## Nhánh phụ (Gemini) — dự phòng và chọn theo mục đích
+
+Gemma vẫn là nhánh chính. Nhánh phụ (OpenAI-compatible, `models/llm/client.py` `_Branch("alt")`) dùng cho:
+- **Dự phòng:** nhánh được chọn hỏng TRƯỚC chữ đầu (mọi đường lỗi, 429/5xx, hết giờ kết nối) → thử nhánh kia, chỉ với
+  mục đích trong `LLM_FALLBACK_PURPOSES` (mặc định `answer,ocr,extract,other`). Đã ra chữ rồi mà đứt → lỗi như cũ.
+- **Ép theo mục đích:** `LLM_ROUTE="answer=alt,extract=alt"`. Mục đích: `answer classify extract money ocr stt_pick
+  prewarm other` (đặt bằng `llm_usage.purpose(...)` ở chỗ gọi).
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `LLM_ALT_BASE_URLS` | rỗng (= tắt) | Đường nhánh phụ, phẩy ngăn cách. 9router: `http://localhost:20128/v1` |
+| `LLM_ALT_API_KEY` | rỗng | Khoá Bearer |
+| `LLM_ALT_MODEL` | `ag/gemini-3.5-flash-lite` | Model nhánh phụ |
+| `LLM_ALT_CONNECT_TIMEOUT_S` | `2.0` | Bắt tay TCP |
+| `LLM_ALT_LOGPROBS` / `LLM_ALT_SCHEMA` | `0` / `0` | Đường có trả logprobs / tôn trọng `response_format` json_schema |
+| `LLM_ROUTE` | rỗng | Ép mục đích sang `alt` |
+| `LLM_FALLBACK` / `LLM_FALLBACK_PURPOSES` | `1` / `answer,ocr,extract,other` | Dự phòng |
+
+Body gửi nhánh phụ bỏ `chat_template_kwargs`, `structured_outputs` (chỉ vLLM hiểu), bỏ `logprobs`/`response_format`
+khi đường không hỗ trợ; giữ `stream_options`. `prewarm` chỉ gửi Gemma (`prewarm=alt` → bỏ hẳn). Mỗi nhánh thử ghi một
+`llm_call` (`provider` theo URL, `model` của nhánh): một lần dự phòng = `uit/error` + `9router/ok`.
+
+**Khi không có xác suất (9router):** `generate_choice` nhận nhãn dạng chữ, chuẩn hoá (nháy, dấu câu, hoa thường) và
+bắt buộc nằm trong tập, xác suất `None`. `money=alt` **chỉ có hiệu lực khi `LLM_ALT_LOGPROBS=1`** (không xác suất thì
+không chốt được mệnh giá, và nhãn "không có tiền" không xác suất sẽ nói nhầm "Không thấy tờ tiền nào"); khi bật, ngưỡng
+`MONEY_MIN_PROB` (0,999, đo trên Gemma) phải đo lại cho Gemini (`evaluations/bench/money_vnd.py`). OCR qua nhánh không
+logprobs: có chữ số là luôn kèm câu cảnh báo chữ số (`lanes/ocr_live.py`). Phân loại vẫn chịu
+trần `INTENT_LLM_TIMEOUT_S` (0,8 s): quá giờ → Clef.
+
+**Số đo 2026-11-22 (9router, câu ngắn):**
+
+| Model | Chữ đầu p50 | Thinking | logprobs / JSON enum |
+|---|---|---|---|
+| Gemma UIT | 0,3–1 s | tắt | có / có |
+| `ag/gemini-3.5-flash-lite` | **1,25 s** (1,22–1,28) | 0 | không / bỏ qua |
+| `ag/gemini-3.8-flash` (low/medium/mặc định) | 4,9–5,4 s | 260–425 token, không tắt được (MINIMAL → 400) | không / bỏ qua |
+| `cx/gpt-6.1-sol` | 1,6 s | 0 | không / bỏ qua |
+
+`ag/gemini-3.5-flash` trả "no longer available"; `3.6/3.7-flash`, `4-carbon` 404. Qua 9router mỗi lời gọi bị cộng
+~2.000 token prompt ẩn (Antigravity) — số token vào phồng so với AI Studio thật. 9router chỉ để thử nghiệm.
+
 ## Biến môi trường
 
 | Biến | Dùng cho |

@@ -335,6 +335,25 @@ LLM_CA_BUNDLE = get("LLM_CA_BUNDLE", os.path.join(_ROOT, "certs", "uit-ca-bundle
 LLM_CONNECT_TIMEOUT_S = float(get("LLM_CONNECT_TIMEOUT_S", "0.5"))
 LLM_TIMEOUT_S = float(get("LLM_TIMEOUT_S", "30"))
 LLM_MAX_TOKENS = int(get("LLM_MAX_TOKENS", "400"))
+# Nhánh LLM phụ (Gemini) chạy song song với Gemma — docs/LLM_PROVIDER.md "Nhánh phụ". URL trống = tắt hẳn.
+# 9router (thử nghiệm): http://localhost:20128/v1 + model `ag/gemini-3.5-flash-lite` (chữ đầu ~1,25 s, không thinking,
+# KHÔNG logprobs/JSON enum). AI Studio: https://generativelanguage.googleapis.com/v1beta/openai.
+LLM_ALT_BASE_URLS = tuple(u.strip().rstrip("/") for u in get("LLM_ALT_BASE_URLS", "").split(",") if u.strip())
+LLM_ALT_API_KEY = get("LLM_ALT_API_KEY", "")
+LLM_ALT_MODEL = get("LLM_ALT_MODEL", "ag/gemini-3.5-flash-lite")
+LLM_ALT_CONNECT_TIMEOUT_S = float(get("LLM_ALT_CONNECT_TIMEOUT_S", "2.0"))
+# Đường phụ có trả logprobs / tôn trọng response_format json_schema không (9router: không cả hai).
+LLM_ALT_LOGPROBS = get("LLM_ALT_LOGPROBS", "0") in ("1", "true", "yes")
+LLM_ALT_SCHEMA = get("LLM_ALT_SCHEMA", "0") in ("1", "true", "yes")
+# Ép mục đích sang nhánh phụ: "answer=alt,extract=alt" (mục đích: answer classify extract money ocr stt_pick
+# prewarm other). Rỗng = mọi thứ qua Gemma.
+LLM_ROUTE = get("LLM_ROUTE", "")
+# Nhánh được chọn hỏng TRƯỚC chữ đầu (mọi đường lỗi, 429/5xx) → thử nhánh kia, chỉ với các mục đích dưới đây.
+# classify (trần 0,8 s → Clef), money (không xác suất = luôn từ chối), stt_pick (đã có lùi `conf`) không dự phòng.
+LLM_FALLBACK = get("LLM_FALLBACK", "1") not in ("0", "false", "no")
+LLM_FALLBACK_PURPOSES = tuple(
+    p.strip() for p in get("LLM_FALLBACK_PURPOSES", "answer,ocr,extract,other").split(",") if p.strip()
+)
 # Cạnh dài ảnh gửi cho Gemma. Ảnh UXGA 1600px gửi nguyên là nhiều token ảnh hơn
 # và upload lâu hơn mà Gemma vẫn thu về độ phân giải nội bộ của nó.
 LLM_IMAGE_MAX_SIDE = int(get("LLM_IMAGE_MAX_SIDE", "896"))

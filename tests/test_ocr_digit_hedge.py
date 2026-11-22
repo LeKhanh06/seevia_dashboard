@@ -59,3 +59,34 @@ def test_hedge_off_does_not_request_logprobs(monkeypatch):
 def test_hedge_not_saved_for_reread(monkeypatch):
     _read(monkeypatch, [("Mã số ", 0.9), ("12", 0.5), ("34 ở cuối trang.", 0.9)])
     assert ocr_live.DIGIT_HEDGE not in (ocr_live.last_text("test-hedge") or "")
+
+
+def _fake_stream_no_logprobs(pieces: list[str]):
+    """Nhánh không trả logprobs (Gemini qua 9router): on_logprobs không bao giờ được gọi."""
+    async def fake(messages, max_tokens=None, on_logprobs=None, **extra):
+        for text in pieces:
+            yield text
+    return fake
+
+
+def test_digits_without_any_logprobs_are_hedged(monkeypatch):
+    """Không biết độ chắc của chữ số (nhánh không logprobs) = coi như không chắc: vẫn cảnh báo."""
+    monkeypatch.setattr(llm, "stream_chat", _fake_stream_no_logprobs(["Số điện thoại ", "0912 345 678 ở cuối."]))
+    monkeypatch.setattr(config, "OCR_DIGIT_HEDGE_PROB", 0.9)
+
+    async def run():
+        return "".join([p async for p in ocr_live.read_image(_jpeg(), "normal", "test-hedge-nolp")])
+
+    text = asyncio.run(run())
+    assert text.startswith("Số điện thoại 0912 345 678")
+    assert ocr_live.DIGIT_HEDGE in text
+
+
+def test_no_digits_without_logprobs_not_hedged(monkeypatch):
+    monkeypatch.setattr(llm, "stream_chat", _fake_stream_no_logprobs(["Cửa hàng Phúc Long, ", "mở cửa buổi sáng."]))
+    monkeypatch.setattr(config, "OCR_DIGIT_HEDGE_PROB", 0.9)
+
+    async def run():
+        return "".join([p async for p in ocr_live.read_image(_jpeg(), "normal", "test-hedge-nolp2")])
+
+    assert ocr_live.DIGIT_HEDGE not in asyncio.run(run())

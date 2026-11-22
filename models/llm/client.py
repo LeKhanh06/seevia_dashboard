@@ -17,6 +17,7 @@ import math
 import re
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 import httpx
 
@@ -39,6 +40,12 @@ _client = net.LoopClient(lambda: net.async_client(
 # Thứ tự đường thử. `warm()` xếp lại theo độ trễ đo được; lỗi thì đẩy xuống cuối.
 _order: list[str] = list(config.LLM_BASE_URLS)
 _ping_task: asyncio.Task | None = None
+
+# Nhánh phụ (Gemini): client + đường riêng, không chung pool/CA với Gemma. `_alt_order` rỗng = tắt.
+_alt_client = net.LoopClient(lambda: net.async_client(
+    connect_timeout=config.LLM_ALT_CONNECT_TIMEOUT_S, timeout=config.LLM_TIMEOUT_S,
+))
+_alt_order: list[str] = list(config.LLM_ALT_BASE_URLS)
 
 
 # Đếm request Gemma đang bay (Task 16): bench tải cần biết đỉnh đồng thời và tổng mỗi lượt.
@@ -122,6 +129,109 @@ def _demote(base: str) -> None:
 
 _RETRYABLE = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadError, httpx.RemoteProtocolError)
 
+# ---- Nhánh: Gemma (primary) + nhánh phụ (alt, Gemini) -----------------------------------------
+_VLLM_ONLY = ("chat_template_kwargs", "structured_outputs")
+
+
+@dataclass(frozen=True)
+class _Branch:
+    """Một nhánh model. `primary` dùng đúng `_order`/`_client`/`_body` của Gemma; `alt` đọc `LLM_ALT_*`."""
+
+    name: str  # "primary" | "alt"
+
+    @property
+    def is_alt(self) -> bool:
+        return self.name == "alt"
+
+    @property
+    def order(self) -> list[str]:
+        return _alt_order if self.is_alt else _order
+
+    @property
+    def model(self) -> str:
+        return config.LLM_ALT_MODEL if self.is_alt else config.LLM_MODEL
+
+    @property
+    def logprobs(self) -> bool:
+        return config.LLM_ALT_LOGPROBS if self.is_alt else True
+
+    @property
+    def structured(self) -> bool:
+        """Ép tập nhãn bằng `structured_outputs` của vLLM (chỉ Gemma)."""
+        return not self.is_alt
+
+    def get_client(self) -> httpx.AsyncClient:
+        return (_alt_client if self.is_alt else _client).get()
+
+    def headers(self) -> dict:
+        if not self.is_alt:
+            return _headers()
+        return {"Authorization": f"Bearer {config.LLM_ALT_API_KEY}"} if config.LLM_ALT_API_KEY else {}
+
+    def demote(self, base: str) -> None:
+        if not self.is_alt:
+            _demote(base)
+        elif base in _alt_order and len(_alt_order) > 1:
+            _alt_order.remove(base)
+            _alt_order.append(base)
+
+
+_PRIMARY, _ALT = _Branch("primary"), _Branch("alt")
+
+
+def _branches() -> tuple[_Branch, _Branch | None]:
+    return _PRIMARY, (_ALT if _alt_order else None)
+
+
+def _routes() -> dict[str, str]:
+    out = {}
+    for item in config.LLM_ROUTE.split(","):
+        key, _, val = item.partition("=")
+        if key.strip() and val.strip() in ("alt", "primary"):
+            out[key.strip()] = val.strip()
+    return out
+
+
+def _plan(purpose: str) -> list[_Branch]:
+    """Nhánh theo `LLM_ROUTE` (mặc định Gemma), rồi nhánh kia nếu được dự phòng cho mục đích này."""
+    primary, alt = _branches()
+    if alt is None or purpose == "prewarm":  # prewarm = nạp KV cache của vLLM: chỉ có nghĩa với Gemma
+        return [primary]
+    to_alt = _routes().get(purpose) == "alt"
+    if purpose == "money" and not config.LLM_ALT_LOGPROBS:
+        to_alt = False  # không xác suất = không chốt được mệnh giá, còn có thể nói nhầm "không thấy tờ tiền"
+    first, other = (alt, primary) if to_alt else (primary, alt)
+    if config.LLM_FALLBACK and purpose in config.LLM_FALLBACK_PURPOSES:
+        return [first, other]
+    return [first]
+
+
+def _body_for(branch: _Branch, messages: list[dict], max_tokens: int, stream: bool, **extra) -> dict:
+    """Body cho nhánh. Gemma: `_body` nguyên vẹn. Nhánh phụ: bỏ khoá chỉ vLLM hiểu, bỏ logprobs/schema khi đường
+    không hỗ trợ (9router: gửi cũng bị lờ, chỉ thêm rủi ro lỗi)."""
+    if not branch.is_alt:
+        return _body(messages, max_tokens, stream, **extra)
+    body = _body(messages, max_tokens, stream, **extra)
+    body["model"] = branch.model
+    for key in _VLLM_ONLY:
+        body.pop(key, None)
+    if not config.LLM_ALT_LOGPROBS:
+        body.pop("logprobs", None)
+        body.pop("top_logprobs", None)
+    if not config.LLM_ALT_SCHEMA:
+        body.pop("response_format", None)
+    return body
+
+
+def _normalize_label(text: str, choices: list[str]) -> str | None:
+    """Nhãn từ chữ trơn (nhánh không ép được tập nhãn): bỏ nháy/dấu câu ở hai đầu, hoa thường, khoảng trắng và
+    gạch nối thành `_`, rồi CHỈ nhận khớp nguyên văn. Câu chứa nhãn ("không phải ocr") → None, không đoán."""
+    def key(s: str) -> str:
+        return re.sub(r"[\s\-]+", "_", s.strip().strip("\"'`.,;:!?*").strip().lower())
+
+    lookup = {key(c): c for c in choices}
+    return lookup.get(key(text))
+
 
 def stream_chat(
     messages: list[dict], max_tokens: int | None = None, on_logprobs=None, **extra,
@@ -139,21 +249,47 @@ def stream_chat(
 async def _stream_chat(
     messages: list[dict], max_tokens: int | None, on_logprobs, purpose: str, ledger, extra: dict,
 ) -> AsyncIterator[str]:
+    """Stream theo `_plan(mục đích)`: nhánh hỏng TRƯỚC chữ đầu thì thử nhánh kia; đã ra chữ rồi mà đứt thì lỗi."""
     if on_logprobs is not None:
         extra = {**extra, "logprobs": True, "top_logprobs": 1}
-    body = _body(messages, max_tokens or config.LLM_MAX_TOKENS, True, **extra)
+    plan = _plan(purpose)
+    failures: list[str] = []
+    for i, branch in enumerate(plan):
+        produced = [False]
+        # aclosing: lượt bị cắt (aclose ở ngoài) đóng nhánh con NGAY — httpx đóng, llm_call `cancelled` ghi liền.
+        try:
+            async with contextlib.aclosing(_stream_once(branch, messages, max_tokens, on_logprobs, purpose, ledger,
+                                                        extra, produced)) as stream:
+                async for delta in stream:
+                    yield delta
+            return
+        except LLMError as exc:
+            if produced[0]:
+                raise
+            failures.append(f"{branch.name}: {exc}")
+            if i + 1 < len(plan):
+                logger.warning("LLM %s lỗi (%s), chuyển sang %s", branch.name, exc, plan[i + 1].name)
+    raise LLMError("; ".join(failures) if len(failures) > 1 else failures[0].split(": ", 1)[1])
+
+
+async def _stream_once(
+    branch: _Branch, messages: list[dict], max_tokens: int | None, on_logprobs, purpose: str, ledger,
+    extra: dict, produced: list[bool],
+) -> AsyncIterator[str]:
+    """Một nhánh: chuyển đường trong nhánh chỉ khi CHƯA ra mảnh nào; ghi một `llm_call`."""
+    body = _body_for(branch, messages, max_tokens or config.LLM_MAX_TOKENS, True, **extra)
     prompt_chars, images = llm_usage.prompt_shape(messages)
     t0 = time.monotonic()
-    out_chars, tokens, status, used = 0, None, "error", (_order[0] if _order else "")
+    order = list(branch.order)
+    out_chars, tokens, status, used = 0, None, "error", (order[0] if order else "")
     try:
         last_exc: Exception | None = None
-        for base in list(_order):
+        for base in order:
             used = base
             started = time.monotonic()
-            produced = False
             try:
-                async with _track_async(), _client.get().stream(
-                    "POST", f"{base}/chat/completions", json=body, headers=_headers(),
+                async with _track_async(), branch.get_client().stream(
+                    "POST", f"{base}/chat/completions", json=body, headers=branch.headers(),
                 ) as resp:
                     if resp.status_code >= 500 or resp.status_code == 429:
                         raise LLMError(f"HTTP {resp.status_code}")
@@ -178,9 +314,10 @@ async def _stream_chat(
                         if on_logprobs is not None and (choice.get("logprobs") or {}).get("content"):
                             on_logprobs(choice["logprobs"]["content"])
                         if delta:
-                            if not produced:
-                                logger.info("Gemma token đầu %.2fs (%s)", time.monotonic() - started, base)
-                            produced = True
+                            if not produced[0]:
+                                logger.info("LLM %s token đầu %.2fs (%s)", branch.model, time.monotonic() - started,
+                                            base)
+                            produced[0] = True
                             out_chars += len(delta)
                             yield delta
                 status = "ok"
@@ -188,37 +325,58 @@ async def _stream_chat(
             except asyncio.CancelledError:
                 raise
             except (LLMError, httpx.HTTPError) as exc:
-                if produced:
-                    raise LLMError(f"Gemma đứt giữa chừng: {exc!r}") from exc
+                if produced[0]:
+                    raise LLMError(f"{branch.model} đứt giữa chừng: {exc!r}") from exc
                 last_exc = exc
-                _demote(base)
-        raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+                branch.demote(base)
+        raise LLMError(f"Không gọi được {branch.model}: {last_exc!r}")
     except (asyncio.CancelledError, GeneratorExit):
         status = "cancelled"  # speculation đoán sai làn / lượt bị cắt: token vẫn tốn
         raise
     finally:
         llm_usage.record(
-            provider=llm_usage.provider_of(used), model=config.LLM_MODEL, purpose=purpose, status=status,
+            provider=llm_usage.provider_of(used), model=branch.model, purpose=purpose, status=status,
             tokens=tokens, prompt_chars=prompt_chars, images=images, output_chars=out_chars,
             latency_ms=(time.monotonic() - t0) * 1000, ledger=ledger,
         )
 
 
 async def complete_raw(messages: list[dict], max_tokens: int | None = None, **extra) -> dict:
-    """Như `complete` nhưng trả nguyên `choices[0]` (có `logprobs` nếu yêu cầu)."""
-    body = _body(messages, max_tokens or config.LLM_MAX_TOKENS, False, **extra)
+    """Như `complete` nhưng trả nguyên `choices[0]` (có `logprobs` nếu yêu cầu và nhánh hỗ trợ)."""
+    choice, branch = await _complete_with_branch(messages, max_tokens, **extra)
+    return {**choice, "_branch": branch.name} if branch.is_alt else choice
+
+
+async def _complete_with_branch(messages: list[dict], max_tokens: int | None = None, **extra) -> tuple[dict, _Branch]:
+    """Gọi theo `_plan(mục đích)`; mỗi nhánh thử ghi một `llm_call`. Trả (choice, nhánh đã trả lời)."""
     purpose, ledger = llm_usage.current_purpose("other"), llm_usage.current_ledger()
+    plan = _plan(purpose)
+    failures: list[str] = []
+    for i, branch in enumerate(plan):
+        try:
+            return await _complete_once(branch, messages, max_tokens, purpose, ledger, extra), branch
+        except LLMError as exc:
+            failures.append(f"{branch.name}: {exc}")
+            if i + 1 < len(plan):
+                logger.warning("LLM %s lỗi (%s), chuyển sang %s", branch.name, exc, plan[i + 1].name)
+    raise LLMError("; ".join(failures) if len(failures) > 1 else failures[0].split(": ", 1)[1])
+
+
+async def _complete_once(branch: _Branch, messages: list[dict], max_tokens: int | None, purpose: str, ledger,
+                         extra: dict) -> dict:
+    body = _body_for(branch, messages, max_tokens or config.LLM_MAX_TOKENS, False, **extra)
     prompt_chars, images = llm_usage.prompt_shape(messages)
     t0 = time.monotonic()
-    tokens, status, used, out_chars = None, "error", (_order[0] if _order else ""), 0
+    order = list(branch.order)
+    tokens, status, used, out_chars = None, "error", (order[0] if order else ""), 0
     try:
         last_exc: Exception | None = None
-        for base in list(_order):
+        for base in order:
             used = base
             try:
                 with _track():
-                    resp = await _client.get().post(
-                        f"{base}/chat/completions", json=body, headers=_headers(),
+                    resp = await branch.get_client().post(
+                        f"{base}/chat/completions", json=body, headers=branch.headers(),
                     )
                 if resp.status_code >= 500 or resp.status_code == 429:
                     raise LLMError(f"HTTP {resp.status_code}")
@@ -234,14 +392,14 @@ async def complete_raw(messages: list[dict], max_tokens: int | None = None, **ex
             except (LLMError, httpx.HTTPError, KeyError, ValueError) as exc:
                 last_exc = exc
                 if isinstance(exc, (LLMError, *_RETRYABLE)):
-                    _demote(base)
-        raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+                    branch.demote(base)
+        raise LLMError(f"Không gọi được {branch.model}: {last_exc!r}")
     except asyncio.CancelledError:
         status = "cancelled"
         raise
     finally:
         llm_usage.record(
-            provider=llm_usage.provider_of(used), model=config.LLM_MODEL, purpose=purpose, status=status,
+            provider=llm_usage.provider_of(used), model=branch.model, purpose=purpose, status=status,
             tokens=tokens, prompt_chars=prompt_chars, images=images, output_chars=out_chars,
             latency_ms=(time.monotonic() - t0) * 1000, ledger=ledger,
         )
@@ -312,6 +470,11 @@ async def generate_choice(prompt: str, choices: list[str], max_tokens: int = 8, 
             logprobs=True, top_logprobs=1, structured_outputs={"choice": choices},
         )
     text = (choice["message"].get("content") or "").strip()
+    if choice.get("_branch") == "alt":  # nhánh phụ không ép tập nhãn: chuẩn hoá chữ trơn, không có xác suất
+        label = _normalize_label(text, choices)
+        if label is None:
+            raise LLMError(f"{config.LLM_ALT_MODEL} không trả đúng nhãn: {text[:80]!r}")
+        return label, None
     if text not in choices:
         raise LLMError(f"Gemma không trả đúng nhãn: {text[:80]!r}")
     return text, prefix_prob(choice, text.index(sep) if sep in text else len(text))
@@ -352,7 +515,10 @@ async def generate_json(
 
 
 async def prewarm(messages: list[dict]) -> None:
-    """Nạp prefix vào KV cache của vLLM (`max_tokens=1`), bỏ qua mọi lỗi."""
+    """Nạp prefix vào KV cache của vLLM (`max_tokens=1`), bỏ qua mọi lỗi. Mục đích prewarm ép sang nhánh phụ
+    (`LLM_ROUTE=prewarm=alt`) thì bỏ hẳn: Gemini không có KV cache để nạp, gọi chỉ tốn token."""
+    if _routes().get("prewarm") == "alt" and _branches()[1] is not None:
+        return
     try:
         with llm_usage.purpose("prewarm"):
             await complete(messages, max_tokens=1)

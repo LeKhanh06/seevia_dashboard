@@ -437,7 +437,8 @@ async def _lane_d(ctx: TurnContext, d: Decision, text: str, params: dict | None 
         if blocked:
             if intent != "contact_call":
                 blocked = _MESSAGE_BLOCK.get(blocked, blocked)
-            return Reply(speech=[blocked], intent=intent, lane="D")
+            # Thống kê: cùng mã với handler (handlers/phone.py) — lượt bị chặn là thất bại, không phải thành công.
+            return Reply(speech=[blocked], intent=intent, lane="D", outcome="failed", error_code="CALL_UNAVAILABLE")
     if params is None:
         params = await _params(ctx, intent, text)
     slot = phone.SLOT.get(intent)

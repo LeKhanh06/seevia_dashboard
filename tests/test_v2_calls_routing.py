@@ -299,6 +299,21 @@ def test_post_only_glasses_cannot_call(rig, monkeypatch):
     assert not [p for p, _ in rig.ab if "/messages/unread" not in p]
 
 
+@pytest.mark.parametrize(("intent", "text", "speech"), [
+    ("contact_call", "gọi cho mẹ", call_bridge.NEED_UPDATE),
+    ("message_send", "nhắn cho mẹ là con về muộn", phone_handlers.MSG_NEED_UPDATE),
+    ("message_read", "đọc tin nhắn", phone_handlers.MSG_NEED_UPDATE),
+])
+def test_blocked_call_or_message_counts_as_failed(rig, intent, text, speech):
+    """Thống kê: router chặn gọi/nhắn (kính chưa sẵn sàng) thì lượt là `failed` + CALL_UNAVAILABLE, không phải thành công."""
+    ctx = final_router.TurnContext("dev-khong-phien", "t", None, None)
+    d = Decision(intent, source="gemma", backend="gemma", confidence=1.0)
+    with device_ctx.use("dev-khong-phien", per_device=True):
+        reply = asyncio.run(final_router.route(ctx, d, text))
+    assert list(reply.speech) == [speech]
+    assert (reply.outcome, reply.error_code) == ("failed", "CALL_UNAVAILABLE")
+
+
 def test_bind_after_ended_does_not_resurrect_call(rig):
     """Minor 5: huỷ sớm rồi mới `bind` id của AB thì Call ENDED không được quay lại sổ (rò bộ nhớ)."""
     call = calls.create(None, DEV, "Mẹ", "to_relative")

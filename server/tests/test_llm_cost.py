@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from app.config import Settings
 from app.schemas.usage import EVENT_MODELS
 from app.services import llm_cost
 
@@ -178,3 +179,26 @@ def test_llm_call_event_accepts_counts_only() -> None:
         model.model_validate(_event(purpose="anything"))
     with pytest.raises(ValidationError):
         model.model_validate(_event(in_tokens=-1))
+
+
+def test_flash_lite_price_has_no_end_date() -> None:
+    """Gemini 3.5 Flash-Lite: $0.30 in, $2.50 out, $0.03 cached; no scheduled change."""
+    for day in (date(2026, 11, 22), date(2027, 6, 1)):
+        price = llm_cost.price_of(PRICES, "ag/gemini-3.5-flash-lite", day)
+        assert price is not None
+        assert (price.input, price.output, price.cached) == (0.30, 2.50, 0.03)
+
+
+def test_flash_lite_on_9router_priced_but_free() -> None:
+    """The 9router trial branch costs 0 in fact; its list price uses the Flash-Lite row."""
+    out = _report([_row(provider="9router", model="ag/gemini-3.5-flash-lite")])
+    assert out["totals"]["cost_actual"] == 0
+    assert out["totals"]["cost_list"] == pytest.approx(0.30 + 0.25)
+    assert out["totals"]["unpriced_calls"] == 0
+
+
+def test_default_compare_models_lead_with_flash_lite() -> None:
+    """The chosen Gemini model (3.5 Flash-Lite) leads the what-if; 3.8 Flash stays second."""
+    factory = Settings.model_fields["llm_compare_models"].default_factory
+    assert factory is not None
+    assert factory() == ["gemini-3.5-flash-lite", "gemini-3.8-flash"]  # type: ignore[call-arg]

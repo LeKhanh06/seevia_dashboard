@@ -40,6 +40,8 @@ DEFAULT_PRICES: list[dict[str, Any]] = [
         "output": 7.50,
         "cached": 0.15,
     },
+    # 3.5 Flash-Lite: what VH's Gemini branch runs (ag/gemini-3.5-flash-lite); no change announced.
+    {"model": "gemini-3.5-flash-lite", "input": 0.30, "output": 2.50, "cached": 0.03},
 ]
 _SUFFIX = re.compile(r"-(minimal|low|medium|high)$")
 

@@ -126,10 +126,13 @@ class Settings(BaseSettings):
     # `llm_prices_path`: file JSON bảng giá [{model, from, to, input, output, cached}], USD/1M;
     # rỗng = bảng mặc định trong app/services/llm_cost.py.
     # `llm_free_providers`: nhánh không trả tiền thật (quota UIT, gói 9router).
-    # `llm_compare_models`: model quy đổi "nếu chạy bằng model này". `llm_usd_vnd`: tỷ giá hiển thị.
+    # `llm_compare_models`: model quy đổi "nếu chạy bằng model này"; model đầu = số chính
+    # `what_if_model` (3.5 Flash-Lite = nhánh Gemini đã chọn ở VH). `llm_usd_vnd`: tỷ giá hiển thị.
     llm_prices_path: str | None = None
     llm_free_providers: list[str] = Field(default_factory=lambda: ["uit", "9router"])
-    llm_compare_models: list[str] = Field(default_factory=lambda: ["gemini-3.8-flash"])
+    llm_compare_models: list[str] = Field(
+        default_factory=lambda: ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
+    )
     llm_usd_vnd: float | None = Field(default=None, gt=0)
     # Dashboard admin (seevia_dashboard): phiên đăng nhập email + mật khẩu, hết hạn sau ttl giây.
     # `admin_cors_origins`: origin của trang dashboard tĩnh (vd. ["http://127.0.0.1:5500"]);

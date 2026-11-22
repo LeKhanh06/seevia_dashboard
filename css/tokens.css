@@ -81,50 +81,63 @@
   --chart-peak-from: #305FFA; --chart-peak-to: #6A5CF2;   /* cột nổi bật: chuyển nhẹ sang tím của palette */           /* rgb dùng với alpha: rgb(var(--chart-heat) / a) */
 }
 
-/* Giao diện tối: ba lớp nền rõ ràng — nền trang < thẻ < thẻ nổi (ô chọn, menu, tooltip); không đổ bóng, tách thẻ bằng viền mảnh. */
+/* Giao diện tối: nền tím, bề mặt lavender và các lớp màu pastel. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #1D1B4A;
-  --bg-gradient: radial-gradient(900px 420px at 88% -80px, rgba(91, 124, 255, 0.30), transparent 72%), linear-gradient(165deg, #1D1B4A 0%, #1D1B4A 60%, #232058 100%);
-  --card: #2A2866;
-  --card-raised: #38357F;
-  --sidebar-bg: #1A1846;
-  --topbar-bg: #1A1846;
-  --line: #48449A;                /* đường kẻ bảng, viền ô nhập */
-  --line-card: #3F3B90;           /* viền thẻ */
-  --th-bg: #2F2C72;
-  --th-ink: #8BA6FF;
+  --bg: #242C59;
+  --bg-gradient: radial-gradient(ellipse at 90% 5%, rgba(158, 131, 255, 0.42), transparent 52%), radial-gradient(ellipse at 5% 45%, rgba(74, 185, 241, 0.30), transparent 52%), radial-gradient(ellipse at 75% 95%, rgba(90, 130, 255, 0.32), transparent 55%), linear-gradient(135deg, #293F70 0%, #292853 48%, #3D3870 100%);
+  --card: #354367;
+  --card-raised: #485782;
+  --sidebar-bg: linear-gradient(180deg, #2A315A, #333965);
+  --topbar-bg: linear-gradient(110deg, #303C68, #484078 65%, #355577);
+  --line: #7E91BB;                /* đường kẻ bảng, viền ô nhập */
+  --line-card: #6479A3;           /* viền thẻ */
+  --th-bg: #455780;
+  --th-ink: #D1E4FF;
   --chip-accent-ink: #C9D6FF;              /* chữ tiêu đề cột: màu nhấn */
   --card-accent: var(--page-accent);   /* đường nhấn mép trên thẻ (mờ dần sang phải) */
-  --card-sheen: linear-gradient(180deg, color-mix(in srgb, var(--page-accent) 13%, transparent), transparent 62%);   /* chiều sâu nhẹ, thay cho đổ bóng */
+  --card-sheen: linear-gradient(135deg, color-mix(in srgb, var(--page-accent) 18%, transparent), transparent 65%);
   --section-bar: var(--page-accent);
-  --row-hover: #343080;
-  --input-bg: #232155;
-  --skeleton-a: #2A2866; --skeleton-b: #38357F;
-  --shadow-card: none;
+  --row-hover: #4C5C87;
+  --input-bg: #2D395E;
+  --skeleton-a: #354367; --skeleton-b: #485782;
+  --shadow-card: 0 4px 18px rgba(9, 20, 39, 0.16);
   --scrim: rgba(8, 6, 30, 0.6);
-  --tooltip-bg: #38357F;
+  --tooltip-bg: #485782;
   --tooltip-text: #E6E9FB;
-  --tooltip-border: #48449A;
+  --tooltip-border: #7E91BB;
 
   --ink: #E6E9FB;
   --deep: #FFFFFF;                /* chỉ cho tiêu đề và số lớn */
-  --sub: #B7BAE0;
+  --sub: #D3DDF1;
   --chip-muted-bg: rgba(166, 169, 204, 0.14);
   --ink-dim: #8E92C0;             /* chữ mờ: chỉ dùng cho phần vô hiệu hóa/trang trí */
   --sidebar-ink: #E6E9FB;
   --sidebar-sub: #A6A9CC;
 
-  --accent: #5B7CFF;
-  --accent-text: #8BA6FF;
+  --accent: #AFBBFF;
+  --accent-text: #C8DBFF;
   --soft: rgba(139, 166, 255, 0.12);
   --tag: rgba(139, 166, 255, 0.22);
   --tab-active: rgba(139, 166, 255, 0.22);
-  --on-accent: #14123A;           /* chữ trên nền nhấn #5B7CFF (trắng chỉ đạt 3,8:1, tối này đạt 4,9:1) */
-  --btn-gradient: linear-gradient(var(--accent), var(--accent));
+  --on-accent: #2B1E43;
+  --btn-gradient: linear-gradient(115deg, #C8B7FF 0%, #96DFFF 100%);
   --avatar-bg: var(--accent);
-  --nav-active-bg: #5B7CFF; --nav-active-ink: #14123A;
+  --nav-active-bg: linear-gradient(110deg, #C8BDFF, #A5E1FF); --nav-active-ink: #2B1E43;
+  --metric-lavender-bg: #594578;
+  --metric-mint-bg: #305F70;
+  --metric-rose-bg: #464C7B;
+  --metric-sky-bg: #3D5478;
+  --metric-lavender-ink: #E3D1FF;
+  --metric-mint-ink: #A4EDFF;
+  --metric-rose-ink: #D5D6FF;
+  --metric-sky-ink: #BCDEFF;
+  --metric-tab-violet: linear-gradient(135deg, #514A80, #403B6B);
+  --metric-tab-blue: linear-gradient(135deg, #3D5882, #35466E);
+  --metric-tab-indigo: linear-gradient(135deg, #484F85, #3C416F);
+  --metric-tab-cyan: linear-gradient(135deg, #3B5C7F, #34496D);
+  --metric-tab-active: #BEBBFF;
   --progress-gradient: linear-gradient(90deg, #35C9D6 0%, #9A8CFF 100%);
 
   --good: #4FD99A; --bad: #FF7A86; --warn: #FFB366;
@@ -136,10 +149,10 @@
   --sos-border: rgba(240, 96, 106, 0.55);
 
   --lvl-0: #3ED07E; --lvl-1: #F0CC4A; --lvl-2: #F09A3C; --lvl-3: #F0606A;
-  --cat-1: #35C9D6; --cat-2: #5AA6FF; --cat-3: #7C93FF; --cat-4: #9A8CFF; --cat-5: #B58CFF;
-  --cat-1-ink: #5ED6E0; --cat-2-ink: #A99CFF; --cat-3-ink: #A99CFF; --cat-4-ink: #A99CFF; --cat-5-ink: #C3A0FF;
-  --chart-main: #7C9BFF; --chart-light: #3B4BB5;
-  --chart-grid: rgba(72, 68, 154, 0.6);
-  --chart-heat: 124 155 255;
-  --chart-peak-from: #7C9BFF; --chart-peak-to: #9A8CFF;
+  --cat-1: #64DED4; --cat-2: #7DBFFF; --cat-3: #A3AEFF; --cat-4: #C0A7FF; --cat-5: #F0A5D6;
+  --cat-1-ink: #80E8DE; --cat-2-ink: #95CDFF; --cat-3-ink: #B7C0FF; --cat-4-ink: #D0BAFF; --cat-5-ink: #F2B8E0;
+  --chart-main: #B7B7FF; --chart-light: #667BAE;
+  --chart-grid: rgba(150, 178, 210, 0.24);
+  --chart-heat: 157 195 255;
+  --chart-peak-from: #BBAAFF; --chart-peak-to: #7DDEFF;
 }

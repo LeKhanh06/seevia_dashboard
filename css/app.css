@@ -49,11 +49,23 @@ body.is-login .app-body { display: block; min-height: 100vh; }
 }
 .nav-link:hover:not([aria-current="page"]) { background: var(--soft); }
 .nav-link[aria-current="page"] { color: var(--nav-active-ink); font-weight: 700; }
-.nav-icon { color: var(--sidebar-sub); }
+.nav-icon { color: var(--accent-text); }
 .nav-link[aria-current="page"] .nav-icon { color: var(--nav-active-ink); }
 .nav-link[data-route="see-read"] .nav-icon { color: var(--cat-1-ink); } .nav-link[data-route="find"] .nav-icon { color: var(--cat-2-ink); }
 .nav-link[data-route="connect"] .nav-icon { color: var(--cat-3-ink); } .nav-link[data-route="go"] .nav-icon { color: var(--cat-4-ink); }
 .nav-link[data-route="community"] .nav-icon { color: var(--cat-5-ink); }
+.nav-link[data-route="time"] .nav-icon, .nav-link[data-route="devices"] .nav-icon { color: var(--cat-1-ink); }
+.nav-link[data-route="quality"] .nav-icon, .nav-link[data-route="accounts"] .nav-icon { color: var(--cat-2-ink); }
+.nav-link[data-route="engagement"] .nav-icon, .nav-link[data-route="config"] .nav-icon { color: var(--cat-4-ink); }
+.nav-link[data-route="safety"] .nav-icon { color: var(--good); }
+.nav-link[data-route="errors"] .nav-icon { color: var(--bad); }
+.nav-link[aria-current="page"] .nav-icon { color: var(--nav-active-ink); }
+
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 1) { --page-accent: var(--cat-1); }
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 2) { --page-accent: var(--cat-2); }
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 3) { --page-accent: var(--cat-4); }
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n) { --page-accent: var(--cat-5); }
+:root[data-theme="dark"] .icon-button { color: var(--accent-text); }
 .nav-logout { margin-top: auto; }
 .scrim { position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 35; background: var(--scrim); }
 
@@ -165,6 +177,25 @@ body.is-login .main-content { padding: 0; }
 .tab-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
 .tab-metric { padding: var(--sp-3) var(--sp-3) var(--sp-3); border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-bottom: 3px solid transparent; cursor: pointer; }
 .tab-metric.is-active { background: var(--tab-active); border-bottom-color: var(--accent); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 1),
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 1) { --metric-bg: var(--metric-lavender-bg); --metric-accent: var(--metric-lavender-ink); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 2),
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 2) { --metric-bg: var(--metric-mint-bg); --metric-accent: var(--metric-mint-ink); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 3),
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n + 3) { --metric-bg: var(--metric-rose-bg); --metric-accent: var(--metric-rose-ink); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n),
+:root[data-theme="dark"] .kpi-grid > .card:nth-child(4n) { --metric-bg: var(--metric-sky-bg); --metric-accent: var(--metric-sky-ink); }
+:root[data-theme="dark"] .tab-metric,
+:root[data-theme="dark"] .kpi-grid > .card { background: var(--metric-bg); border-radius: var(--radius-md); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 1) { --metric-bg: var(--metric-tab-violet); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 2) { --metric-bg: var(--metric-tab-blue); --metric-accent: var(--metric-sky-ink); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n + 3) { --metric-bg: var(--metric-tab-indigo); }
+:root[data-theme="dark"] .tab-metric:nth-child(4n) { --metric-bg: var(--metric-tab-cyan); }
+:root[data-theme="dark"] .tab-metric { border: 1px solid color-mix(in srgb, var(--metric-accent) 25%, transparent); box-shadow: none; }
+:root[data-theme="dark"] .tab-metric:hover { border-color: color-mix(in srgb, var(--metric-accent) 60%, transparent); }
+:root[data-theme="dark"] .tab-metric.is-active { border-color: var(--metric-tab-active); box-shadow: inset 0 -2px var(--metric-tab-active); }
+:root[data-theme="dark"] .tab-metric .metric-value,
+:root[data-theme="dark"] .kpi-grid > .card .kpi-value { color: var(--metric-accent); }
 .metric-select { display: flex; flex-direction: column; gap: 4px; padding: 0; background: none; border: 0; text-align: left; }
 .tab-metric.is-active .metric-label, .tab-metric.is-active .delta { color: var(--ink); }
 .tab-metric.is-active .delta b, .tab-metric.is-active .delta > svg { color: color-mix(in srgb, var(--good) 78%, var(--deep)); }

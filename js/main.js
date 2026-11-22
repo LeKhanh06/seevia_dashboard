@@ -4,7 +4,7 @@
  */
 import { CONFIG } from "./config.js";
 import { h } from "./lib/dom.js";
-import { vi } from "./i18n/vi.js";
+import { vi, fill } from "./i18n/vi.js";
 import { api, ApiError, setUnauthorizedHandler } from "./api/client.js";
 import { isSignedIn, setSession, clearSession, getUser, updateUser } from "./core/session.js";
 import { parseHash, buildHash, go } from "./core/router.js";
@@ -138,6 +138,7 @@ function errorMessage(error) {
 
 async function renderPage({ soft = false } = {}) {
   const mine = ++seq;
+  stopRefresh();
   let route = parseHash();
 
   if (!isSignedIn() && route.id !== "login") { go("#login", { replace: true }); route = parseHash(); }
@@ -186,6 +187,8 @@ async function renderPage({ soft = false } = {}) {
       lastValues = { id: def.id, map: countUp(view, same) };
     }
     restoreFocus(focusedId);
+    live.raw = JSON.stringify(raw ?? null);
+    startRefresh();
   } catch (error) {
     if (error instanceof ApiError && error.kind === "aborted") return;
     if (mine !== seq) return;
@@ -194,6 +197,100 @@ async function renderPage({ soft = false } = {}) {
     body.removeAttribute("aria-busy");
   }
 }
+
+// ---- Tự cập nhật ---------------------------------------------------------------------------
+// Trang theo kỳ có hôm nay: mỗi CONFIG.AUTO_REFRESH_S giây tải lại ngầm (không khung tải, không nhảy trang).
+// Số liệu đổi → vẽ lại, số chạy từ giá trị cũ sang mới, cột biểu đồ co giãn tới chiều cao mới; không đổi → không vẽ.
+// Bỏ qua lượt khi tab ẩn, đang gõ/mở menu/xem tooltip/bôi chữ; lỗi mạng giữ số cũ, thử lại ở lượt sau.
+const live = { timer: 0, abort: null, raw: null, at: 0 };
+const liveOn = cur => CONFIG.AUTO_REFRESH_S > 0 && cur?.def.period && cur.ctx.period && cur.ctx.period.from <= todayISO() && todayISO() <= cur.ctx.period.to;
+
+function stopRefresh() { clearTimeout(live.timer); live.timer = 0; live.abort?.abort(); live.abort = null; }
+function startRefresh() {
+  live.at = Date.now();
+  stampUpdated();
+  scheduleRefresh();
+}
+function scheduleRefresh() {
+  clearTimeout(live.timer);
+  if (liveOn(current)) live.timer = setTimeout(autoRefresh, CONFIG.AUTO_REFRESH_S * 1000);
+}
+function stampUpdated() {
+  const host = main.querySelector(".page-title");
+  if (!host) return;
+  let el = host.querySelector(".page-updated");
+  if (!liveOn(current)) { el?.remove(); return; }
+  if (!el) { el = h("p", { class: "page-updated" }); host.append(el); }
+  const time = new Intl.DateTimeFormat(CONFIG.LOCALE, { timeZone: CONFIG.TIMEZONE, hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(live.at));
+  el.textContent = fill(vi.live.updated, { time, seconds: CONFIG.AUTO_REFRESH_S });
+}
+function busy() {
+  const a = document.activeElement;
+  if (a && main.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return true;
+  if (main.querySelector('[aria-expanded="true"]') || document.querySelector("#global-tooltip:not([hidden])")) return true;
+  const sel = getSelection();
+  return Boolean(sel && !sel.isCollapsed && main.contains(sel.anchorNode));
+}
+async function autoRefresh() {
+  const cur = current, mine = seq;
+  if (!liveOn(cur) || !isSignedIn()) return;
+  if (document.hidden || busy()) return scheduleRefresh();
+  live.abort = new AbortController();
+  try {
+    const raw = await api.get(cur.def.endpoint(cur.ctx), apiQuery(cur.def, cur.ctx), { signal: live.abort.signal, retry: false });
+    if (mine !== seq || current !== cur) return;
+    const text = JSON.stringify(raw ?? null);
+    if (text !== live.raw && !busy()) { live.raw = text; repaint(cur, raw); }
+    live.at = Date.now();
+    stampUpdated();
+  } catch (error) {
+    if (error instanceof ApiError && (error.kind === "aborted" || error.status === 401)) return;
+  } finally {
+    if (mine === seq) { live.abort = null; scheduleRefresh(); }
+  }
+}
+function repaint(cur, raw) {
+  const body = main.querySelector("#page-body");
+  if (!body) return;
+  const ui = captureUi(body), y = scrollY;
+  const vm = cur.def.map(raw, cur.ctx);
+  const view = cur.def.view(vm, cur.ctx);
+  view.classList.add("is-live");   // không chạy lại hiệu ứng vào trang
+  body.replaceChildren(view);
+  current = { ...cur, vm };
+  restoreUi(body, ui);
+  scrollTo(0, y);
+  lastValues = { id: cur.def.id, map: countUp(view, lastValues?.id === cur.def.id ? lastValues.map : null) };
+  requestAnimationFrame(() => growBars(body, ui.bars));
+}
+// Trạng thái người dùng đang mở: bảng số liệu đang xổ, tab chỉ số đang chọn (Tổng quan), chiều cao cột biểu đồ.
+function captureUi(body) {
+  return {
+    open: [...body.querySelectorAll("details")].map(d => d.open),
+    tab: body.querySelector(".tab-metric.is-active")?.dataset.key || null,
+    bars: [...body.querySelectorAll(".chart-svg")].map(svg => [...svg.querySelectorAll(".chart-bar")].map(r => ({ x: r.getAttribute("x"), y: +r.getAttribute("y"), h: +r.getAttribute("height") }))),
+  };
+}
+function restoreUi(body, ui) {
+  body.querySelectorAll("details").forEach((d, i) => { if (ui.open[i]) d.open = true; });
+  if (ui.tab) body.querySelector(`.tab-metric[data-key="${CSS.escape(ui.tab)}"] .metric-select`)?.click();
+}
+function growBars(body, before) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  [...body.querySelectorAll(".chart-svg")].forEach((svg, i) => {
+    const old = new Map((before[i] || []).map(b => [b.x, b]));
+    svg.querySelectorAll(".chart-bar").forEach(r => {
+      const was = old.get(r.getAttribute("x")), y = +r.getAttribute("y"), hgt = +r.getAttribute("height");
+      const base = y + hgt;
+      const from = was || { y: base, h: 0 };   // cột mới mọc từ đáy
+      if (from.y === y && from.h === hgt) return;
+      try { r.animate([{ y: `${from.y}px`, height: `${from.h}px` }, { y: `${y}px`, height: `${hgt}px` }], { duration: 500, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }); } catch { /* trình duyệt không hỗ trợ: cột đổi ngay */ }
+    });
+  });
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && liveOn(current) && !live.abort && Date.now() - live.at >= CONFIG.AUTO_REFRESH_S * 1000) { clearTimeout(live.timer); autoRefresh(); }
+});
 
 function restoreFocus(id) {
   if (!id) return;

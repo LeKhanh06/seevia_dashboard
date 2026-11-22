@@ -29,6 +29,10 @@ export const CONFIG = Object.freeze({
   // Số dòng mỗi trang cho các danh sách phân trang phía server.
   PAGE_SIZE: 10,
 
+  // Tự cập nhật trang thống kê (giây): tải lại ngầm khi kỳ đang xem có hôm nay và tab đang mở; 0 = tắt.
+  // Số liệu ở server trễ ~10–15 giây (VH gửi sự kiện mỗi 5 giây, AB gộp mỗi 5 giây).
+  AUTO_REFRESH_S: 20,
+
   // Chỉ dùng khi USE_MOCK = true: độ trễ giả lập (mili giây).
   MOCK_LATENCY_MS: 220,
 });

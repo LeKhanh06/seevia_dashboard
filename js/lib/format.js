@@ -9,6 +9,11 @@ const nf = new Intl.NumberFormat(CONFIG.LOCALE);
 const nf1 = new Intl.NumberFormat(CONFIG.LOCALE, { maximumFractionDigits: 1 });
 const nf2 = new Intl.NumberFormat(CONFIG.LOCALE, { maximumFractionDigits: 2 });
 
+const usd = new Intl.NumberFormat(CONFIG.LOCALE, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const usdSmall = new Intl.NumberFormat(CONFIG.LOCALE, { style: "currency", currency: "USD", maximumSignificantDigits: 3 });
+const vnd = new Intl.NumberFormat(CONFIG.LOCALE, { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+const compact = new Intl.NumberFormat(CONFIG.LOCALE, { notation: "compact", maximumFractionDigits: 1 });
+
 export const toNum = v => (v === null || v === undefined || v === "" || typeof v === "boolean" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
 export function fmtInt(v) { const n = toNum(v); return n === null ? DASH : nf.format(Math.round(n)); }
@@ -87,3 +92,9 @@ export function fmtMsFixed(ms) {
 
 // Chữ cái đầu của tên hiển thị (dùng cho avatar).
 export const initialOf = user => (String(user?.display_name || user?.email_masked || "").trim().charAt(0) || "A").toLocaleUpperCase("vi");
+
+// Tiền USD: từ 1 USD ghi 2 chữ số lẻ; nhỏ hơn giữ 3 chữ số có nghĩa (chi phí mỗi lượt cỡ 0,000123 US$).
+export function fmtUsd(v) { const n = toNum(v); return n === null ? DASH : n === 0 ? usdSmall.format(0) : Math.abs(n) >= 1 ? usd.format(n) : usdSmall.format(n); }
+export function fmtVnd(v) { const n = toNum(v); return n === null ? DASH : vnd.format(n); }
+// Token: số lớn ghi gọn (1,2 Tr) ở thẻ chỉ số; bảng dùng fmtInt để đủ chữ số.
+export function fmtCompact(v) { const n = toNum(v); return n === null ? DASH : Math.abs(n) < 10000 ? nf.format(Math.round(n)) : compact.format(n); }

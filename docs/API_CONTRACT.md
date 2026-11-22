@@ -200,6 +200,31 @@ Tham số thêm: `group`, `firmware_version`, `sort` (`code|feature|group|count|
 
 ---
 
+### `GET /admin/stats/llm` — Chi phí AI
+Token của mọi lần server gọi mô hình AI trong kỳ và tiền tính lúc đọc theo bảng giá có ngày hiệu lực (USD / 1 triệu token).
+Không có chữ người dùng nói, chỉ số đếm. `in_tokens` gồm ảnh và phần cache; `out_tokens` gồm token suy nghĩ (`reasoning_tokens`).
+- `currency` (`"USD"`), `usd_vnd` (tỷ giá hoặc `null` = chỉ hiện USD), `what_if_model` (mô hình quy đổi), `attempts` (tổng lượt sử dụng có gọi AI).
+- `totals`, mỗi phần tử `by_day[]` (`day`), `by_feature[]` (`feature`; `none` = ngoài lượt), `by_purpose[]` (`purpose`),
+  `by_model[]` (`provider`, `model`) cùng bộ trường: `calls`, `estimated_calls`, `in_tokens`, `out_tokens`, `reasoning_tokens`,
+  `cached_tokens`, `images`, `avg_latency_ms`, `cost_actual` (nhánh miễn phí = 0), `cost_list` (giá niêm yết của chính mô hình; không có
+  giá thì không cộng và đếm vào `unpriced_calls`), `cost_what_if` (cùng token theo giá `what_if_model`), `unpriced_calls`.
+  `by_feature[]` thêm `attempts`, `cost_list_per_attempt`, `cost_what_if_per_attempt` (`null` khi `attempts = 0`).
+- `waste`: `cancelled_calls`/`_tokens`/`_cost_list`/`_cost_what_if` (bị hủy giữa chừng), `prewarm_*` (làm nóng), `error_calls`.
+- `what_if[]` `{model, cost, priced, per_attempt}`: một phần tử mỗi mô hình so sánh.
+- `purpose`: `answer`, `classify`, `extract`, `money`, `ocr`, `stt_pick`, `prewarm`, `other`. `provider`: `uit`, `9router`, `aistudio`, `vertex`, `gemini` hoặc tên máy.
+```json
+{ "currency": "USD", "usd_vnd": 26300, "what_if_model": "gemini-3.8-flash", "attempts": 3010,
+  "totals": { "calls": 7811, "estimated_calls": 147, "in_tokens": 5689030, "out_tokens": 362898, "reasoning_tokens": 13590, "cached_tokens": 1013220,
+              "images": 2181, "avg_latency_ms": 744, "cost_actual": 0, "cost_list": 0.45258, "cost_what_if": 4.943716, "unpriced_calls": 7660 },
+  "waste": { "cancelled_calls": 147, "cancelled_tokens": 150097, "cancelled_cost_list": 0, "cancelled_cost_what_if": 0.126, "prewarm_calls": 1204,
+             "prewarm_tokens": 1084804, "prewarm_cost_list": 0, "prewarm_cost_what_if": 0.817, "error_calls": 59 },
+  "by_day": [ { "day": "2026-11-16", "calls": 1100, "...": "..." } ],
+  "by_feature": [ { "feature": "ocr", "attempts": 907, "calls": 1814, "cost_what_if": 1.62, "cost_what_if_per_attempt": 0.00179, "...": "..." } ],
+  "by_purpose": [ { "purpose": "answer", "calls": 1963, "...": "..." } ],
+  "by_model": [ { "provider": "uit", "model": "gemma-4-26b", "calls": 7660, "...": "..." } ],
+  "what_if": [ { "model": "gemini-3.8-flash", "cost": 4.943716, "priced": true, "per_attempt": 0.001642 } ] }
+```
+
 ## Quản trị (chỉ xem)
 
 ### `GET /admin/accounts`
@@ -233,6 +258,8 @@ Tham số: `q`, `status` (`online`\|`offline`), `firmware_version`, `sort` (`id|
 - `summary.uses` của từng trang nhóm = `groups[].uses` tương ứng ở Tổng quan = tổng `features[].uses` của trang đó.
 - `sos.count` (An toàn) = `sos_uses` (Tổng quan) = `success` + `failed` + `cancelled_within_5s`.
 - Bốn `levels[].share_pct` cộng lại = 100. `total_accounts` = tổng số tài khoản trong danh sách.
+- Chi phí AI: `calls`, `in_tokens`, `cost_what_if` của `by_day` / `by_feature` / `by_purpose` / `by_model` cộng lại = `totals`;
+  tổng `by_feature[].attempts` = `attempts`; `what_if[0].cost` = `totals.cost_what_if`.
 
 ---
 

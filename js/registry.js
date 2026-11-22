@@ -8,6 +8,8 @@ import { makeReportMapper } from "./mappers/report.js";
 import { mapCommunity, mapTime, mapQuality, mapEngagement, mapSafety } from "./mappers/analytics.js";
 import { mapErrors, mapAccounts, mapAccountDetail, mapDevices, mapDeviceDetail, mapConfig, mapProfile } from "./mappers/admin.js";
 import { viewOverview, viewReport, viewCommunity, viewTime, viewQuality, viewEngagement, viewSafety } from "./views/reports.js";
+import { mapAiCost } from "./mappers/aicost.js";
+import { viewAiCost } from "./views/aicost.js";
 import { viewErrors, viewAccounts, viewAccountDetail, viewDevices, viewDeviceDetail, viewConfig, viewProfile } from "./views/admin.js";
 
 const stat = name => () => `/admin/stats/${name}`;
@@ -24,6 +26,7 @@ export const ROUTES = {
   quality: { id: "quality", group: "analytics", icon: "quality", endpoint: stat("quality"), map: mapQuality, view: viewQuality, period: true, export: true, skeleton: "charts" },
   engagement: { id: "engagement", group: "analytics", icon: "engagement", endpoint: stat("engagement"), map: mapEngagement, view: viewEngagement, period: true, export: true, skeleton: "cards6" },
   safety: { id: "safety", group: "analytics", icon: "safety", endpoint: stat("safety"), map: mapSafety, view: viewSafety, period: true, export: true, skeleton: "charts" },
+  "ai-cost": { id: "ai-cost", group: "analytics", icon: "ai-cost", endpoint: stat("llm"), map: mapAiCost, view: viewAiCost, period: true, export: true, skeleton: "charts" },
   accounts: { id: "accounts", group: "admin", icon: "accounts", endpoint: () => "/admin/accounts", map: mapAccounts, view: viewAccounts, list: ["q", "status", "sort", "order", "page", "page_size"], export: true, skeleton: "list" },
   "account-detail": { id: "account-detail", group: null, parent: "accounts", endpoint: ctx => `/admin/accounts/${encodeURIComponent(ctx.params[0] || "")}`, map: mapAccountDetail, view: viewAccountDetail, skeleton: "detail", detail: true },
   devices: { id: "devices", group: "admin", icon: "devices", endpoint: () => "/admin/devices", map: mapDevices, view: viewDevices, list: ["q", "status", "firmware_version", "sort", "order", "page", "page_size"], export: true, skeleton: "list" },
@@ -34,7 +37,7 @@ export const ROUTES = {
 };
 
 // Thứ tự thanh điều hướng.
-export const NAV_ORDER = ["overview", "see-read", "find", "connect", "go", "community", "time", "quality", "engagement", "safety", "accounts", "devices", "errors", "config"];
+export const NAV_ORDER = ["overview", "see-read", "find", "connect", "go", "community", "time", "quality", "engagement", "safety", "ai-cost", "accounts", "devices", "errors", "config"];
 
 // Tham số gửi lên API: kỳ (nếu trang theo kỳ) + các khóa lọc/sắp xếp/phân trang của danh sách.
 export function apiQuery(def, ctx, { page, pageSize } = {}) {

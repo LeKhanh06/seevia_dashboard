@@ -9,8 +9,10 @@ Bảng điều khiển dành cho nhóm vận hành **SeeVia** (kính thông minh
 - **Tổng quan**: lượt sử dụng, chủ kính hoạt động, tỷ lệ hoàn thành, thời gian sử dụng; so sánh với kỳ trước; biểu đồ theo ngày/giờ.
 - **Báo cáo chức năng**: Đọc & Nhận diện, Tìm & Hiểu, Kết nối, Di chuyển, Cộng đồng & Thiết bị.
 - **Phân tích**: Thời điểm (hôm nay theo giờ; tuần theo ngày rồi giờ × thứ; tháng theo tuần, theo ngày rồi giờ × thứ), Chất lượng & tốc độ, Gắn bó (hoạt động theo kỳ chọn: DAU hôm nay, WAU tuần này, MAU tháng này), An toàn (SOS, cảnh báo vật cản).
+- **Chi phí AI**: token đã dùng; chi phí thật, giá niêm yết và quy đổi sang một mô hình so sánh (USD, kèm VND nếu có tỷ giá); token tốn vô ích (bị hủy, làm nóng, lỗi); theo ngày, chức năng, mục đích gọi, mô hình.
 - **Quản trị (chỉ xem)**: Tài khoản, Thiết bị, Lỗi hệ thống, Cấu hình.
 - **Hồ sơ quản trị viên**: thông tin tài khoản, đổi ảnh đại diện (tự cắt vuông, thu nhỏ trên trình duyệt), đổi mật khẩu (kiểm tra mật khẩu hiện tại, độ mạnh, nhập lại).
+- **Tự cập nhật** mỗi 20 giây khi kỳ đang xem có hôm nay (không nhấp nháy, giữ bảng đang mở và tab đang chọn; tạm dừng khi tab ẩn hoặc đang gõ/mở menu/xem tooltip); dòng "Cập nhật lúc …" dưới tiêu đề.
 - Chọn kỳ **hôm nay / tuần này / tháng này** (giờ Việt Nam); kỳ nằm trong URL nên chia sẻ link vẫn đúng.
 - **Xuất Excel (.xlsx)** từ dữ liệu đang hiển thị: tiếng Việt đúng ở Excel, WPS, LibreOffice; có thể đổi sang CSV trong cấu hình.
 - Giao diện **Sáng / Tối**, responsive từ điện thoại đến màn hình rộng, hỗ trợ bàn phím và trình đọc màn hình.
@@ -46,6 +48,7 @@ API_BASE_URL: "https://api.example.com",   // gốc API; cần bật CORS nếu 
 | `EXPORT_FORMAT` | `"xlsx"` (mặc định) hoặc `"csv"`: định dạng file khi dashboard tự tạo từ dữ liệu đang hiển thị |
 | `CSV_SERVER_EXPORT` | `true`: tải CSV do backend trả về (`format=csv`) thay vì tự tạo |
 | `PAGE_SIZE` | Số dòng mỗi trang của danh sách |
+| `AUTO_REFRESH_S` | Tự cập nhật trang thống kê (mặc định `20` giây; `0` = tắt): chỉ khi kỳ đang xem có hôm nay và tab đang mở; tải ngầm, số và cột biểu đồ chạy từ giá trị cũ sang mới |
 
 Backend làm theo **[docs/API_CONTRACT.md](docs/API_CONTRACT.md)**: các endpoint `GET /admin/...` chỉ đọc, `POST /admin/auth/login` và `logout`, cùng ba thao tác hồ sơ cá nhân (`POST /admin/auth/password`, `PUT` và `DELETE /admin/auth/avatar`). Định nghĩa từng chỉ số (tên hiển thị, trường API, đơn vị, cách tính) nằm trong **[docs/METRICS.md](docs/METRICS.md)**.
 

@@ -69,6 +69,13 @@ Chi tiết hình dạng JSON: `docs/API_CONTRACT.md`.
 | Số phiên | `alert_live.sessions` | phiên | Số lần chế độ cảnh báo vật cản được bật. | Theo dõi mức dùng cảnh báo vật cản live. | An toàn |
 | Tổng phút bật | `alert_live.total_on_seconds` | giây | Tổng số phút chế độ cảnh báo vật cản được bật. | Cho biết chế độ này được dùng bao lâu. | An toàn |
 | Cảnh báo / giờ | `alert_live.alerts_per_hour` | số cảnh báo / giờ | Tổng số cảnh báo chia tổng số giờ bật. | Chỉ cho biết tần suất, không cho biết cảnh báo đúng hay sai. | An toàn |
+| Token đã dùng | `totals.in_tokens + totals.out_tokens` | token | Tổng token vào (prompt, gồm ảnh) cộng token ra (gồm token suy nghĩ) của mọi lần server gọi mô hình AI trong kỳ, kể cả lần bị hủy và làm nóng. | Cho biết khối lượng AI hệ thống tiêu thụ, không phụ thuộc giá. | Chi phí AI |
+| Chi phí thật | `totals.cost_actual` | USD | Tiền phải trả theo bảng giá có ngày hiệu lực. Nhánh miễn phí (Gemma UIT, 9router thử nghiệm) tính 0. | Cho biết số tiền thực sự bị tính. | Chi phí AI |
+| Giá niêm yết | `totals.cost_list`, `totals.unpriced_calls` | USD | Token của từng mô hình nhân giá niêm yết của chính mô hình đó, kể cả khi đang dùng miễn phí. Mô hình chưa có giá (Gemma) không cộng vào. | Cho biết sẽ tốn bao nhiêu nếu trả tiền cho đúng mô hình đang dùng. | Chi phí AI |
+| Quy đổi {model} | `totals.cost_what_if`, `what_if[].per_attempt` | USD | Toàn bộ token trong kỳ tính theo giá `what_if_model`. Là ước lượng: mỗi mô hình đếm token khác nhau. | So chi phí nếu chuyển hết sang mô hình đó. | Chi phí AI |
+| Lượt gọi bị hủy | `waste.cancelled_*` | lần, token, USD | Lần gọi bị bỏ giữa chừng: đoán sai làn trả lời, người dùng cắt lời. Token đã sinh vẫn bị tính. | Cho biết phần token tốn vô ích do đoán trước. | Chi phí AI |
+| Làm nóng | `waste.prewarm_*` | lần, token, USD | Lần gọi nạp trước ngữ cảnh (prewarm) để trả lời nhanh hơn, không sinh câu trả lời. | Cân nhắc giữa độ trễ và chi phí. | Chi phí AI |
+| Lỗi | `waste.error_calls` | lần | Lần gọi thất bại (mạng, hết hạn mức, máy chủ AI lỗi). Không tính token. | Phát hiện nhánh AI không ổn định. | Chi phí AI |
 
 ## Mục không phải chỉ số
 - Lượt theo giờ: Số lượt trong từng khung giờ 0h–23h theo giờ Việt Nam (UTC+7); mỗi lượt tính vào khung giờ lúc bắt đầu.

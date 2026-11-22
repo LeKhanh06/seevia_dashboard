@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 from zoneinfo import ZoneInfo
 
 from app.repositories.admin_stats import AdminStatsRepository, DailyRow
+from app.services import llm_cost
 from app.services.admin_directory import AdminDirectoryService, ListQuery
 from app.services.usage_aggregate import empty_metrics, merge, percentile
 from app.services.usage_ids import pseudonym
@@ -694,6 +695,37 @@ class AdminStatsService:
         }
 
     # ---------------------------------------------------------- errors
+
+    async def llm(
+        self,
+        period: Period,
+        *,
+        prices_path: str | None,
+        free_providers: list[str],
+        compare_models: list[str],
+        usd_vnd: float | None,
+    ) -> dict[str, Any]:
+        """``GET /admin/stats/llm``: token totals and their cost (priced now, see llm_cost)."""
+        rows = await self._repo.llm_daily(period.first, period.last)
+        attempts: dict[str, int] = defaultdict(int)
+        for daily in await self._repo.daily(period.first, period.last):
+            # usage_daily splits live OCR off as "ocr_live"; LLM rows use the attempt's feature.
+            feature = "ocr" if daily.feature == "ocr_live" else daily.feature
+            attempts[feature] += int(daily.metrics.get("attempts", 0))
+        out = llm_cost.report(
+            rows,
+            prices=llm_cost.load_prices(prices_path),
+            free_providers=free_providers,
+            compare_models=compare_models,
+            attempts_by_feature=dict(attempts),
+            usd_vnd=usd_vnd,
+        )
+        out["period"] = {
+            "name": period.name,
+            "from": period.first.isoformat(),
+            "to": period.last.isoformat(),
+        }
+        return out
 
     async def errors(  # noqa: PLR0913
         self,

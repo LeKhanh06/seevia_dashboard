@@ -124,6 +124,21 @@ async def stats_safety(
     return await _service(request, session).safety(period)
 
 
+@router.get("/llm")
+async def stats_llm(
+    _admin: Admin, period: PeriodQ, request: Request, session: Db
+) -> dict[str, Any]:
+    """LLM calls, tokens and cost (actual, list price, what-if per compare model)."""
+    settings = request.app.state.settings
+    return await _service(request, session).llm(
+        period,
+        prices_path=settings.llm_prices_path,
+        free_providers=settings.llm_free_providers,
+        compare_models=settings.llm_compare_models,
+        usd_vnd=settings.llm_usd_vnd,
+    )
+
+
 @router.get("/errors")
 async def stats_errors(  # noqa: PLR0913
     *,

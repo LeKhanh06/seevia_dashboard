@@ -15,7 +15,7 @@ from sqlalchemy import distinct, func, select
 from app.models.care_link import CareLink
 from app.models.enums import CareLinkStatus, GlassesLinkStatus
 from app.models.glasses_device import GlassesDevice
-from app.models.usage import UsageActiveDay, UsageAttempt, UsageDaily, UsageHourly
+from app.models.usage import UsageActiveDay, UsageAttempt, UsageDaily, UsageHourly, UsageLlmDaily
 from app.models.user import User
 
 if TYPE_CHECKING:
@@ -51,6 +51,17 @@ class AdminStatsRepository:
             stmt = stmt.where(d.owner_hash == owner_hash)
         result = await self._session.execute(stmt)
         return [DailyRow(r[0], r[1], r[2], r[3], r[4], dict(r[5])) for r in result.all()]
+
+    async def llm_daily(self, first: date, last: date) -> list[dict[str, Any]]:
+        """Every ``usage_llm_daily`` row with ``first <= day <= last``."""
+        t = UsageLlmDaily
+        result = await self._session.execute(
+            select(t).where(t.day >= first, t.day <= last).order_by(t.day)
+        )
+        return [
+            {c.name: getattr(r, c.name) for c in t.__table__.columns}
+            for r in result.scalars().all()
+        ]
 
     async def hourly(self, first: date, last: date) -> list[tuple[date, int, str, int]]:
         """``(day, hour, feature, uses)`` for ``first <= day <= last``."""

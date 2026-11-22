@@ -66,6 +66,13 @@ ComponentVersion = Annotated[
     str, Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.+=,:-]+$")
 ]
 DeviceId = Annotated[str, Field(min_length=1, max_length=64)]
+# Tên model như nhà cung cấp gọi (vd. "gemma-4-26b", "ag/gemini-3.8-flash", "@cf/meta/x").
+ModelName = Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:@/+-]+$")]
+Tokens = Annotated[int, Field(ge=0, le=10_000_000)]
+LlmPurpose = Literal[
+    "answer", "classify", "extract", "money", "ocr", "stt_pick", "prewarm", "other"
+]
+LlmStatus = Literal["ok", "cancelled", "error"]
 Millis = Annotated[int, Field(ge=0, le=86_400_000)]
 
 
@@ -177,6 +184,28 @@ class AlertRaised(_EventBase):
     level: Annotated[int, Field(ge=0, le=3)]
 
 
+class LlmCall(_EventBase):
+    """One LLM call made by VH: token counts only (cost is priced at read time, never stored).
+
+    ``attempt_id`` is empty for calls outside a turn (startup warm-up). ``estimated`` marks counts
+    VH derived from text length because the provider sent no ``usage`` (e.g. a cancelled stream).
+    """
+
+    type: Literal["llm_call"]
+    attempt_id: UUID | None = None
+    provider: Code
+    model: ModelName
+    purpose: LlmPurpose
+    status: LlmStatus
+    in_tokens: Tokens
+    out_tokens: Tokens
+    reasoning_tokens: Tokens = 0
+    cached_tokens: Tokens = 0
+    images: Annotated[int, Field(ge=0, le=64)] = 0
+    estimated: bool = False
+    latency_ms: Millis | None = None
+
+
 UsageEventIn = (
     AttemptStarted
     | AttemptSignal
@@ -187,6 +216,7 @@ UsageEventIn = (
     | SessionHeartbeat
     | SessionEnded
     | AlertRaised
+    | LlmCall
 )
 
 EVENT_MODELS: dict[str, type[_EventBase]] = {
@@ -199,6 +229,7 @@ EVENT_MODELS: dict[str, type[_EventBase]] = {
     "session_heartbeat": SessionHeartbeat,
     "session_ended": SessionEnded,
     "alert_raised": AlertRaised,
+    "llm_call": LlmCall,
 }
 
 

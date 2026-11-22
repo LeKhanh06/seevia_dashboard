@@ -26,6 +26,7 @@ from app.models.usage import (
     UsageDirtyDay,
     UsageEvent,
     UsageHourly,
+    UsageLlmDaily,
     UsageSession,
     UsageSos,
     UsageTask,
@@ -273,6 +274,29 @@ _CLAIM_DIRTY_SQL = (
 )
 
 
+# One day of layer-1 ``llm_call`` events -> usage_llm_daily rows (feature from the attempt, if any).
+_LLM_DAY_SQL = """
+SELECT coalesce(a.feature, 'none') AS feature,
+       e.body->>'provider' AS provider,
+       e.body->>'model' AS model,
+       e.body->>'purpose' AS purpose,
+       e.body->>'status' AS status,
+       count(*) AS calls,
+       count(*) FILTER (WHERE (e.body->>'estimated')::boolean) AS estimated_calls,
+       count(DISTINCT e.body->>'attempt_id') AS attempts,
+       coalesce(sum((e.body->>'in_tokens')::bigint), 0) AS in_tokens,
+       coalesce(sum((e.body->>'out_tokens')::bigint), 0) AS out_tokens,
+       coalesce(sum((e.body->>'reasoning_tokens')::bigint), 0) AS reasoning_tokens,
+       coalesce(sum((e.body->>'cached_tokens')::bigint), 0) AS cached_tokens,
+       coalesce(sum((e.body->>'images')::int), 0) AS images,
+       coalesce(sum((e.body->>'latency_ms')::bigint), 0) AS latency_ms_sum
+FROM usage_events e
+LEFT JOIN usage_attempts a ON a.attempt_id = (e.body->>'attempt_id')::uuid
+WHERE e.type = 'llm_call' AND e.occurred_at >= :lo AND e.occurred_at < :hi
+GROUP BY 1, 2, 3, 4, 5
+"""
+
+
 class UsageReadRepository:
     """Layer-2 reads and layer-3 replacement for the rollup worker and exact queries."""
 
@@ -446,6 +470,17 @@ class UsageReadRepository:
                 insert(UsageActiveDay),
                 [{"day": day, "owner_hash": o, "device_hash": d} for o, d in result.active],
             )
+
+    async def llm_day(self, lo: datetime, hi: datetime) -> list[dict[str, Any]]:
+        """LLM token totals of ``[lo, hi)`` grouped like ``usage_llm_daily`` (no ``day``)."""
+        result = await self._session.execute(text(_LLM_DAY_SQL), {"lo": lo, "hi": hi})
+        return [dict(row) for row in result.mappings().all()]
+
+    async def replace_llm_day(self, day: date, rows: list[dict[str, Any]]) -> None:
+        """Swap the ``usage_llm_daily`` rows of ``day`` for ``rows``."""
+        await self._session.execute(delete(UsageLlmDaily).where(UsageLlmDaily.day == day))
+        if rows:
+            await self._session.execute(insert(UsageLlmDaily), [{"day": day, **r} for r in rows])
 
     async def release_dirty(self, day: date, marked_at: datetime) -> None:
         """Drop the dirty mark unless the day was re-marked while it was being computed."""

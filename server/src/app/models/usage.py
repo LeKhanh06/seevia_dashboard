@@ -17,6 +17,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     CHAR,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -45,7 +46,14 @@ class UsageEvent(Base):
     """Layer 1: one raw, validated usage event."""
 
     __tablename__ = "usage_events"
-    __table_args__ = (Index("ix_usage_events_occurred_at", "occurred_at"),)
+    __table_args__ = (
+        Index("ix_usage_events_occurred_at", "occurred_at"),
+        Index(
+            "ix_usage_events_llm_call_at",
+            "occurred_at",
+            postgresql_where=text("type = 'llm_call'"),
+        ),
+    )
 
     event_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     type: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -227,3 +235,30 @@ class UsageActiveDay(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     owner_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     device_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+
+class UsageLlmDaily(Base):
+    """Layer 3: LLM token totals per report day, feature, provider, model, purpose and status.
+
+    Rebuilt by the rollup worker from layer-1 ``llm_call`` events (joined to ``usage_attempts`` for
+    the feature; ``none`` = call outside a turn). Holds tokens only: money is priced at read time
+    from the dated price table, so a price change re-prices history without a rebuild.
+    """
+
+    __tablename__ = "usage_llm_daily"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    feature: Mapped[str] = mapped_column(String(32), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model: Mapped[str] = mapped_column(String(80), primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(16), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), primary_key=True)
+    calls: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_calls: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    in_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    out_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reasoning_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    cached_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    images: Mapped[int] = mapped_column(Integer, nullable=False)
+    latency_ms_sum: Mapped[int] = mapped_column(BigInteger, nullable=False)

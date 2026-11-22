@@ -54,6 +54,7 @@ class UsageRollupWorker:
                 lo, hi = day_bounds(day, self._tz)
                 result = aggregate_day(await repo.layer2(lo, hi), day, self._tz)
                 await repo.replace_day(day, result)
+                await repo.replace_llm_day(day, await repo.llm_day(lo, hi))
                 await repo.release_dirty(day, marked_at)
                 await session.commit()
         if claimed:

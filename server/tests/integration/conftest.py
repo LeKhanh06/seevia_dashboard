@@ -137,7 +137,7 @@ async def _truncate_mutable_tables(engine: AsyncEngine) -> None:
                 "TRUNCATE TABLE operations, devices, glasses_devices, "
                 "usage_events, usage_attempts, usage_tasks, usage_sessions, "
                 "usage_calls, usage_sos, "
-                "usage_dirty_days, usage_daily, usage_hourly, usage_active_days, "
+                "usage_dirty_days, usage_daily, usage_hourly, usage_active_days, usage_llm_daily, "
                 "admin_sessions, admin_users, users CASCADE"
             )
         )

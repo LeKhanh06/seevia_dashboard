@@ -25,6 +25,7 @@ from app.schemas.usage import (
     AttemptMarks,
     AttemptSignal,
     AttemptStarted,
+    LlmCall,
     RejectedEvent,
     SessionEnded,
     SessionHeartbeat,
@@ -237,6 +238,9 @@ class UsageIngestService:
             )
         elif isinstance(event, (SessionStarted, SessionHeartbeat, SessionEnded, AlertRaised)):
             await self._apply_session(event, ids, dirty)
+        elif isinstance(event, LlmCall):
+            # Layer 1 is the only per-call store (immutable rows); the day's LLM rollup reads it.
+            dirty.add(report_day(at, self._tz))
 
     async def _apply_session(
         self,

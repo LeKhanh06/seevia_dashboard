@@ -123,6 +123,7 @@ def test_public_and_device_contract_paths_are_separated(test_app: FastAPI) -> No
         "/api/v1/admin/stats/engagement",
         "/api/v1/admin/stats/safety",
         "/api/v1/admin/stats/errors",
+        "/api/v1/admin/stats/llm",
         "/api/v1/me/stats",
     }
 

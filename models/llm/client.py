@@ -22,6 +22,7 @@ import httpx
 
 import config
 from models import net
+from services import llm_usage
 
 logger = logging.getLogger("blind_assist")
 
@@ -106,6 +107,8 @@ def _body(messages: list[dict], max_tokens: int, stream: bool, **extra) -> dict:
         "temperature": extra.pop("temperature", 0.3),
         "stream": stream,
         "chat_template_kwargs": {"enable_thinking": False},
+        # Stream: xin `usage` ở mảnh cuối (vLLM/OpenAI chỉ gửi khi có cờ này) để đo token thật thay ước lượng.
+        **({"stream_options": {"include_usage": True}} if stream and config.LLM_STREAM_USAGE else {}),
         **extra,
     }
 
@@ -120,77 +123,128 @@ def _demote(base: str) -> None:
 _RETRYABLE = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadError, httpx.RemoteProtocolError)
 
 
-async def stream_chat(
+def stream_chat(
     messages: list[dict], max_tokens: int | None = None, on_logprobs=None, **extra,
 ) -> AsyncIterator[str]:
     """Sinh text theo mảnh (SSE). Chuyển đường chỉ khi CHƯA nhận được mảnh nào.
 
     `on_logprobs(items)`: nhận `logprobs.content` của từng mảnh (bật logprobs trong request) — dùng
     để biết model chắc đến đâu ở các chữ số vừa đọc (lanes/ocr_live.py)."""
+    # Hàm thường bọc generator: mục đích + sổ token lấy LÚC GỌI (speculation tạo stream trong lượt, chỗ
+    # gọi bọc `with llm_usage.purpose(...)` quanh dòng tạo), không phải lúc mảnh đầu được đọc.
+    return _stream_chat(messages, max_tokens, on_logprobs, llm_usage.current_purpose("answer"),
+                        llm_usage.current_ledger(), extra)
+
+
+async def _stream_chat(
+    messages: list[dict], max_tokens: int | None, on_logprobs, purpose: str, ledger, extra: dict,
+) -> AsyncIterator[str]:
     if on_logprobs is not None:
         extra = {**extra, "logprobs": True, "top_logprobs": 1}
     body = _body(messages, max_tokens or config.LLM_MAX_TOKENS, True, **extra)
-    last_exc: Exception | None = None
-    for base in list(_order):
-        started = time.monotonic()
-        produced = False
-        try:
-            async with _track_async(), _client.get().stream(
-                "POST", f"{base}/chat/completions", json=body, headers=_headers(),
-            ) as resp:
-                if resp.status_code >= 500 or resp.status_code == 429:
-                    raise LLMError(f"HTTP {resp.status_code}")
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        choice = json.loads(data)["choices"][0]
-                        delta = choice.get("delta", {}).get("content")
-                    except (ValueError, KeyError, IndexError):
-                        continue
-                    if on_logprobs is not None and (choice.get("logprobs") or {}).get("content"):
-                        on_logprobs(choice["logprobs"]["content"])
-                    if delta:
-                        if not produced:
-                            logger.info("Gemma token đầu %.2fs (%s)", time.monotonic() - started, base)
-                        produced = True
-                        yield delta
-            return
-        except asyncio.CancelledError:
-            raise
-        except (LLMError, httpx.HTTPError) as exc:
-            if produced:
-                raise LLMError(f"Gemma đứt giữa chừng: {exc!r}") from exc
-            last_exc = exc
-            _demote(base)
-    raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+    prompt_chars, images = llm_usage.prompt_shape(messages)
+    t0 = time.monotonic()
+    out_chars, tokens, status, used = 0, None, "error", (_order[0] if _order else "")
+    try:
+        last_exc: Exception | None = None
+        for base in list(_order):
+            used = base
+            started = time.monotonic()
+            produced = False
+            try:
+                async with _track_async(), _client.get().stream(
+                    "POST", f"{base}/chat/completions", json=body, headers=_headers(),
+                ) as resp:
+                    if resp.status_code >= 500 or resp.status_code == 429:
+                        raise LLMError(f"HTTP {resp.status_code}")
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(data)
+                        except ValueError:
+                            continue
+                        if isinstance(obj, dict) and obj.get("usage"):  # mảnh cuối (stream_options.include_usage)
+                            tokens = llm_usage.normalize_openai(obj["usage"]) or tokens
+                        try:
+                            choice = obj["choices"][0]
+                            delta = choice.get("delta", {}).get("content")
+                        except (KeyError, IndexError, TypeError, AttributeError):
+                            continue
+                        if on_logprobs is not None and (choice.get("logprobs") or {}).get("content"):
+                            on_logprobs(choice["logprobs"]["content"])
+                        if delta:
+                            if not produced:
+                                logger.info("Gemma token đầu %.2fs (%s)", time.monotonic() - started, base)
+                            produced = True
+                            out_chars += len(delta)
+                            yield delta
+                status = "ok"
+                return
+            except asyncio.CancelledError:
+                raise
+            except (LLMError, httpx.HTTPError) as exc:
+                if produced:
+                    raise LLMError(f"Gemma đứt giữa chừng: {exc!r}") from exc
+                last_exc = exc
+                _demote(base)
+        raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+    except (asyncio.CancelledError, GeneratorExit):
+        status = "cancelled"  # speculation đoán sai làn / lượt bị cắt: token vẫn tốn
+        raise
+    finally:
+        llm_usage.record(
+            provider=llm_usage.provider_of(used), model=config.LLM_MODEL, purpose=purpose, status=status,
+            tokens=tokens, prompt_chars=prompt_chars, images=images, output_chars=out_chars,
+            latency_ms=(time.monotonic() - t0) * 1000, ledger=ledger,
+        )
 
 
 async def complete_raw(messages: list[dict], max_tokens: int | None = None, **extra) -> dict:
     """Như `complete` nhưng trả nguyên `choices[0]` (có `logprobs` nếu yêu cầu)."""
     body = _body(messages, max_tokens or config.LLM_MAX_TOKENS, False, **extra)
-    last_exc: Exception | None = None
-    for base in list(_order):
-        try:
-            with _track():
-                resp = await _client.get().post(
-                    f"{base}/chat/completions", json=body, headers=_headers(),
-                )
-            if resp.status_code >= 500 or resp.status_code == 429:
-                raise LLMError(f"HTTP {resp.status_code}")
-            resp.raise_for_status()
-            return resp.json()["choices"][0]
-        except asyncio.CancelledError:
-            raise
-        except (LLMError, httpx.HTTPError, KeyError, ValueError) as exc:
-            last_exc = exc
-            if isinstance(exc, (LLMError, *_RETRYABLE)):
-                _demote(base)
-    raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+    purpose, ledger = llm_usage.current_purpose("other"), llm_usage.current_ledger()
+    prompt_chars, images = llm_usage.prompt_shape(messages)
+    t0 = time.monotonic()
+    tokens, status, used, out_chars = None, "error", (_order[0] if _order else ""), 0
+    try:
+        last_exc: Exception | None = None
+        for base in list(_order):
+            used = base
+            try:
+                with _track():
+                    resp = await _client.get().post(
+                        f"{base}/chat/completions", json=body, headers=_headers(),
+                    )
+                if resp.status_code >= 500 or resp.status_code == 429:
+                    raise LLMError(f"HTTP {resp.status_code}")
+                resp.raise_for_status()
+                data = resp.json()
+                choice = data["choices"][0]
+                tokens = llm_usage.normalize_openai(data.get("usage"))
+                out_chars = len(((choice.get("message") or {}).get("content")) or "")
+                status = "ok"
+                return choice
+            except asyncio.CancelledError:
+                raise
+            except (LLMError, httpx.HTTPError, KeyError, ValueError) as exc:
+                last_exc = exc
+                if isinstance(exc, (LLMError, *_RETRYABLE)):
+                    _demote(base)
+        raise LLMError(f"Không gọi được Gemma: {last_exc!r}")
+    except asyncio.CancelledError:
+        status = "cancelled"
+        raise
+    finally:
+        llm_usage.record(
+            provider=llm_usage.provider_of(used), model=config.LLM_MODEL, purpose=purpose, status=status,
+            tokens=tokens, prompt_chars=prompt_chars, images=images, output_chars=out_chars,
+            latency_ms=(time.monotonic() - t0) * 1000, ledger=ledger,
+        )
 
 
 async def complete(messages: list[dict], max_tokens: int | None = None, **extra) -> str:
@@ -252,10 +306,11 @@ async def generate_choice(prompt: str, choices: list[str], max_tokens: int = 8, 
     chọn; `guided_choice` và `extra_body` bị server lờ đi (trả "Hello!" cho tập {alpha,beta}).
     Sinh ~4 token thay vì ~24 của JSON ba trường, nên nhanh hơn nhiều (decode ~8 ms/token).
     """
-    choice = await complete_raw(
-        [user_message(prompt)], max_tokens=max_tokens, temperature=0.0,
-        logprobs=True, top_logprobs=1, structured_outputs={"choice": choices},
-    )
+    with llm_usage.purpose(llm_usage.current_purpose("classify")):
+        choice = await complete_raw(
+            [user_message(prompt)], max_tokens=max_tokens, temperature=0.0,
+            logprobs=True, top_logprobs=1, structured_outputs={"choice": choices},
+        )
     text = (choice["message"].get("content") or "").strip()
     if text not in choices:
         raise LLMError(f"Gemma không trả đúng nhãn: {text[:80]!r}")
@@ -275,13 +330,14 @@ async def generate_json(
     structured output (json_schema) khi gửi `logprobs: true, top_logprobs: 1`.
     """
     extra = {"logprobs": True, "top_logprobs": 1} if logprobs else {}
-    choice = await complete_raw(
-        [user_message(prompt)], max_tokens=max_tokens, temperature=0.0,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "params", "schema": schema},
-        }, **extra,
-    )
+    with llm_usage.purpose(llm_usage.current_purpose("extract")):
+        choice = await complete_raw(
+            [user_message(prompt)], max_tokens=max_tokens, temperature=0.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "params", "schema": schema},
+            }, **extra,
+        )
     text = choice["message"].get("content") or ""
     match = _JSON_BLOCK.search(text)
     if not match:
@@ -298,7 +354,8 @@ async def generate_json(
 async def prewarm(messages: list[dict]) -> None:
     """Nạp prefix vào KV cache của vLLM (`max_tokens=1`), bỏ qua mọi lỗi."""
     try:
-        await complete(messages, max_tokens=1)
+        with llm_usage.purpose("prewarm"):
+            await complete(messages, max_tokens=1)
     except Exception as exc:  # noqa: BLE001
         logger.debug("prewarm Gemma lỗi: %r", exc)
 

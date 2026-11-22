@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 import config
+from services import llm_usage
 
 logger = logging.getLogger("blind_assist")
 
@@ -236,9 +237,10 @@ async def llm_probs(cands: list[str], device: dict | None) -> tuple[list[float],
 
     labels = [str(i) for i in range(1, len(cands) + 1)]
     t0 = time.perf_counter()
-    choice = await llm.complete_raw(
-        [llm.user_message(_prompt(cands, device))], max_tokens=1, temperature=0.0, logprobs=True,
-        top_logprobs=min(len(labels), 8), structured_outputs={"choice": labels})
+    with llm_usage.purpose("stt_pick"):
+        choice = await llm.complete_raw(
+            [llm.user_message(_prompt(cands, device))], max_tokens=1, temperature=0.0, logprobs=True,
+            top_logprobs=min(len(labels), 8), structured_outputs={"choice": labels})
     ms = (time.perf_counter() - t0) * 1000
     items = (choice.get("logprobs") or {}).get("content") or []
     top = {t.get("token", "").strip(): t.get("logprob", -30.0) for t in (items[0].get("top_logprobs") or [])} \

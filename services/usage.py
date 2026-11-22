@@ -45,6 +45,11 @@ ALLOWED_FIELDS: dict[str, frozenset[str]] = {
     "session_heartbeat": frozenset({"session_id", "kind"}),
     "session_ended": frozenset({"session_id", "kind", "end_reason", "align_ms"}),
     "alert_raised": frozenset({"session_id", "level"}),
+    # Token một lời gọi LLM (services/llm_usage.py). Không có chữ — tiền tính ở AB theo bảng giá.
+    "llm_call": frozenset({
+        "attempt_id", "provider", "model", "purpose", "status", "in_tokens", "out_tokens",
+        "reasoning_tokens", "cached_tokens", "images", "estimated", "latency_ms",
+    }),
 }
 
 # Lượt đang chạy trong ngữ cảnh hiện tại: `signal()` ở sâu trong làn/handler không cần truyền tay.

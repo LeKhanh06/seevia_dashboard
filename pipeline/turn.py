@@ -28,6 +28,7 @@ from pipeline.prewarm import Prewarmer
 from pipeline.reply import Reply
 from pipeline.stt_stream import StreamingTranscriber
 from live.session import sessions
+from services import llm_usage
 
 logger = logging.getLogger("blind_assist")
 
@@ -140,6 +141,7 @@ async def run(
 ) -> TurnResult:
     """`glasses`: dict mốc kính (t_press_ms/t_release_ms) do phiên điền; đọc lúc ghi metrics."""
     device_ctx.turn.set(turn_id)  # mọi log của lượt (kể cả thread nền copy context) mang turn id
+    llm_usage.start_turn()  # sổ token: prewarm/speculation chạy trước khi lượt có attempt_id
     started = time.monotonic()
     loop = asyncio.get_running_loop()
 
@@ -200,6 +202,7 @@ async def run(
         attempt_id = usage_turn.begin(
             device, released, transport=transport, glasses=glasses, has_speech=transcriber.has_speech,
         )
+        llm_usage.bind_attempt(attempt_id)
         if reply is None:
             reply = await final_router.route(ctx, decision, text)
         t_route = time.monotonic()
@@ -210,6 +213,7 @@ async def run(
         # Bị lượt mới/huỷ cắt trước khi có lời đáp, hoặc lỗi: lượt mở theo intent đã đoán rồi chốt.
         usage_turn.aborted(attempt_id, decision.intent if decision is not None else "",
                            cancelled=isinstance(exc, asyncio.CancelledError))
+        llm_usage.bind_attempt(attempt_id)  # token đã tốn vẫn phải gửi, kể cả khi lượt hỏng trước begin
         stop.set()
         partials.cancel()
         if ef is not None and ef.task is not None:

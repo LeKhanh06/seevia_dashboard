@@ -25,6 +25,7 @@ import time
 
 import config
 from models import clef, llm
+from services import llm_usage
 from models.clef import LABELS, ClefResult
 
 logger = logging.getLogger("blind_assist")
@@ -125,11 +126,16 @@ async def _choice_reply(text: str, device: dict | None) -> dict:
     return {"intent": intent, "ocr_mode": mode, "needs_web": web, "_label_prob": prob}
 
 
+async def _classify_json(prompt: str) -> dict:
+    with llm_usage.purpose("classify"):
+        return await llm.generate_json(prompt, _SCHEMA, max_tokens=40, logprobs=True)
+
+
 async def _json_reply(text: str, device: dict | None, started: float) -> dict | None:
     prompt = _PREFIX + _context(device) + f'Câu lệnh: "{text}"\nTrả JSON.'
     try:
         return await asyncio.wait_for(
-            llm.generate_json(prompt, _SCHEMA, max_tokens=40, logprobs=True),
+            _classify_json(prompt),
             config.INTENT_LLM_TIMEOUT_S,
         )
     except asyncio.CancelledError:

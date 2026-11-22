@@ -27,6 +27,7 @@ from models.ocr import prompts
 from pipeline import speech, usage_sessions, usage_turn
 from pipeline.usage_tasks import tracker
 from pipeline.image_buffer import resize_jpeg
+from services import llm_usage
 
 logger = logging.getLogger("blind_assist")
 
@@ -95,7 +96,8 @@ async def read_image(jpeg: bytes, mode: str, device: str) -> AsyncIterator[str]:
                            if it.get("logprob") is not None and any(c.isdigit() for c in it.get("token", "")))
 
     hedge = config.OCR_DIGIT_HEDGE_PROB > 0
-    stream = llm.stream_chat([message], max_tokens=1024, temperature=0.0, on_logprobs=seen if hedge else None)
+    with llm_usage.purpose("ocr"):
+        stream = llm.stream_chat([message], max_tokens=1024, temperature=0.0, on_logprobs=seen if hedge else None)
     head, released, reply, so_far = "", False, [], ""
     peek = len(prompts.NO_TEXT_SENTINEL) + 4
     async with contextlib.aclosing(stream):

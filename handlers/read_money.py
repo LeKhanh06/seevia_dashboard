@@ -8,6 +8,7 @@ from models import llm, vlm
 from models.llm.client import prefix_prob
 from pipeline import image_quality
 from pipeline.image_buffer import resize_jpeg
+from services import llm_usage
 
 logger = logging.getLogger("blind_assist")
 
@@ -64,10 +65,11 @@ UNSURE = "Chưa đọc rõ mệnh giá. Bạn lật mặt có số to về phía
 
 async def choose_raw(messages: list[dict], top_logprobs: int = 1) -> tuple[str, dict]:
     """(nhãn, choice gốc của server) — một lượt Gemma structured choice có logprobs."""
-    choice = await llm.complete_raw(
-        messages, max_tokens=12, temperature=0.0,
-        logprobs=True, top_logprobs=top_logprobs, structured_outputs={"choice": CHOICES},
-    )
+    with llm_usage.purpose("money"):
+        choice = await llm.complete_raw(
+            messages, max_tokens=12, temperature=0.0,
+            logprobs=True, top_logprobs=top_logprobs, structured_outputs={"choice": CHOICES},
+        )
     text = (choice["message"].get("content") or "").strip()
     if text not in CHOICES:
         raise llm.LLMError(f"Gemma không trả đúng nhãn: {text[:40]!r}")

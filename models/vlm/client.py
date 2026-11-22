@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Iterator
 
 import config
@@ -54,6 +55,18 @@ def warm() -> None:
         f1 = executor.submit(_warm_vlm)
         f2 = executor.submit(_warm_intent)
         concurrent.futures.wait([f1, f2], timeout=10.0)
+
+
+def _record(model: str, default: str, status: str, meta, prompt: str, image: bytes | None,
+            out_chars: int, t0: float) -> None:
+    """Token của một lời gọi Gemini (nhánh `gemini`, song song với Gemma) — xem services/llm_usage.py."""
+    from services import llm_usage
+
+    llm_usage.record(
+        provider="gemini", model=model, purpose=llm_usage.current_purpose(default), status=status,
+        tokens=llm_usage.normalize_gemini(meta), prompt_chars=len(prompt), images=int(image is not None),
+        output_chars=out_chars, latency_ms=(time.monotonic() - t0) * 1000,
+    )
 
 
 def _guess_mime(image: bytes) -> str:
@@ -117,23 +130,33 @@ def generate_stream(
     """
     contents = _build_contents(prompt, image)
     got_text = False
+    model = config.GEMINI_SEARCH_MODEL if search else config.GEMINI_MODEL
+    t0, meta, status, out_chars = time.monotonic(), None, "error", 0
 
     try:
         stream = _get_client().models.generate_content_stream(
             # Lượt có tra Google phải chạy trên model còn hạn mức grounding —
             # xem `config.GEMINI_SEARCH_MODEL`.
-            model=config.GEMINI_SEARCH_MODEL if search else config.GEMINI_MODEL,
+            model=model,
             contents=contents,
             config=_generation_config(search=search),
         )
         for part in stream:
+            meta = getattr(part, "usage_metadata", None) or meta  # mảnh cuối mang tổng token
             text = getattr(part, "text", None)
             if not text:
                 continue  # Gemini chèn part rỗng; đẩy xuống TTS là gọi model vô ích
             got_text = True
+            out_chars += len(text)
             yield text
+        status = "ok"
+    except GeneratorExit:
+        status = "cancelled"
+        raise
     except Exception as exc:  # noqa: BLE001 - propagate as VLMError, không nuốt lỗi
         raise VLMError(f"Gemini API lỗi: {exc}") from exc
+    finally:
+        _record(model, "answer", status, meta, prompt, image, out_chars, t0)
 
     if not got_text:
         raise VLMError("Gemini trả về response rỗng")
@@ -165,14 +188,19 @@ def generate_json(
             thinking_budget=config.GEMINI_THINKING_BUDGET
         )
 
+    model = model or config.GEMINI_MODEL
+    t0 = time.monotonic()
     try:
         response = _get_client().models.generate_content(
-            model=model or config.GEMINI_MODEL,
+            model=model,
             contents=_build_contents(prompt, image),
             config=cfg,
         )
     except Exception as exc:  # noqa: BLE001 - propagate as VLMError, không nuốt lỗi
+        _record(model, "extract", "error", None, prompt, image, 0, t0)
         raise VLMError(f"Gemini API lỗi: {exc}") from exc
+    _record(model, "extract", "ok", getattr(response, "usage_metadata", None), prompt, image,
+            len(getattr(response, "text", None) or ""), t0)
 
     text = (getattr(response, "text", None) or "").strip()
     if not text:

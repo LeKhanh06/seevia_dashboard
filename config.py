@@ -340,6 +340,12 @@ LLM_MAX_TOKENS = int(get("LLM_MAX_TOKENS", "400"))
 LLM_IMAGE_MAX_SIDE = int(get("LLM_IMAGE_MAX_SIDE", "896"))
 # OCR cần giữ chi tiết chữ nhỏ nên ảnh chụp high-res gửi lớn hơn.
 LLM_OCR_IMAGE_MAX_SIDE = int(get("LLM_OCR_IMAGE_MAX_SIDE", "1600"))
+# Stream xin `usage` thật (stream_options.include_usage); 0 = không gửi, dùng ước lượng bên dưới.
+LLM_STREAM_USAGE = get("LLM_STREAM_USAGE", "1") not in ("0", "false", "no")
+# Ước lượng token khi phản hồi không có `usage` (lượt bị huỷ trước mảnh cuối, server không gửi usage):
+# ký tự/token cho chữ tiếng Việt và token cho một ảnh. Sự kiện gắn `estimated`; hiệu chỉnh từ số thật.
+LLM_EST_CHARS_PER_TOKEN = float(get("LLM_EST_CHARS_PER_TOKEN", "3.5"))  # đo Gemma 22/11: 3,2–3,9; ảnh ~265
+LLM_EST_IMAGE_TOKENS = int(get("LLM_EST_IMAGE_TOKENS", "260"))
 # Đọc tiền làn B: "choice" = Gemma chọn nhãn mệnh giá + xác suất, dưới MONEY_MIN_PROB thì từ chối
 # (handlers/read_money.read_choice); "prompt" = prompt tự do cũ. Ngưỡng chọn trên dev 2026-10-21:
 # sai <= 3 % mà đúng cao nhất; test: nói sai 11,2 % -> 3,3 %, trễ p90 234 -> 215 ms.

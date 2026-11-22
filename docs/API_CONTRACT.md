@@ -210,19 +210,21 @@ Không có chữ người dùng nói, chỉ số đếm. `in_tokens` gồm ảnh
   giá thì không cộng và đếm vào `unpriced_calls`), `cost_what_if` (cùng token theo giá `what_if_model`), `unpriced_calls`.
   `by_feature[]` thêm `attempts`, `cost_list_per_attempt`, `cost_what_if_per_attempt` (`null` khi `attempts = 0`).
 - `waste`: `cancelled_calls`/`_tokens`/`_cost_list`/`_cost_what_if` (bị hủy giữa chừng), `prewarm_*` (làm nóng), `error_calls`.
-- `what_if[]` `{model, cost, priced, per_attempt}`: một phần tử mỗi mô hình so sánh.
+- `what_if[]` `{model, cost, priced, per_attempt}`: một phần tử mỗi mô hình so sánh (`LLM_COMPARE_MODELS` của AB, mặc định `gemini-3.5-flash-lite` rồi `gemini-3.8-flash`); phần tử đầu = `what_if_model`.
 - `purpose`: `answer`, `classify`, `extract`, `money`, `ocr`, `stt_pick`, `prewarm`, `other`. `provider`: `uit`, `9router`, `aistudio`, `vertex`, `gemini` hoặc tên máy.
 ```json
-{ "currency": "USD", "usd_vnd": 26300, "what_if_model": "gemini-3.8-flash", "attempts": 3010,
-  "totals": { "calls": 7811, "estimated_calls": 147, "in_tokens": 5689030, "out_tokens": 362898, "reasoning_tokens": 13590, "cached_tokens": 1013220,
-              "images": 2181, "avg_latency_ms": 744, "cost_actual": 0, "cost_list": 0.45258, "cost_what_if": 4.943716, "unpriced_calls": 7660 },
-  "waste": { "cancelled_calls": 147, "cancelled_tokens": 150097, "cancelled_cost_list": 0, "cancelled_cost_what_if": 0.126, "prewarm_calls": 1204,
-             "prewarm_tokens": 1084804, "prewarm_cost_list": 0, "prewarm_cost_what_if": 0.817, "error_calls": 59 },
+{ "currency": "USD", "usd_vnd": 26300, "what_if_model": "gemini-3.5-flash-lite", "attempts": 3010,
+  "totals": { "calls": 7811, "estimated_calls": 147, "in_tokens": 5689030, "out_tokens": 349308, "reasoning_tokens": 0, "cached_tokens": 1013220,
+              "images": 2181, "avg_latency_ms": 709, "cost_actual": 0, "cost_list": 0.176711, "cost_what_if": 2.30641, "unpriced_calls": 7660 },
+  "waste": { "cancelled_calls": 147, "cancelled_tokens": 150097, "cancelled_cost_list": 0, "cancelled_cost_what_if": 0.054879, "prewarm_calls": 1204,
+             "prewarm_tokens": 1084804, "prewarm_cost_list": 0, "prewarm_cost_what_if": 0.32809, "error_calls": 59 },
   "by_day": [ { "day": "2026-11-16", "calls": 1100, "...": "..." } ],
-  "by_feature": [ { "feature": "ocr", "attempts": 907, "calls": 1814, "cost_what_if": 1.62, "cost_what_if_per_attempt": 0.00179, "...": "..." } ],
+  "by_feature": [ { "feature": "ocr", "attempts": 907, "calls": 1814, "cost_what_if": 0.800848, "cost_what_if_per_attempt": 0.000883, "...": "..." } ],
   "by_purpose": [ { "purpose": "answer", "calls": 1963, "...": "..." } ],
-  "by_model": [ { "provider": "uit", "model": "gemma-4-26b", "calls": 7660, "...": "..." } ],
-  "what_if": [ { "model": "gemini-3.8-flash", "cost": 4.943716, "priced": true, "per_attempt": 0.001642 } ] }
+  "by_model": [ { "provider": "uit", "model": "gemma-4-26b", "calls": 7660, "...": "..." },
+                { "provider": "9router", "model": "ag/gemini-3.5-flash-lite", "calls": 151, "cost_list": 0.176711, "...": "..." } ],
+  "what_if": [ { "model": "gemini-3.5-flash-lite", "cost": 2.30641, "priced": true, "per_attempt": 0.000766 },
+               { "model": "gemini-3.8-flash", "cost": 4.892754, "priced": true, "per_attempt": 0.001625 } ] }
 ```
 
 ## Quản trị (chỉ xem)

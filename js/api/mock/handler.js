@@ -229,9 +229,10 @@ function quality(p) {
 const LLM_PRICES = [
   { model: "gemini-3.8-flash", to: "2026-12-31", input: 0.75, output: 3.75, cached: 0.075 },
   { model: "gemini-3.8-flash", from: "2027-01-01", input: 1.5, output: 7.5, cached: 0.15 },
+  { model: "gemini-3.5-flash-lite", input: 0.3, output: 2.5, cached: 0.03 },
 ];
 const LLM_FREE = new Set(["uit", "9router"]);
-const LLM_COMPARE = "gemini-3.8-flash";
+const LLM_COMPARE = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];   // mô hình đầu = số "Quy đổi" chính (what_if_model)
 // [chức năng, tỷ trọng lượt, token vào / lượt, token ra / lượt, ảnh / lượt]
 const LLM_FEATURES = [["ocr", 81, 1450, 170, 1], ["space", 38, 1180, 120, 1], ["money", 31, 520, 6, 1], ["ask", 25, 1260, 140, 1], ["chat", 24, 820, 160, 0],
   ["find", 20, 1150, 80, 1], ["call", 18, 380, 18, 0], ["message_send", 14, 520, 40, 0], ["music", 10, 300, 12, 0], ["navigation", 8, 340, 20, 0]];
@@ -254,14 +255,14 @@ function llmRows(p) {
     const split = distribute(perDay[di], LLM_FEATURES.map(f => f[1]));
     LLM_FEATURES.forEach(([feature, , inT, outT, img], fi) => {
       const n = split[fi]; if (!n) return;
-      const trial = Math.round(n * 0.05), main = n - trial;   // ~5% lượt thử nhánh Gemini qua 9router
+      const trial = Math.round(n * 0.05), main = n - trial;   // ~5% lượt thử nhánh Gemini 3.5 Flash-Lite qua 9router
       const answer = feature === "money" ? "money" : feature === "ocr" ? "ocr" : "answer";
       add(day, feature, "uit", "gemma-4-26b", "classify", "ok", main, main, main * 310, main * 3, { latency: main * 380 });
       if (["call", "message_send", "music", "navigation"].includes(feature)) add(day, feature, "uit", "gemma-4-26b", "extract", "ok", main, 0, main * 420, main * 28, { latency: main * 520 });
       add(day, feature, "uit", "gemma-4-26b", answer, "ok", main, 0, main * inT, main * outT, { images: main * img, cached: main * inT * 0.35, latency: main * 1250 });
       const cancelled = Math.round(main * 0.12 * jit(di + fi, 6));
       add(day, feature, "uit", "gemma-4-26b", "answer", "cancelled", cancelled, 0, cancelled * inT, cancelled * outT * 0.3, { estimated: cancelled, latency: cancelled * 600 });
-      add(day, feature, "9router", "ag/gemini-3.8-flash-low", answer, "ok", trial, trial, trial * (inT + 2000), trial * (outT + 90), { reasoning: trial * 90, images: trial * img, latency: trial * 3100 });
+      add(day, feature, "9router", "ag/gemini-3.5-flash-lite", answer, "ok", trial, trial, trial * (inT + 2000), trial * outT, { images: trial * img, latency: trial * 1300 });
     });
     const errors = Math.round(perDay[di] * 0.02);
     add(day, "chat", "uit", "gemma-4-26b", "answer", "error", errors, 0, 0, 0, { latency: errors * 900 });
@@ -279,10 +280,10 @@ function llm(p) {
   const totals = blank(), groups = { day: new Map(), feature: new Map(), purpose: new Map(), model: new Map() };
   const waste = { cancelled_calls: 0, cancelled_tokens: 0, cancelled_cost_list: 0, cancelled_cost_what_if: 0, prewarm_calls: 0, prewarm_tokens: 0, prewarm_cost_list: 0, prewarm_cost_what_if: 0, error_calls: 0 };
   const attemptsBy = {};
-  let altCost = 0, altPriced = false;
+  const alts = LLM_COMPARE.map(model => ({ model, cost: 0, priced: false }));
   for (const row of rows) {
     const listed = llmCost(priceOf(row.model, row.day), row), actual = LLM_FREE.has(row.provider) ? 0 : listed || 0;
-    const alt = llmCost(priceOf(LLM_COMPARE, row.day), row) || 0;
+    const alt = llmCost(priceOf(LLM_COMPARE[0], row.day), row) || 0;
     const keys = { day: row.day, feature: row.feature, purpose: row.purpose, model: `${row.provider}\u0000${row.model}` };
     for (const acc of [totals, ...Object.entries(keys).map(([g, k]) => { if (!groups[g].has(k)) groups[g].set(k, blank()); return groups[g].get(k); })]) {
       SUMS.forEach(k => { acc[k] += row[k]; });
@@ -295,13 +296,13 @@ function llm(p) {
       waste[`${kind}_calls`] += row.calls; waste[`${kind}_tokens`] += tokens; waste[`${kind}_cost_list`] += listed || 0; waste[`${kind}_cost_what_if`] += alt;
     }
     if (row.feature !== "none") attemptsBy[row.feature] = (attemptsBy[row.feature] || 0) + row.attempts;
-    altCost += alt; altPriced = altPriced || priceOf(LLM_COMPARE, row.day) !== null;
+    alts.forEach(a => { const c = llmCost(priceOf(a.model, row.day), row); if (c !== null) { a.cost += c; a.priced = true; } });
   }
   const attempts = Object.values(attemptsBy).reduce((x, y) => x + y, 0);
   const sorted = m => [...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   Object.keys(waste).forEach(k => { if (k.includes("cost")) waste[k] = r6(waste[k]); });
   return {
-    range: rangeOf(p), currency: "USD", what_if_model: LLM_COMPARE, usd_vnd: 26300, attempts,
+    range: rangeOf(p), currency: "USD", what_if_model: LLM_COMPARE[0], usd_vnd: 26300, attempts,
     totals: finish(totals), waste,
     by_day: sorted(groups.day).map(([day, acc]) => ({ day, ...finish(acc) })),
     by_feature: sorted(groups.feature).map(([feature, acc]) => {
@@ -310,7 +311,7 @@ function llm(p) {
     }),
     by_purpose: sorted(groups.purpose).map(([purpose, acc]) => ({ purpose, ...finish(acc) })),
     by_model: sorted(groups.model).map(([k, acc]) => { const [provider, model] = k.split("\u0000"); return { provider, model, ...finish(acc) }; }),
-    what_if: [{ model: LLM_COMPARE, cost: r6(altCost), priced: altPriced, per_attempt: attempts && altPriced ? r6(altCost / attempts) : null }],
+    what_if: alts.map(a => ({ model: a.model, cost: r6(a.cost), priced: a.priced, per_attempt: attempts && a.priced ? r6(a.cost / attempts) : null })),
   };
 }
 

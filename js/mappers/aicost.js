@@ -23,11 +23,14 @@ export function mapAiCost(raw) {
   const cached = toNum(t.cached_tokens);
   const tokensFoot = fill(a.tokensFoot, { in: fmtCompact(t.in_tokens), out: fmtCompact(t.out_tokens) }) + (cached ? fill(a.cachedFoot, { pct: pctOf(cached, t.in_tokens) }) : "");
   const perAttempt = toNum(alt.per_attempt) === null ? null : fill(a.perAttemptFoot, { value: fmtUsd(alt.per_attempt) });
+  // Các mô hình so sánh còn lại (vd gemini-3.8-flash khi số chính là 3.5 Flash-Lite): một đoạn ở chân thẻ Quy đổi.
+  const others = arr(r.what_if).filter(x => x !== alt && x.priced && toNum(x.cost) !== null)
+    .map(x => fill(a.otherWhatIfFoot, { model: x.model, cost: fmtUsd(x.cost) }));
   const cards = [
     metric(M.tokens, fmtCompact(tokensOf(t)), tokensFoot),
     metric(M.cost_actual, fmtUsd(t.cost_actual), join(a.freeFoot, money(t.cost_actual))),
     metric(M.cost_list, calls && toNum(t.unpriced_calls) === calls ? DASH : fmtUsd(t.cost_list), join(toNum(t.unpriced_calls) ? fill(a.unpricedFoot, { calls: fmtInt(t.unpriced_calls) }) : a.allPricedFoot, money(t.cost_list))),
-    metric(withModel(M.what_if, model), alt.priced === false ? DASH : fmtUsd(toNum(t.cost_what_if) ?? alt.cost), join(perAttempt, money(t.cost_what_if ?? alt.cost))),
+    metric(withModel(M.what_if, model), alt.priced === false ? DASH : fmtUsd(toNum(t.cost_what_if) ?? alt.cost), join(perAttempt, money(t.cost_what_if ?? alt.cost), ...others)),
   ];
 
   const wasteBlock = (def, n, tokens, cost) => metric(def, fill(a.callsValue, { value: fmtInt(n) }),

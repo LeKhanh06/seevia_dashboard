@@ -285,7 +285,12 @@ export const vi = {
     searchPlaceholder: "Tìm theo mã tài khoản", searchLabel: "Tìm theo mã tài khoản", statusLabel: "Trạng thái",
     cols: { id: "Mã tài khoản", email: "Email / SĐT (ẩn một phần)", created: "Ngày tạo", status: "Trạng thái", glasses: "Số kính liên kết" },
     statuses: { active: "Hoạt động", suspended: "Tạm ngưng" },
-    breadcrumb: "Tài khoản", emailLabel: "Email / SĐT", createdLabel: "Ngày tạo", statusField: "Trạng thái", glassesLabel: "Số kính liên kết",
+    customerTitle: "Thông tin khách hàng", accountTitle: "Thông tin tài khoản",
+    contactTitle: "Thông tin liên hệ", maskedLabel: "Đã ẩn thông tin",
+    revealedLabel: "Đang hiện thông tin", showCustomerInfo: "Hiện đầy đủ thông tin khách hàng", hideCustomerInfo: "Ẩn thông tin khách hàng",
+    nameLabel: "Họ và tên", phoneLabel: "Số điện thoại", genderLabel: "Giới tính", birthDateLabel: "Ngày sinh", addressLabel: "Địa chỉ",
+    notUpdated: "Chưa cập nhật", genders: { female: "Nữ", male: "Nam", other: "Khác", prefer_not_to_say: "Không muốn tiết lộ" },
+    breadcrumb: "Tài khoản", emailLabel: "Email", createdLabel: "Ngày tạo", statusField: "Trạng thái", glassesLabel: "Số kính liên kết",
     linkedTitle: "Kính liên kết", linkedCols: { id: "Mã kính", firmware: "Phiên bản firmware", status: "Trạng thái", last: "Lần kết nối gần nhất" }, linkedEmpty: "Chưa liên kết kính nào",
   },
 

@@ -100,12 +100,22 @@ export const VOLUME = 10;
 export const DAILY_OWNERS = 44;   // chủ kính hoạt động trong ngày cao nhất
 
 const PREFIX = ["ng", "tr", "le", "ph", "va", "ho", "hu", "bu", "da", "do", "mi", "ha", "ly", "vo", "dg", "ta", "an", "lu", "ki", "th"];
+const CUSTOMERS = [
+  { full_name: "Nguyễn Thị Nga", gender: "female", address: "Phường Bến Thành, TP. Hồ Chí Minh" },
+  { full_name: "Trần Minh Tuấn", gender: "male", address: "Phường Cầu Giấy, Hà Nội" },
+  { full_name: "Lê Thu Hà", gender: "female", address: "Phường Hải Châu, Đà Nẵng" },
+  { full_name: "Phạm Hoàng Nam", gender: "male", address: "Phường Ninh Kiều, Cần Thơ" },
+  { full_name: "Võ Ngọc Anh", gender: "other", address: "Phường Thuận Hóa, Huế" },
+  { full_name: "Hoàng Minh Đức", gender: "prefer_not_to_say", address: "Phường Lê Chân, Hải Phòng" },
+];
 const pseudo = (i, k) => Math.abs(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1;
 const day = n => `2026-${n < 31 ? "10" : "11"}-${String(n < 31 ? n + 1 : n - 30).padStart(2, "0")}`;
 export const ACCOUNTS = Array.from({ length: 72 }, (_, i) => {
   const n = i + 1;
   return {
     id: `TK-${String(n).padStart(4, "0")}`, email_masked: `${PREFIX[i % PREFIX.length]}${["", "a", "o", "n"][Math.floor(pseudo(n, 1) * 4)]}***@gmail.com`,
+    ...CUSTOMERS[i % CUSTOMERS.length], phone_number: `090${String(1000000 + n).padStart(7, "0")}`, email: `khachhang${n}@example.com`,
+    date_of_birth: `${1965 + i % 40}-${String(i % 12 + 1).padStart(2, "0")}-${String(i % 28 + 1).padStart(2, "0")}`,
     created_at: day(Math.min(45, Math.floor(n * 0.62))), status: n % 17 === 0 ? "suspended" : "active", glasses_count: n % 12 === 0 ? 0 : 1,
   };
 });

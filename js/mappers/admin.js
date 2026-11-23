@@ -4,6 +4,7 @@ import { initialOf, fmtInt, fmtDate, fmtDateTime, fmtShortDateTime, fmtSigned, t
 import { compareName } from "../core/period.js";
 import { arr, obj } from "./util.js";
 import { CONFIG } from "../config.js";
+import { maskName, maskPhone, maskEmail, maskAddress } from "../lib/privacy.js";
 
 const pageInfo = (raw, ctx) => {
   const total = toNum(raw?.total) ?? arr(raw?.items).length;
@@ -70,8 +71,21 @@ export function mapAccountDetail(raw) {
   const a = vi.accounts, r = obj(raw);
   return {
     id: text(r.id), found: Boolean(r.id),
+    customer: {
+      name: maskName(r.full_name) || a.notUpdated,
+      fullName: r.full_name || a.notUpdated,
+      demographics: [
+        { label: a.genderLabel, value: a.genders[r.gender] || a.notUpdated },
+        { label: a.birthDateLabel, value: r.date_of_birth ? fmtDate(r.date_of_birth) : a.notUpdated },
+      ],
+      contacts: [
+        { label: a.phoneLabel, value: maskPhone(r.phone_masked || r.phone_number) || a.notUpdated, fullValue: r.phone_number || maskPhone(r.phone_masked) || a.notUpdated, icon: "connect" },
+        { label: a.emailLabel, value: maskEmail(r.email_masked || r.email) || a.notUpdated, fullValue: r.email || r.email_masked || a.notUpdated, icon: "mail" },
+        { label: a.addressLabel, value: maskAddress(r.address) || a.notUpdated, fullValue: r.address || a.notUpdated, icon: "map-pin" },
+      ],
+    },
     fields: [
-      { label: a.emailLabel, value: text(contactOf(r)), ellipsis: true }, { label: a.createdLabel, value: fmtDate(r.created_at) },
+      { label: a.createdLabel, value: fmtDate(r.created_at) },
       { label: a.statusField, chip: accountStatus(r.status) }, { label: a.glassesLabel, value: fmtInt(r.glasses_count) },
     ],
     glasses: linkedGlasses(r.glasses),

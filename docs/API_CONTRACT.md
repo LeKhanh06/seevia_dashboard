@@ -13,7 +13,7 @@ Chuyển sang backend thật: `js/config.js` → `USE_MOCK = false`, `API_BASE_U
 - Mọi trường chỉ số **được phép `null`** (chưa có dữ liệu / không áp dụng) hoặc vắng mặt; frontend hiện `—`. Danh sách rỗng là `[]`.
 - Chỉ số "chưa chắc": thêm trường `<tên_chỉ_số>_is_estimate: true`; frontend hiện nhãn "Chưa chắc" kèm tooltip.
 - Chức năng thử nghiệm có kiểm soát: `is_experimental: true` → frontend hiện dấu † và chú thích.
-- **Không** có trường nào là thống kê cá nhân. Email trả về **đã che sẵn** (ví dụ `ng***@gmail.com`); frontend không tự che. Chỉ `accounts/{id}` và `devices/{id}` là dữ liệu theo từng đối tượng.
+- **Không** có trường nào là thống kê cá nhân. Email danh sách trả về **đã che sẵn** (ví dụ `ng***@gmail.com`). Chỉ `accounts/{id}` và `devices/{id}` là dữ liệu theo từng đối tượng. Trang chi tiết tài khoản mặc định che phần giữa họ tên, số điện thoại, email và địa chỉ bằng `***`; nút con mắt cho phép hiện/ẩn thông tin đầy đủ do API cung cấp.
 
 ### Tham số kỳ (mọi endpoint `/admin/stats/*`)
 
@@ -209,9 +209,13 @@ Tham số: `q` (mã), `status` (`active`\|`suspended`), `sort` (`id|created_at|s
 ```
 ### `GET /admin/accounts/{id}`
 ```json
-{ "id": "TK-0001", "email_masked": "ng***@gmail.com", "created_at": "2026-11-02", "status": "active", "glasses_count": 1,
+{ "id": "TK-0001", "full_name": "Nguyễn Thị Nga", "phone_number": "0901000001", "email": "khachhang1@example.com", "email_masked": "ng***@gmail.com",
+  "gender": "female", "date_of_birth": "1965-01-01", "address": "Phường Bến Thành, TP. Hồ Chí Minh",
+  "created_at": "2026-11-02", "status": "active", "glasses_count": 1,
   "glasses": [ { "id": "KINH-01", "firmware_version": "v0", "status": "online", "last_seen_at": "2026-11-15T08:42:00+07:00" } ] }
 ```
+Các trường khách hàng `full_name`, `phone_number`, `email`, `gender`, `date_of_birth`, `address` là tùy chọn (string hoặc null). `gender`: `male`, `female`, `other`, `prefer_not_to_say`; `date_of_birth`: ngày `YYYY-MM-DD`. Trang chi tiết hiển thị “Chưa cập nhật” khi thiếu dữ liệu; khi ẩn ưu tiên `email_masked`, nếu chỉ có `email` thì che trước khi hiển thị. Tên, điện thoại và địa chỉ cũng được che phần giữa, ví dụ `Nguyễn *** Nga`, `090***001`, `Phường *** Hồ Chí Minh`. Nút con mắt hiện đầy đủ cả bốn trường; bấm lại để che. Email đầy đủ lấy từ `email`; nếu API chỉ trả `email_masked` thì giữ giá trị đã che. Trạng thái hiện chỉ áp dụng cho trang đang mở, không lưu lại khi chuyển trang hoặc tải lại. Giá trị gốc chỉ được đưa vào nội dung văn bản khi bấm hiện, không đưa vào tooltip, thuộc tính HTML hay liên kết liên hệ. Các ví dụ trên là dữ liệu giả lập.
+
 ### `GET /admin/devices`
 Tham số: `q`, `status` (`online`\|`offline`), `firmware_version`, `sort` (`id|firmware_version|status|last_seen_at|account_id`), `order`, `page`, `page_size`.
 ```json
@@ -260,3 +264,5 @@ người thân gọi tới kính đã kết thúc, hoặc một lần SOS đã k
 nên mọi ràng buộc nhất quán ở trên đều đúng với dữ liệu thật. `ocr_live` là các lần đọc chữ phải căn khung trực tiếp (không cộng
 trùng với `ocr`). `features[].errors` và bảng lỗi chỉ đếm lượt thất bại/lỗi kỹ thuật có mã; lượt bị huỷ không phải lỗi.
 Tỷ lệ hoàn thành, hoàn thành ngay lần đầu, bỏ cuộc tính trên các lượt là tác vụ (không gồm cảnh báo, cuộc gọi đến, SOS).
+
+Trang chi tiết dùng `phone_masked` khi AB chưa cung cấp `phone_number`. Nút hiện thông tin chỉ hiển thị giá trị gốc nếu API có trả về.

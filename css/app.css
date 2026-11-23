@@ -286,6 +286,49 @@ body.is-login .main-content { padding: 0; }
 .status-chip.status-good { background: var(--good-bg); color: var(--good); }
 .status-chip.status-neutral { background: var(--neutral-bg); color: var(--sub); }
 
+.customer-card { overflow: hidden; }
+.customer-card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); padding: var(--sp-6) var(--sp-8) 0; }
+.customer-card-head h2 { font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+.customer-privacy { display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-pill); background: var(--soft); color: var(--sub); font-size: var(--fs-xs); }
+.customer-privacy-tools { display: flex; align-items: center; gap: var(--sp-1); }
+.customer-visibility { color: var(--accent-text); }
+.customer-visibility[aria-pressed="true"] { background: var(--tag); }
+.customer-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--sp-8); padding: var(--sp-8); }
+.customer-identity { display: flex; align-items: flex-start; gap: var(--sp-4); min-width: 0; }
+.customer-avatar { display: grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--tag); color: var(--accent-text); }
+.customer-person { min-width: 0; }
+.customer-label, .customer-demographics dt, .customer-account-list dt { color: var(--sub); font-size: var(--fs-xs); font-weight: 400; }
+.customer-name { margin-block: var(--sp-1) var(--sp-6); color: var(--deep); font-size: 1.5rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-demographics { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-6); margin: 0; }
+.customer-demographics dd { margin: var(--sp-1) 0 0; color: var(--ink); font-size: var(--fs-sm); }
+.customer-contact { min-width: 0; padding-inline-start: var(--sp-8); border-inline-start: 1px solid var(--line-card); }
+.customer-contact-list { margin: var(--sp-2) 0 0; }
+.customer-contact-row { display: grid; grid-template-columns: minmax(0, 136px) minmax(0, 1fr); align-items: baseline; gap: var(--sp-3); padding-block: var(--sp-3); }
+.customer-contact-row + .customer-contact-row { border-block-start: 1px solid var(--line-card); }
+.customer-contact-row dt { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--sub); }
+.customer-contact-row dt .icon { align-self: flex-start; margin-block-start: 2px; color: var(--accent-text); }
+.customer-contact-row dd { min-width: 0; margin: 0; color: var(--deep); font-size: 0.9375rem; font-weight: 500; overflow-wrap: anywhere; }
+.customer-account { padding: var(--sp-4) var(--sp-8); border-block-start: 1px solid var(--line-card); background: var(--soft); }
+.customer-account-list { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); margin: 0; }
+.customer-account-list > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.customer-account-list dd { margin: 0; font-size: var(--fs-sm); font-weight: 500; color: var(--ink); }
+
+@media (max-width: 1199px) {
+  .customer-body { grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
+  .customer-contact { border-inline-start: 0; border-block-start: 1px solid var(--line-card); padding-inline-start: 0; padding-block-start: var(--sp-5); }
+}
+@media (max-width: 559px) {
+  .customer-card-head { padding: var(--sp-5) var(--sp-5) 0; }
+  .customer-body { padding: var(--sp-6) var(--sp-5); }
+  .customer-avatar { width: 48px; height: 48px; }
+  .customer-name { font-size: var(--fs-xl); }
+  .customer-account { padding: var(--sp-4) var(--sp-5); }
+  .customer-account-list { align-items: stretch; flex-direction: column; gap: var(--sp-3); }
+  .customer-account-list > div { justify-content: space-between; }
+  .customer-contact-row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+  .customer-contact-row dd { padding-inline-start: calc(18px + var(--sp-3)); }
+}
+
 /* Menu avatar */
 .menu-wrap { position: relative; }
 .avatar-button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; }

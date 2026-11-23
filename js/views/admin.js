@@ -50,9 +50,52 @@ const fieldsPanel = fields => h("section", { class: "card panel info-card" },
         : f.ellipsis ? h("span", { class: "ellipsis", tabindex: "0", dataset: { tooltip: f.value, tooltipUse: "" } }, f.value)
           : f.href ? h("a", { href: f.href }, f.value) : f.value)))));
 
+function customerPanel(vm) {
+  const a = vi.accounts, c = vm.customer;
+  let revealed = false;
+  const name = h("h3", { class: "customer-name" }, c.name);
+  const contactValues = c.contacts.map(f => h("dd", null, f.value));
+  const privacy = h("span", { class: "customer-privacy", "aria-live": "polite", "aria-atomic": "true" }, icon("lock", { size: 14 }), a.maskedLabel);
+  const toggle = h("button", {
+    class: "icon-button customer-visibility", type: "button", "aria-label": a.showCustomerInfo,
+    "aria-pressed": "false", "aria-controls": "ad-customer-values",
+    disabled: c.fullName === c.name && c.contacts.every(f => f.fullValue === f.value),
+    onClick: () => {
+      revealed = !revealed;
+      name.textContent = revealed ? c.fullName : c.name;
+      contactValues.forEach((node, i) => { node.textContent = revealed ? c.contacts[i].fullValue : c.contacts[i].value; });
+      privacy.replaceChildren(icon(revealed ? "eye" : "lock", { size: 14 }), revealed ? a.revealedLabel : a.maskedLabel);
+      toggle.setAttribute("aria-label", revealed ? a.hideCustomerInfo : a.showCustomerInfo);
+      toggle.setAttribute("aria-pressed", String(revealed));
+      toggle.replaceChildren(icon(revealed ? "eye-off" : "eye", { size: 20 }));
+    },
+  }, icon("eye", { size: 20 }));
+  return h("section", { class: "card customer-card", "aria-labelledby": "ad-customer-title" },
+    h("div", { class: "customer-card-head" },
+      h("h2", { id: "ad-customer-title" }, a.customerTitle),
+      h("div", { class: "customer-privacy-tools" }, privacy, toggle)),
+    h("div", { class: "customer-body", id: "ad-customer-values" },
+      h("div", { class: "customer-identity" },
+        h("span", { class: "customer-avatar", "aria-hidden": "true" }, icon("user", { size: 28 })),
+        h("div", { class: "customer-person" },
+          h("p", { class: "customer-label" }, a.nameLabel),
+          name,
+          h("dl", { class: "customer-demographics" }, c.demographics.map(f => h("div", null,
+            h("dt", null, f.label), h("dd", null, f.value)))))),
+      h("div", { class: "customer-contact", "aria-labelledby": "ad-contact-title" },
+        h("h3", { class: "customer-label", id: "ad-contact-title" }, a.contactTitle),
+        h("dl", { class: "customer-contact-list" }, c.contacts.map((f, i) => h("div", { class: "customer-contact-row" },
+          h("dt", null, icon(f.icon, { size: 18 }), f.label), contactValues[i]))))),
+    h("div", { class: "customer-account", "aria-labelledby": "ad-account-title" },
+      h("h3", { class: "sr-only", id: "ad-account-title" }, a.accountTitle),
+      h("dl", { class: "customer-account-list" }, vm.fields.map(f => h("div", null,
+        h("dt", null, f.label), h("dd", null, f.chip ? statusDot(f.chip, "chip") : f.value))))));
+}
+
 export function viewAccountDetail(vm) {
   const a = vi.accounts;
-  return h("div", { class: "stack-y" }, fieldsPanel(vm.fields),
+  return h("div", { class: "stack-y" },
+    customerPanel(vm),
     h("h2", { class: "section-title" }, a.linkedTitle),
     section({ cls: "flush", id: "ad-glasses" }, dataTable({
       caption: a.linkedTitle, emptyText: a.linkedEmpty,
